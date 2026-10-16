@@ -1,2 +1,129 @@
 apiVersion: v1
-entries: {}
+entries:
+  clickhouse:
+  - apiVersion: v2
+    appVersion: 24.1.2
+    created: "2026-10-16T23:38:45.235408781Z"
+    dependencies:
+    - condition: zookeeper.enabled
+      name: zookeeper
+      repository: file://../zookeeper
+      version: 0.0.1
+    description: A Helm chart for ClickHouse
+    digest: 6b11e4143a6a3eb09e2bd768f0ad3df182a794d99e8edecf09cba29015c208b9
+    icon: https://github.com/ClickHouse/clickhouse-docs/raw/84f38d893eb7e561c7296279d7953b6a508ec413/static/img/clickhouse-logo.svg
+    maintainers:
+    - name: FuseOne
+      url: https://github.com/fuseone-io
+    name: clickhouse
+    sources:
+    - https://github.com/SigNoz/charts
+    - https://github.com/ClickHouse/ClickHouse
+    type: application
+    urls:
+    - https://github.com/fuseone-io/fusescope-charts/releases/download/clickhouse-24.1.18/clickhouse-24.1.18.tgz
+    version: 24.1.18
+  fusescope:
+  - apiVersion: v2
+    appVersion: 0.147.0
+    created: "2026-10-16T23:38:45.399819435Z"
+    dependencies:
+    - condition: clickhouse.enabled
+      name: clickhouse
+      repository: file://../clickhouse
+      version: 24.1.18
+    - condition: postgresql.enabled
+      name: postgresql
+      repository: file://../postgresql
+      version: 0.0.2
+    description: FuseScope observability platform (APM, traces, metrics and logs)
+      Helm chart
+    digest: 328a81a8b1f0d3318b42602e4930424491cd1cf39d3d5b2c341980d2371b4998
+    home: https://github.com/fuseone-io/fusescope
+    icon: https://raw.githubusercontent.com/fuseone-io/fusescope/main/docs/brand/fusescope-app-icon.svg
+    keywords:
+    - FuseScope
+    - opentelemetry
+    - apm
+    - monitoring
+    - distributed tracing
+    - distributed logging
+    maintainers:
+    - name: FuseOne
+      url: https://github.com/fuseone-io
+    name: fusescope
+    sources:
+    - https://github.com/fuseone-io/fusescope-charts
+    - https://github.com/fuseone-io/fusescope
+    - https://github.com/fuseone-io/fusescope-otel-collector
+    type: application
+    urls:
+    - https://github.com/fuseone-io/fusescope-charts/releases/download/fusescope-0.147.0/fusescope-0.147.0.tgz
+    version: 0.147.0
+  k8s-infra:
+  - apiVersion: v2
+    appVersion: 0.139.0
+    created: "2026-10-16T23:38:45.566212375Z"
+    description: Helm chart for collecting metrics and logs in K8s
+    digest: dc59221f942327a3ac429ee18539b5a16de3f6b7cd235984f8da6cad48d6c913
+    home: https://github.com/fuseone-io/fusescope-charts
+    icon: https://raw.githubusercontent.com/fuseone-io/fusescope/main/docs/brand/fusescope-app-icon.svg
+    keywords:
+    - SigNoz
+    - OpenTelemetry
+    - apm
+    - monitoring
+    - logs
+    maintainers:
+    - name: FuseOne
+      url: https://github.com/fuseone-io
+    name: k8s-infra
+    sources:
+    - https://github.com/fuseone-io/fusescope-charts
+    - https://github.com/open-telemetry/opentelemetry-collector-contrib
+    type: application
+    urls:
+    - https://github.com/fuseone-io/fusescope-charts/releases/download/k8s-infra-0.17.1/k8s-infra-0.17.1.tgz
+    version: 0.17.1
+  postgresql:
+  - apiVersion: v2
+    appVersion: 15.0.0
+    created: "2026-10-16T23:38:45.727309368Z"
+    description: A Helm Chart for PostgreSQL
+    digest: bf6ab9da681dc4f01e756a49178d9ac2710198eb8ae5756facb6a0b0d4a54ffc
+    home: https://github.com/fuseone-io/fusescope-charts
+    icon: https://wiki.postgresql.org/wiki/File:PostgreSQL_logo.3colors.svg
+    maintainers:
+    - name: FuseOne
+      url: https://github.com/fuseone-io
+    name: postgresql
+    sources:
+    - https://github.com/fuseone-io/fusescope-charts
+    - https://github.com/postgres/postgres
+    type: application
+    urls:
+    - https://github.com/fuseone-io/fusescope-charts/releases/download/postgresql-0.0.2/postgresql-0.0.2.tgz
+    version: 0.0.2
+  zookeeper:
+  - apiVersion: v2
+    appVersion: 3.8.1
+    created: "2026-10-16T23:38:45.966826898Z"
+    dependencies:
+    - name: common
+      repository: file://charts/common
+      tags:
+      - bitnami-common
+      version: 0.0.1
+    description: Bitnami Helm chart for Zookeeper
+    digest: ce5d22addbe8a4139dfabcf7be4a2afc0e4162caa0960ace6a31b7dc2d07698f
+    icon: https://bitnami.com/assets/stacks/zookeeper/img/zookeeper-stack-220x234.png
+    maintainers:
+    - name: FuseOne
+      url: https://github.com/fuseone-io
+    name: zookeeper
+    sources:
+    - https://github.com/bitnami/charts/tree/main/bitnami/zookeeper
+    urls:
+    - https://github.com/fuseone-io/fusescope-charts/releases/download/zookeeper-0.0.1/zookeeper-0.0.1.tgz
+    version: 0.0.1
+generated: "2026-10-16T23:38:45.966834498Z"
