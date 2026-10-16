@@ -14,9 +14,5 @@ dependencies:
     version: 0.0.1
     condition: zookeeper.enabled
 maintainers:
-  - name: SigNoz
-    email: hello@signoz.io
-    url: https://signoz.io
-  - name: prashant-shahi
-    email: prashant@signoz.io
-    url: https://prashantshahi.dev
+  - name: FuseOne
+    url: https://github.com/fuseone-io

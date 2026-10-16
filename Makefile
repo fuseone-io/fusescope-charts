@@ -5,13 +5,13 @@ delete-namespace:
 	kubectl delete namespace $(NAMESPACE)
 
 add-repository:
-	helm repo add --force-update signoz https://charts.signoz.io
+	helm repo add --force-update fusescope https://fuseone-io.github.io/fusescope-charts
 
 update-repository:
 	helm repo update
 
 dependency-update:
-	helm dependency update charts/signoz
+	helm dependency update charts/fusescope
 
 setup: add-repository update-repository
 
@@ -19,11 +19,11 @@ local-setup: dependency-update
 
 # print resulting manifests to console without applying them
 debug:
-	helm install --dry-run --debug $(RELEASE_NAME) signoz/signoz
+	helm install --dry-run --debug $(RELEASE_NAME) fusescope/fusescope
 
 # install the chart to configured namespace
 install: setup
-	helm upgrade -i $(RELEASE_NAME) -n $(NAMESPACE) --create-namespace signoz/signoz
+	helm upgrade -i $(RELEASE_NAME) -n $(NAMESPACE) --create-namespace fusescope/fusescope
 
 # uninstall the chart and resources from configured namespace
 uninstall:
@@ -44,17 +44,17 @@ list-all:
 
 # install the local development chart to configured namespace
 dev-install: local-setup
-	helm upgrade -i $(RELEASE_NAME) -n $(NAMESPACE) --create-namespace charts/signoz
+	helm upgrade -i $(RELEASE_NAME) -n $(NAMESPACE) --create-namespace charts/fusescope
 
 re-install: delete install
 
 purge: delete delete-namespace
 
-# generate docs for the signoz and k8s-infra chart with respective templates
+# generate docs for the fusescope and k8s-infra chart with respective templates
 # generate docs for specified charts with respective templates
 # Usage: make chart-docs CHARTS=chart1,chart2
-# Example: make chart-docs CHARTS=charts/signoz,charts/k8s-infra
-CHARTS ?= charts/signoz,charts/k8s-infra,charts/postgresql
+# Example: make chart-docs CHARTS=charts/fusescope,charts/k8s-infra
+CHARTS ?= charts/fusescope,charts/k8s-infra,charts/postgresql
 HELM_DOCS = go run github.com/norwoodj/helm-docs/cmd/helm-docs@v1.14.2
 chart-docs:
 	$(HELM_DOCS) --chart-search-root=charts --template-files=README.md.gotmpl --chart-to-generate=$(CHARTS) --sort-values-order=file

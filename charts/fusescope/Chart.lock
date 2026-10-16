@@ -1,0 +1,9 @@
+dependencies:
+- name: clickhouse
+  repository: file://../clickhouse
+  version: 24.1.18
+- name: postgresql
+  repository: file://../postgresql
+  version: 0.0.2
+digest: sha256:26a539ba09b9505116fce86fcc491fdcba505467e2f08fed6398904e0a4570c7
+generated: "2026-10-16T17:46:58.905817956-03:00"

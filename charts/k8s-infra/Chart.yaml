@@ -4,8 +4,8 @@ description: Helm chart for collecting metrics and logs in K8s
 type: application
 version: 0.17.1
 appVersion: "0.139.0"
-home: https://signoz.io
-icon: https://signoz.io/img/SigNozLogo-orange.svg
+home: https://github.com/fuseone-io/fusescope-charts
+icon: https://raw.githubusercontent.com/fuseone-io/fusescope/main/docs/brand/fusescope-app-icon.svg
 keywords:
   - SigNoz
   - OpenTelemetry
@@ -13,12 +13,8 @@ keywords:
   - monitoring
   - logs
 sources:
-  - https://github.com/signoz/charts
+  - https://github.com/fuseone-io/fusescope-charts
   - https://github.com/open-telemetry/opentelemetry-collector-contrib
 maintainers:
-  - name: SigNoz
-    email: hello@signoz.io
-    url: https://signoz.io
-  - name: prashant-shahi
-    email: prashant@signoz.io
-    url: https://prashantshahi.dev
+  - name: FuseOne
+    url: https://github.com/fuseone-io

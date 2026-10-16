@@ -13,6 +13,5 @@ dependencies:
   - bitnami-common
   version: 0.0.1
 maintainers:
-- name: SigNoz
-  email: hello@signoz.io
-  url: https://signoz.io
+- name: FuseOne
+  url: https://github.com/fuseone-io

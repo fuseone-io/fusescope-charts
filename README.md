@@ -1,12 +1,16 @@
-# SigNoz Helm Chart
+<p align="center">
+  <img alt="FuseScope" src="docs/brand/fusescope-logo-universal.svg" width="440">
+</p>
 
-SigNoz helm chart ready to be deployed on Kubernetes using [Kubernetes Helm](https://github.com/helm/helm).
+# FuseScope Helm Charts
+
+Helm charts for [FuseScope](https://github.com/fuseone-io/fusescope), ready to be deployed on Kubernetes using [Kubernetes Helm](https://github.com/helm/helm). This repository is a hard fork of [SigNoz/charts](https://github.com/SigNoz/charts) maintained by FuseOne.
 
 ## TL;DR
 
 ```bash
-$ helm repo add signoz https://charts.signoz.io
-$ helm install -n platform  --create-namespace my-release signoz/signoz
+$ helm repo add fusescope https://fuseone-io.github.io/fusescope-charts
+$ helm install -n platform  --create-namespace my-release fusescope/fusescope
 ```
 
 ## Before you begin
@@ -35,17 +39,17 @@ of pre-configured Kubernetes resources.
 
 To install Helm follow the instructions [here](https://helm.sh/docs/intro/install/).
 
-### Add SigNoz Repository
+### Add FuseScope Repository
 
-To add the SigNoz helm repository:
+To add the FuseScope helm repository:
 
 ```bash
-$ helm repo add signoz https://charts.signoz.io
+$ helm repo add fusescope https://fuseone-io.github.io/fusescope-charts
 ```
 
 ### Usage
 
-See the [README of SigNoz helm chart](./charts/signoz/README.md).
+See the [README of FuseScope helm chart](./charts/fusescope/README.md).
 
 ### Contribute the Chart
 
@@ -55,4 +59,5 @@ See the [instructions here to contribute](./CONTRIBUTING.md).
 
 MIT License
 
+Copyright (c) 2026-present FuseOne
 Copyright (c) 2022 SigNoz
