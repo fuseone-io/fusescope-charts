@@ -36,6 +36,9 @@ envsubst '${FUSESCOPE_LAB_OIDC_CLIENT_SECRET} ${FUSESCOPE_LAB_USER_PASSWORD}' \
 kubectl -n "$ns" apply -f "$here/keycloak.yaml"
 kubectl -n "$ns" rollout restart deployment/keycloak >/dev/null 2>&1 || true
 
+# Local file:// dependencies are packaged as they are on disk, so build them bottom-up:
+# clickhouse must already bundle zookeeper when fusescope packages it.
+helm dependency build "$charts/clickhouse" >/dev/null
 helm dependency build "$charts/fusescope" >/dev/null
 helm upgrade --install fusescope "$charts/fusescope" -n "$ns" -f "$here/values-fusescope.yaml" --wait --timeout 15m
 helm upgrade --install k8s-infra "$charts/k8s-infra" -n "$ns" -f "$here/values-k8s-infra.yaml" --wait --timeout 10m
