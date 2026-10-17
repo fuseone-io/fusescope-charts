@@ -1,0 +1,89 @@
+# FuseScope on the FuseOne lab: PostgreSQL metastore, ClickHouse, OIDC SSO via Keycloak
+# declared in the configuration file, public OTLP/HTTP ingestion.
+global:
+  storageClass: longhorn
+
+postgresql:
+  enabled: true
+  persistence:
+    size: 5Gi
+
+clickhouse:
+  persistence:
+    size: 20Gi
+  resources:
+    requests:
+      cpu: 200m
+      memory: 1Gi
+    limits:
+      memory: 4Gi
+
+signoz:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 2Gi
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    hosts:
+      - host: fusescope.fuseone.io
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            port: 8080
+    tls:
+      - secretName: fusescope-fuseone-io-tls
+        hosts:
+          - fusescope.fuseone.io
+  env:
+    signoz_global_external__url: https://fusescope.fuseone.io
+    signoz_alertmanager_signoz_external__url: https://fusescope.fuseone.io
+    FUSESCOPE_LAB_OIDC_CLIENT_SECRET:
+      valueFrom:
+        secretKeyRef:
+          name: fusescope-lab-oidc
+          key: client-secret
+  config:
+    authdomain:
+      domains:
+        - name: lab.fuseone.io
+          config:
+            kind: oidc
+            spec:
+              issuer: https://sso.fuseone.io/realms/fusescope
+              clientId: fusescope
+              clientSecret: ${FUSESCOPE_LAB_OIDC_CLIENT_SECRET}
+              getUserInfo: true
+          role_mapping:
+            defaultRole: VIEWER
+            groupMappings:
+              fusescope-admins: ADMIN
+              fusescope-editors: EDITOR
+
+otelCollector:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 2Gi
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    hosts:
+      - host: otlp.fusescope.fuseone.io
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            port: 4318
+    tls:
+      - secretName: otlp-fusescope-fuseone-io-tls
+        hosts:
+          - otlp.fusescope.fuseone.io
