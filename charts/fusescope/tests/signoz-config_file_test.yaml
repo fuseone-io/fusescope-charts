@@ -1,0 +1,72 @@
+suite: Test the FuseScope configuration file
+
+templates:
+  - templates/signoz/statefulset.yaml
+  - templates/signoz/configmap.yaml
+
+release:
+  name: fusescope
+  namespace: fusescope
+
+tests:
+  - it: should not render a config map or --config without signoz.config
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: templates/signoz/configmap.yaml
+      - isNullOrEmpty:
+          path: spec.template.spec.containers[0].args
+        template: templates/signoz/statefulset.yaml
+
+  - it: should render signoz.config as config.yaml in a config map
+    set:
+      signoz:
+        config:
+          authdomain:
+            domains:
+              - name: example.com
+                config:
+                  kind: oidc
+                  spec:
+                    issuer: https://login.microsoftonline.com/tenant/v2.0
+                    clientId: fusescope
+                    clientSecret: ${FUSESCOPE_ENTRA_CLIENT_SECRET}
+    template: templates/signoz/configmap.yaml
+    asserts:
+      - isKind:
+          of: ConfigMap
+      - equal:
+          path: metadata.name
+          value: fusescope-config
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "issuer: https://login.microsoftonline.com/tenant/v2.0"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "clientSecret: \\$\\{FUSESCOPE_ENTRA_CLIENT_SECRET\\}"
+
+  - it: should mount the config map and pass --config to the server
+    set:
+      signoz:
+        config:
+          authdomain:
+            reconcile_interval: 1m
+    template: templates/signoz/statefulset.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].args
+          content: --config=/etc/fusescope/config.yaml
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: config
+            mountPath: /etc/fusescope
+            readOnly: true
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: config
+            configMap:
+              name: fusescope-config
+      - exists:
+          path: spec.template.metadata.annotations["checksum/config"]

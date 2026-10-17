@@ -16,9 +16,14 @@ spec:
       {{- include "signoz.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- if .Values.signoz.podAnnotations }}
+      {{- if or .Values.signoz.podAnnotations .Values.signoz.config }}
       annotations:
-        {{- toYaml .Values.signoz.podAnnotations | nindent 8 }}
+        {{- with .Values.signoz.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- if .Values.signoz.config }}
+        checksum/config: {{ toYaml .Values.signoz.config | sha256sum }}
+        {{- end }}
       {{- end }}
       labels:
         {{- include "signoz.selectorLabels" . | nindent 8 }}
@@ -56,6 +61,9 @@ spec:
           image: {{ template "signoz.image" . }}
           imagePullPolicy: {{ .Values.signoz.image.pullPolicy }}
           args:
+            {{- if .Values.signoz.config }}
+            - "--config=/etc/fusescope/config.yaml"
+            {{- end }}
             {{- range .Values.signoz.additionalArgs }}
             - {{ . | quote }}
             {{- end }}
@@ -111,6 +119,11 @@ spec:
           {{- end }}
               mountPath: /var/lib/signoz/
           {{- end}}
+          {{- if .Values.signoz.config }}
+            - name: config
+              mountPath: /etc/fusescope
+              readOnly: true
+          {{- end }}
           {{- if .Values.signoz.additionalVolumeMounts }}
             {{- toYaml .Values.signoz.additionalVolumeMounts | nindent 12 }}
           {{- end }}
@@ -126,6 +139,11 @@ spec:
         - name: signoz-db-existing-claim
           persistentVolumeClaim:
             claimName: {{ .Values.signoz.persistence.existingClaim }}
+        {{- end }}
+        {{- if .Values.signoz.config }}
+        - name: config
+          configMap:
+            name: {{ include "signoz.fullname" . }}-config
         {{- end }}
         {{- if .Values.signoz.additionalVolumes }}
           {{- toYaml .Values.signoz.additionalVolumes | nindent 8 }}

@@ -1,0 +1,12 @@
+{{- if .Values.signoz.config }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "signoz.fullname" . }}-config
+  namespace: {{ include "signoz.namespace" . }}
+  labels:
+    {{- include "signoz.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    {{- toYaml .Values.signoz.config | nindent 4 }}
+{{- end }}
