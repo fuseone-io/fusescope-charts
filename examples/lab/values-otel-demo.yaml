@@ -1,0 +1,60 @@
+# OpenTelemetry Demo sending traces, metrics and logs to FuseScope only. Jaeger, Grafana,
+# Prometheus, OpenSearch and the LLM/profiling components are disabled to keep the
+# shared lab cluster light.
+components:
+  chatbot:
+    enabled: false
+  agent:
+    enabled: false
+  mcp:
+    enabled: false
+  firepit:
+    enabled: false
+  telemetry-docs:
+    enabled: false
+  frontend-proxy:
+    ingress:
+      enabled: true
+      ingressClassName: nginx
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+      hosts:
+        - host: otel-demo.fuseone.io
+          paths:
+            - path: /
+              pathType: Prefix
+              port: 8080
+      tls:
+        - secretName: otel-demo-fuseone-io-tls
+          hosts:
+            - otel-demo.fuseone.io
+
+jaeger:
+  enabled: false
+prometheus:
+  enabled: false
+grafana:
+  enabled: false
+opensearch:
+  enabled: false
+
+opentelemetry-collector:
+  config:
+    exporters:
+      otlp_grpc/fusescope:
+        endpoint: fusescope-otel-collector.fusescope-lab.svc.cluster.local:4317
+        tls:
+          insecure: true
+        sending_queue:
+          batch: {}
+    service:
+      pipelines:
+        traces:
+          exporters: [otlp_grpc/fusescope, span_metrics]
+        metrics:
+          receivers: [otlp, kafkametrics, span_metrics, prometheus/ad]
+          exporters: [otlp_grpc/fusescope]
+        logs:
+          exporters: [otlp_grpc/fusescope]
+        profiles:
+          exporters: [debug]

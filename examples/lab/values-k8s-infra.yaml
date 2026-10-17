@@ -1,0 +1,7 @@
+# Cluster metrics, events and pod logs from the FuseOne lab into FuseScope.
+global:
+  clusterName: fuseone-lab
+  deploymentEnvironment: lab
+
+otelCollectorEndpoint: fusescope-otel-collector.fusescope-lab.svc.cluster.local:4317
+otelInsecure: true

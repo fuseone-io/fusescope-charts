@@ -1,0 +1,70 @@
+{
+  "realm": "fusescope",
+  "enabled": true,
+  "sslRequired": "external",
+  "groups": [
+    { "name": "fusescope-admins" },
+    { "name": "fusescope-editors" },
+    { "name": "fusescope-viewers" }
+  ],
+  "clients": [
+    {
+      "clientId": "fusescope",
+      "name": "FuseScope",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "${FUSESCOPE_LAB_OIDC_CLIENT_SECRET}",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["https://fusescope.fuseone.io/api/v1/complete/oidc"],
+      "webOrigins": ["https://fusescope.fuseone.io"],
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "config": {
+            "claim.name": "groups",
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "admin@lab.fuseone.io",
+      "email": "admin@lab.fuseone.io",
+      "firstName": "Lab",
+      "lastName": "Admin",
+      "enabled": true,
+      "emailVerified": true,
+      "groups": ["fusescope-admins"],
+      "credentials": [{ "type": "password", "value": "${FUSESCOPE_LAB_USER_PASSWORD}", "temporary": false }]
+    },
+    {
+      "username": "editor@lab.fuseone.io",
+      "email": "editor@lab.fuseone.io",
+      "firstName": "Lab",
+      "lastName": "Editor",
+      "enabled": true,
+      "emailVerified": true,
+      "groups": ["fusescope-editors"],
+      "credentials": [{ "type": "password", "value": "${FUSESCOPE_LAB_USER_PASSWORD}", "temporary": false }]
+    },
+    {
+      "username": "viewer@lab.fuseone.io",
+      "email": "viewer@lab.fuseone.io",
+      "firstName": "Lab",
+      "lastName": "Viewer",
+      "enabled": true,
+      "emailVerified": true,
+      "groups": ["fusescope-viewers"],
+      "credentials": [{ "type": "password", "value": "${FUSESCOPE_LAB_USER_PASSWORD}", "temporary": false }]
+    }
+  ]
+}
