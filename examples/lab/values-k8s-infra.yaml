@@ -3,5 +3,5 @@ global:
   clusterName: fuseone-lab
   deploymentEnvironment: lab
 
-otelCollectorEndpoint: fusescope-otel-collector.fusescope-lab.svc.cluster.local:4317
+otelCollectorEndpoint: http://fusescope-otel-collector.fusescope-lab.svc.cluster.local:4318
 otelInsecure: true

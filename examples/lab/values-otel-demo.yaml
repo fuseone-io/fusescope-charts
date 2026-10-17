@@ -39,6 +39,16 @@ opensearch:
   enabled: false
 
 opentelemetry-collector:
+  # k8s-infra already runs a node agent holding the OTLP host ports and collecting
+  # host, kubelet and cluster metrics.
+  mode: deployment
+  presets:
+    hostMetrics:
+      enabled: false
+    kubeletMetrics:
+      enabled: false
+    clusterMetrics:
+      enabled: false
   config:
     exporters:
       otlp_grpc/fusescope:
