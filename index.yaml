@@ -26,6 +26,42 @@ entries:
   fusescope:
   - apiVersion: v2
     appVersion: 0.149.2
+    created: "2026-10-18T05:40:12.78168345Z"
+    dependencies:
+    - condition: clickhouse.enabled
+      name: clickhouse
+      repository: file://../clickhouse
+      version: 24.1.18
+    - condition: postgresql.enabled
+      name: postgresql
+      repository: file://../postgresql
+      version: 0.0.3
+    description: FuseScope observability platform (APM, traces, metrics and logs)
+      Helm chart
+    digest: 0443a0aeb2a3989a7b2d7ee04644c45ed639344c42b31049e018fa2ab157c5d3
+    home: https://github.com/fuseone-io/fusescope
+    icon: https://raw.githubusercontent.com/fuseone-io/fusescope/main/docs/brand/fusescope-app-icon.svg
+    keywords:
+    - FuseScope
+    - opentelemetry
+    - apm
+    - monitoring
+    - distributed tracing
+    - distributed logging
+    maintainers:
+    - name: FuseOne
+      url: https://github.com/fuseone-io
+    name: fusescope
+    sources:
+    - https://github.com/fuseone-io/fusescope-charts
+    - https://github.com/fuseone-io/fusescope
+    - https://github.com/fuseone-io/fusescope-otel-collector
+    type: application
+    urls:
+    - https://github.com/fuseone-io/fusescope-charts/releases/download/fusescope-0.149.3/fusescope-0.149.3.tgz
+    version: 0.149.3
+  - apiVersion: v2
+    appVersion: 0.149.2
     created: "2026-10-18T05:26:50.199471854Z"
     dependencies:
     - condition: clickhouse.enabled
@@ -232,6 +268,24 @@ entries:
   postgresql:
   - apiVersion: v2
     appVersion: 15.0.0
+    created: "2026-10-18T05:40:12.91828898Z"
+    description: A Helm Chart for PostgreSQL
+    digest: 7762ab6535d36c8f18a1d6c4c4c679c8c6b96ee8757b183b38bf8e5b7c0d0464
+    home: https://github.com/fuseone-io/fusescope-charts
+    icon: https://wiki.postgresql.org/wiki/File:PostgreSQL_logo.3colors.svg
+    maintainers:
+    - name: FuseOne
+      url: https://github.com/fuseone-io
+    name: postgresql
+    sources:
+    - https://github.com/fuseone-io/fusescope-charts
+    - https://github.com/postgres/postgres
+    type: application
+    urls:
+    - https://github.com/fuseone-io/fusescope-charts/releases/download/postgresql-0.0.3/postgresql-0.0.3.tgz
+    version: 0.0.3
+  - apiVersion: v2
+    appVersion: 15.0.0
     created: "2026-10-16T23:38:45.727309368Z"
     description: A Helm Chart for PostgreSQL
     digest: bf6ab9da681dc4f01e756a49178d9ac2710198eb8ae5756facb6a0b0d4a54ffc
@@ -270,4 +324,4 @@ entries:
     urls:
     - https://github.com/fuseone-io/fusescope-charts/releases/download/zookeeper-0.0.1/zookeeper-0.0.1.tgz
     version: 0.0.1
-generated: "2026-10-18T05:26:50.199487948Z"
+generated: "2026-10-18T05:40:12.918304693Z"
