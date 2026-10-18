@@ -16,7 +16,10 @@ clickhouse:
       cpu: "1"
       memory: 2Gi
     limits:
+      cpu: "4"
       memory: 6Gi
+  profiles:
+    default/max_threads: "4"
 
 signoz:
   resources:
