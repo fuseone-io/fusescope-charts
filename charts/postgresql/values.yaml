@@ -153,15 +153,18 @@ persistence:
   # @default -- ["ReadWriteOnce"]
   accessModes:
     - ReadWriteOnce
-  # persistence.mountPath -- Mount path for Postgres data.
-  # @default -- "/signoz/postgresql"
-  mountPath: /var/lib/postgresql
+  # persistence.mountPath -- Mount path for Postgres data. It must be the image's
+  # data volume (`/var/lib/postgresql/data` for the official image), or the
+  # container runtime mounts an anonymous node-local volume over the data directory.
+  # @default -- "/var/lib/postgresql/data"
+  mountPath: /var/lib/postgresql/data
   # persistence.subPath -- Subpath within the volume for Postgres data.
   # @default -- ""
   subPath: ""
-  # persistence.dataDir -- Data directory for Postgres data.
-  # @default -- "/signoz/postgresql/data"
-  dataDir: /var/lib/postgresql/data
+  # persistence.dataDir -- Data directory for Postgres data (PGDATA). A
+  # subdirectory of mountPath, since initdb refuses a directory holding lost+found.
+  # @default -- "/var/lib/postgresql/data/pgdata"
+  dataDir: /var/lib/postgresql/data/pgdata
 
 # additionalArgs -- Additional command-line arguments for Postgres containers.
 # @default -- []
