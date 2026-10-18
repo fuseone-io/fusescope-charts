@@ -2,6 +2,10 @@
 # Prometheus, OpenSearch and the LLM/profiling components are disabled to keep the
 # shared lab cluster light.
 components:
+  load-generator:
+    envOverrides:
+      - name: LOCUST_USERS
+        value: "1"
   chatbot:
     enabled: false
   agent:
