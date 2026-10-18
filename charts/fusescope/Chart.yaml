@@ -1,6 +1,6 @@
 apiVersion: v2
 name: fusescope
-version: 0.149.3
+version: 0.149.4
 appVersion: "0.149.2"
 description: FuseScope observability platform (APM, traces, metrics and logs) Helm chart
 type: application
@@ -21,7 +21,7 @@ dependencies:
   - name: clickhouse
     repository: file://../clickhouse
     condition: clickhouse.enabled
-    version: 24.1.18
+    version: 24.1.19
   - name: postgresql
     repository: file://../postgresql
     condition: postgresql.enabled
