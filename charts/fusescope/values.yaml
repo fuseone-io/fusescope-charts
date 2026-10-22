@@ -960,6 +960,42 @@ signoz:
     #  - secretName: chart-example-tls
     #    hosts:
     #      - signoz.domain.com
+  # Real User Monitoring ingestion gateway, served by FuseScope at /rum/v1 on the HTTP port.
+  # Other gateway settings (`forward_timeout`, `key_cache_ttl`, `usage_flush_interval`) go in
+  # `signoz.env`, e.g. `signoz_rum_forward__timeout: 10s`; `signoz.env` overrides these values.
+  rum:
+    # signoz.rum.enabled -- Serve the RUM ingestion gateway (`/rum/v1/traces`, `/rum/v1/logs`).
+    # @section -- SigNoz RUM
+    enabled: true
+    # signoz.rum.collectorEndpoint -- (string) Base URL of the collector OTLP/HTTP receiver the gateway forwards to.
+    # @default -- "http://RELEASE-otel-collector:4318, from otelCollector.ports.otlp-http"
+    # @section -- SigNoz RUM
+    collectorEndpoint: ""
+    # signoz.rum.trustForwardedFor -- (bool) Take the client IP for the per-client rate limit from the first
+    # `X-Forwarded-For` address. Must be true behind an ingress or load balancer, or every browser shares one
+    # limit; only enable it behind a proxy that sets the header.
+    # @default -- "signoz.ingress.enabled"
+    # @section -- SigNoz RUM
+    trustForwardedFor:
+    # signoz.rum.maxBodySize -- Largest accepted request body in bytes, before and after gzip decoding.
+    # @default -- "4194304 (4 MiB)"
+    # @section -- SigNoz RUM
+    maxBodySize: 4194304
+    rateLimit:
+      key:
+        # signoz.rum.rateLimit.key.rate -- (float) Requests per second shared by every client of one application key.
+        # @section -- SigNoz RUM
+        rate: 500
+        # signoz.rum.rateLimit.key.burst -- Burst size of the per-key limit.
+        # @section -- SigNoz RUM
+        burst: 1000
+      client:
+        # signoz.rum.rateLimit.client.rate -- (float) Requests per second per application key and client IP.
+        # @section -- SigNoz RUM
+        rate: 20
+        # signoz.rum.rateLimit.client.burst -- Burst size of the per-client limit.
+        # @section -- SigNoz RUM
+        burst: 60
   # signoz.resources -- Resource requests and limits.
   # Ref: http://kubernetes.io/docs/user-guide/compute-resources/
   # @section -- SigNoz
