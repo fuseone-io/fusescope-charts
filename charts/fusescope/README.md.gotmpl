@@ -61,6 +61,14 @@ Sometimes everything doesn't get properly removed. If that happens try deleting 
 kubectl delete namespace platform
 ```
 
+### Real User Monitoring
+
+FuseScope serves the RUM ingestion gateway on its HTTP port (8080): browsers send OTLP/HTTP to `POST /rum/v1/traces` and `POST /rum/v1/logs` directly, authenticated by the application's public key. The gateway forwards to the in-chart collector (`signoz.rum.collectorEndpoint`) and is configured under `signoz.rum` (see SigNoz RUM in [Values](#values)).
+
+- **Public endpoint.** Browsers must reach `/rum/` on the FuseScope URL. The default ingress path `/` already routes it to the backend; if you narrow `signoz.ingress.hosts[].paths`, add `/rum` (`Prefix`, port 8080).
+- **CORS belongs to the gateway.** It answers `OPTIONS` preflights from each application's allowed origins. The ingress or proxy must pass `OPTIONS` and the `Origin` header through and must not add CORS headers of its own. With ingress-nginx, don't set `nginx.ingress.kubernetes.io/enable-cors` on this ingress, and raise `nginx.ingress.kubernetes.io/proxy-body-size` (1m by default) to `signoz.rum.maxBodySize` (4m).
+- **Client IP.** The per-client rate limit (20 req/s, burst 60) keys on the client IP. Behind an ingress or load balancer every browser would share the proxy's IP, so `signoz.rum.trustForwardedFor` defaults to `signoz.ingress.enabled` and the gateway then reads the first `X-Forwarded-For` address. Set it to `true` when another proxy fronts FuseScope, and only when that proxy overwrites the header: a client-supplied address would let a browser pick its own bucket, though it stays within the per-key limit. With ingress-nginx this holds by default (`use-forwarded-headers: false`); keep the real client IP reaching the controller (e.g. `externalTrafficPolicy: Local` or PROXY protocol).
+
 > [!WARNING]
 > ### Breaking Changes
 > #### Version 0.131.0

@@ -433,6 +433,8 @@ Create Env
     "signoz_telemetrystore_clickhouse_cluster" (include "clickhouse.cluster" .)
 }}
 
+{{- $defaultEnv = merge $defaultEnv (include "signoz.rumEnv" . | fromYaml) -}}
+
 {{/*
 SQL STORE POSTGRES ENV
 */}}
@@ -476,6 +478,33 @@ Keep it seprate from sqlStorePostgresEnv to maintain the order of env variables
 {{- template "signoz.renderEnv" $completeEnv -}}
 {{/* Render the sqlstoreEnv (provider, dsn) seprately to maintain the order of the env variables */}}
 {{- template "signoz.renderEnv" $sqlStoreEnv -}}
+{{- end -}}
+
+{{/*
+RUM gateway env, as a YAML map. trustForwardedFor follows signoz.ingress.enabled unless set.
+*/}}
+{{- define "signoz.rumEnv" -}}
+{{- $rum := .Values.signoz.rum | default dict -}}
+{{- $enabled := ternary true $rum.enabled (kindIs "invalid" $rum.enabled) -}}
+signoz_rum_enabled: {{ $enabled | quote }}
+{{- if $enabled }}
+{{- $endpoint := $rum.collectorEndpoint | default (printf "http://%s:%v" (include "otelCollector.fullname" .) (index .Values.otelCollector.ports "otlp-http" "servicePort")) }}
+signoz_rum_collector__endpoint: {{ $endpoint | quote }}
+{{- $trust := ternary .Values.signoz.ingress.enabled $rum.trustForwardedFor (kindIs "invalid" $rum.trustForwardedFor) }}
+signoz_rum_ratelimit_trust__forwarded__for: {{ $trust | quote }}
+{{- with $rum.maxBodySize }}
+signoz_rum_max__body__size: {{ int64 . | quote }}
+{{- end }}
+{{- range $scope := list "key" "client" }}
+{{- $limit := index ($rum.rateLimit | default dict) $scope | default dict }}
+{{- with $limit.rate }}
+signoz_rum_ratelimit_{{ $scope }}_rate: {{ . | quote }}
+{{- end }}
+{{- with $limit.burst }}
+signoz_rum_ratelimit_{{ $scope }}_burst: {{ int64 . | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
 {{- end -}}
 
 {{/*

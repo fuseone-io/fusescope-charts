@@ -1,0 +1,183 @@
+suite: Test the RUM gateway environment variables
+
+templates:
+  - templates/signoz/statefulset.yaml
+
+release:
+  name: fusescope
+  namespace: platform
+
+tests:
+  - it: should render the RUM gateway defaults
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_ENABLED
+            value: "true"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_MAX__BODY__SIZE
+            value: "4194304"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_RATELIMIT_KEY_RATE
+            value: "500"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_RATELIMIT_KEY_BURST
+            value: "1000"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_RATELIMIT_CLIENT_RATE
+            value: "20"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_RATELIMIT_CLIENT_BURST
+            value: "60"
+
+  - it: should forward to the in-chart collector OTLP/HTTP service by default
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_COLLECTOR__ENDPOINT
+            value: http://fusescope-otel-collector:4318
+
+  - it: should follow the collector OTLP/HTTP service port
+    set:
+      otelCollector:
+        ports:
+          otlp-http:
+            servicePort: 14318
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_COLLECTOR__ENDPOINT
+            value: http://fusescope-otel-collector:14318
+
+  - it: should not trust X-Forwarded-For without the ingress
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_RATELIMIT_TRUST__FORWARDED__FOR
+            value: "false"
+
+  - it: should trust X-Forwarded-For behind the ingress
+    set:
+      signoz:
+        ingress:
+          enabled: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_RATELIMIT_TRUST__FORWARDED__FOR
+            value: "true"
+
+  - it: should honour explicit overrides
+    set:
+      signoz:
+        ingress:
+          enabled: true
+        rum:
+          collectorEndpoint: https://collector.example.com:4318
+          trustForwardedFor: false
+          maxBodySize: 1048576
+          rateLimit:
+            key:
+              rate: 50
+              burst: 100
+            client:
+              rate: 5
+              burst: 10
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_COLLECTOR__ENDPOINT
+            value: https://collector.example.com:4318
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_RATELIMIT_TRUST__FORWARDED__FOR
+            value: "false"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_MAX__BODY__SIZE
+            value: "1048576"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_RATELIMIT_KEY_RATE
+            value: "50"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_RATELIMIT_KEY_BURST
+            value: "100"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_RATELIMIT_CLIENT_RATE
+            value: "5"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_RATELIMIT_CLIENT_BURST
+            value: "10"
+
+  - it: should trust X-Forwarded-For when set explicitly without the ingress
+    set:
+      signoz:
+        rum:
+          trustForwardedFor: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_RATELIMIT_TRUST__FORWARDED__FOR
+            value: "true"
+
+  - it: should only disable the gateway when RUM is disabled
+    set:
+      signoz:
+        rum:
+          enabled: false
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_ENABLED
+            value: "false"
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_COLLECTOR__ENDPOINT
+          any: true
+
+  - it: should let signoz.env override the RUM values
+    set:
+      signoz:
+        env:
+          signoz_rum_forward__timeout: 5s
+          signoz_rum_collector__endpoint: http://other-collector:4318
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_FORWARD__TIMEOUT
+            value: 5s
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_COLLECTOR__ENDPOINT
+            value: http://other-collector:4318
