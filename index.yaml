@@ -47,6 +47,42 @@ entries:
     version: 24.1.18
   fusescope:
   - apiVersion: v2
+    appVersion: 0.152.0
+    created: "2026-10-23T09:58:34.955410416Z"
+    dependencies:
+    - condition: clickhouse.enabled
+      name: clickhouse
+      repository: file://../clickhouse
+      version: 24.1.19
+    - condition: postgresql.enabled
+      name: postgresql
+      repository: file://../postgresql
+      version: 0.0.3
+    description: FuseScope observability platform (APM, traces, metrics and logs)
+      Helm chart
+    digest: 823a18a5bd1fc06869d56697c96049ce33c867fc9aa20025dc55bd9a635096f1
+    home: https://github.com/fuseone-io/fusescope
+    icon: https://raw.githubusercontent.com/fuseone-io/fusescope/main/docs/brand/fusescope-app-icon.svg
+    keywords:
+    - FuseScope
+    - opentelemetry
+    - apm
+    - monitoring
+    - distributed tracing
+    - distributed logging
+    maintainers:
+    - name: FuseOne
+      url: https://github.com/fuseone-io
+    name: fusescope
+    sources:
+    - https://github.com/fuseone-io/fusescope-charts
+    - https://github.com/fuseone-io/fusescope
+    - https://github.com/fuseone-io/fusescope-otel-collector
+    type: application
+    urls:
+    - https://github.com/fuseone-io/fusescope-charts/releases/download/fusescope-0.152.0/fusescope-0.152.0.tgz
+    version: 0.152.0
+  - apiVersion: v2
     appVersion: 0.151.0
     created: "2026-10-22T22:57:03.831449639Z"
     dependencies:
@@ -490,4 +526,4 @@ entries:
     urls:
     - https://github.com/fuseone-io/fusescope-charts/releases/download/zookeeper-0.0.1/zookeeper-0.0.1.tgz
     version: 0.0.1
-generated: "2026-10-22T22:57:03.831476589Z"
+generated: "2026-10-23T09:58:34.955488963Z"
