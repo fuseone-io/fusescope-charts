@@ -960,6 +960,11 @@ signoz:
     #  - secretName: chart-example-tls
     #    hosts:
     #      - signoz.domain.com
+  # signoz.ingestionUrl -- (string) OTLP/HTTP URL FuseScope shows in onboarding for sending telemetry (`global.ingestion_url`).
+  # An admin can still override it from the UI.
+  # @default -- "The collector ingress (https when its host has TLS), else http://RELEASE-otel-collector.NAMESPACE.svc:4318"
+  # @section -- SigNoz Networking
+  ingestionUrl: ""
   # Real User Monitoring ingestion gateway, served by FuseScope at /rum/v1 on the HTTP port.
   # Other gateway settings (`forward_timeout`, `key_cache_ttl`, `usage_flush_interval`) go in
   # `signoz.env`, e.g. `signoz_rum_forward__timeout: 10s`; `signoz.env` overrides these values.

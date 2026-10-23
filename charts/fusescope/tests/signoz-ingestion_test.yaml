@@ -1,0 +1,105 @@
+suite: Test the ingestion URL shown in onboarding
+
+templates:
+  - templates/signoz/statefulset.yaml
+
+release:
+  name: fusescope
+  namespace: platform
+
+tests:
+  - it: should point at the in-chart collector service when it has no ingress
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_GLOBAL_INGESTION__URL
+            value: http://fusescope-otel-collector.platform.svc:4318
+
+  - it: should follow the collector OTLP/HTTP service port
+    set:
+      otelCollector:
+        ports:
+          otlp-http:
+            servicePort: 14318
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_GLOBAL_INGESTION__URL
+            value: http://fusescope-otel-collector.platform.svc:14318
+
+  - it: should use the collector ingress host over plain HTTP without TLS
+    set:
+      otelCollector:
+        ingress:
+          enabled: true
+          hosts:
+            - host: otlp.example.com
+              paths:
+                - path: /
+                  pathType: Prefix
+                  port: 4318
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_GLOBAL_INGESTION__URL
+            value: http://otlp.example.com
+
+  - it: should use https and the OTLP/HTTP path when the ingress host has TLS
+    set:
+      otelCollector:
+        ingress:
+          enabled: true
+          hosts:
+            - host: otlp.example.com
+              paths:
+                - path: /grpc
+                  pathType: Prefix
+                  port: 4317
+                - path: /otlp/
+                  pathType: Prefix
+                  port: 4318
+          tls:
+            - secretName: otlp-tls
+              hosts:
+                - otlp.example.com
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_GLOBAL_INGESTION__URL
+            value: https://otlp.example.com/otlp
+
+  - it: should prefer signoz.ingestionUrl over the ingress
+    set:
+      signoz:
+        ingestionUrl: https://ingest.acme.io
+      otelCollector:
+        ingress:
+          enabled: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_GLOBAL_INGESTION__URL
+            value: https://ingest.acme.io
+
+  - it: should let signoz.env override the computed URL
+    set:
+      signoz:
+        ingestionUrl: https://ingest.acme.io
+        env:
+          signoz_global_ingestion__url: https://from-env.acme.io
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_GLOBAL_INGESTION__URL
+            value: https://from-env.acme.io
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_GLOBAL_INGESTION__URL
+            value: https://ingest.acme.io
