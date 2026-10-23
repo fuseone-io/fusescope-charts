@@ -434,6 +434,7 @@ Create Env
 }}
 
 {{- $defaultEnv = merge $defaultEnv (include "signoz.rumEnv" . | fromYaml) -}}
+{{- $defaultEnv = merge $defaultEnv (include "signoz.retentionEnv" . | fromYaml) -}}
 
 {{/*
 SQL STORE POSTGRES ENV
@@ -503,6 +504,18 @@ signoz_rum_ratelimit_{{ $scope }}_rate: {{ . | quote }}
 {{- with $limit.burst }}
 signoz_rum_ratelimit_{{ $scope }}_burst: {{ int64 . | quote }}
 {{- end }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Default retention env, as a YAML map. Unset signals keep the schema default.
+*/}}
+{{- define "signoz.retentionEnv" -}}
+{{- $default := (.Values.signoz.retention | default dict).default | default dict -}}
+{{- range $signal := list "logs" "traces" "metrics" }}
+{{- with index $default $signal }}
+signoz_retention_default_{{ $signal }}: {{ int64 . | quote }}
 {{- end }}
 {{- end }}
 {{- end -}}

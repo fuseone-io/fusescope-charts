@@ -1,0 +1,95 @@
+suite: Test the default retention environment variables
+
+templates:
+  - templates/signoz/statefulset.yaml
+
+release:
+  name: fusescope
+  namespace: platform
+
+tests:
+  - it: should keep the schema default retention when unset
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RETENTION_DEFAULT_LOGS
+          any: true
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RETENTION_DEFAULT_TRACES
+          any: true
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RETENTION_DEFAULT_METRICS
+          any: true
+
+  - it: should render the default retention of each signal
+    set:
+      signoz:
+        retention:
+          default:
+            logs: 3
+            traces: 7
+            metrics: 30
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RETENTION_DEFAULT_LOGS
+            value: "3"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RETENTION_DEFAULT_TRACES
+            value: "7"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RETENTION_DEFAULT_METRICS
+            value: "30"
+
+  - it: should render only the signals that are set
+    set:
+      signoz:
+        retention:
+          default:
+            traces: 3
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RETENTION_DEFAULT_TRACES
+            value: "3"
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RETENTION_DEFAULT_LOGS
+          any: true
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RETENTION_DEFAULT_METRICS
+          any: true
+
+  - it: should let signoz.env override the default retention
+    set:
+      signoz:
+        retention:
+          default:
+            logs: 3
+        env:
+          signoz_retention_default_logs: "5"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RETENTION_DEFAULT_LOGS
+            value: "5"
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RETENTION_DEFAULT_LOGS
+            value: "3"
