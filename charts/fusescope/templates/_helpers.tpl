@@ -434,6 +434,7 @@ Create Env
 }}
 
 {{- $defaultEnv = merge $defaultEnv (include "signoz.rumEnv" . | fromYaml) -}}
+{{- $_ := set $defaultEnv "signoz_global_ingestion__url" (include "signoz.ingestionUrl" .) -}}
 {{- $defaultEnv = merge $defaultEnv (include "signoz.retentionEnv" . | fromYaml) -}}
 
 {{/*
@@ -479,6 +480,35 @@ Keep it seprate from sqlStorePostgresEnv to maintain the order of env variables
 {{- template "signoz.renderEnv" $completeEnv -}}
 {{/* Render the sqlstoreEnv (provider, dsn) seprately to maintain the order of the env variables */}}
 {{- template "signoz.renderEnv" $sqlStoreEnv -}}
+{{- end -}}
+
+{{/*
+OTLP/HTTP URL FuseScope shows for sending telemetry: signoz.ingestionUrl, else the
+collector ingress (https when its host has TLS, on the path routed to the OTLP/HTTP
+port), else the collector's in-cluster service.
+*/}}
+{{- define "signoz.ingestionUrl" -}}
+{{- $collector := .Values.otelCollector -}}
+{{- $httpPort := index $collector.ports "otlp-http" "servicePort" -}}
+{{- if .Values.signoz.ingestionUrl -}}
+{{- .Values.signoz.ingestionUrl -}}
+{{- else if and $collector.ingress.enabled $collector.ingress.hosts -}}
+{{- $rule := first $collector.ingress.hosts -}}
+{{- $scheme := "http" -}}
+{{- range $collector.ingress.tls -}}
+{{- if has $rule.host .hosts }}{{ $scheme = "https" }}{{ end -}}
+{{- end -}}
+{{- $path := "" -}}
+{{- with $rule.paths -}}
+{{- $path = (first .).path -}}
+{{- range . -}}
+{{- if eq (toString .port) (toString $httpPort) }}{{ $path = .path }}{{ break }}{{ end -}}
+{{- end -}}
+{{- end -}}
+{{- printf "%s://%s%s" $scheme $rule.host (trimSuffix "/" ($path | default "")) -}}
+{{- else -}}
+{{- printf "http://%s.%s.svc:%v" (include "otelCollector.fullname" .) .Release.Namespace $httpPort -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
