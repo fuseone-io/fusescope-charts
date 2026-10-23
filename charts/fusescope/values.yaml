@@ -996,6 +996,20 @@ signoz:
         # signoz.rum.rateLimit.client.burst -- Burst size of the per-client limit.
         # @section -- SigNoz RUM
         burst: 60
+  # Default retention, in days, that FuseScope sets on startup for each signal no organization has a
+  # retention set for yet, through the same path as Settings > Retention. A value set in the UI is never
+  # overridden. Like a change from the UI, the ClickHouse TTL applies to new parts only.
+  retention:
+    default:
+      # signoz.retention.default.logs -- (int) Default logs retention in days. Empty keeps the schema default.
+      # @section -- SigNoz Retention
+      logs:
+      # signoz.retention.default.traces -- (int) Default traces retention in days. Empty keeps the schema default.
+      # @section -- SigNoz Retention
+      traces:
+      # signoz.retention.default.metrics -- (int) Default metrics retention in days. Empty keeps the schema default.
+      # @section -- SigNoz Retention
+      metrics:
   # signoz.resources -- Resource requests and limits.
   # Ref: http://kubernetes.io/docs/user-guide/compute-resources/
   # @section -- SigNoz
