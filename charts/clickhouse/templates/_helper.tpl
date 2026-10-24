@@ -353,3 +353,36 @@ Return common environment variables for ClickHouse Operator
         containerName: operator
         resource: limits.memory
 {{- end }}
+
+{{/*
+Fail early on cold storage values ClickHouse would reject or that would leave it without credentials.
+*/}}
+{{- define "clickhouse.coldStorage.validate" -}}
+{{- with .Values.coldStorage }}
+{{- if .enabled }}
+{{- if not (has .type (list "s3" "gcs")) }}
+{{- fail (printf "coldStorage.type must be s3 or gcs, got %q" .type) }}
+{{- end }}
+{{- if not .endpoint }}
+{{- fail "coldStorage.endpoint is required when coldStorage.enabled is true, e.g. https://<bucket>.s3.<region>.amazonaws.com/data/" }}
+{{- end }}
+{{- if and .role.enabled (ne .type "s3") }}
+{{- fail "coldStorage.role.enabled works only with type s3; GCS uses HMAC keys" }}
+{{- end }}
+{{- if not (or .role.enabled .existingSecret (and .accessKey .secretAccess)) }}
+{{- fail "coldStorage needs credentials: set accessKey and secretAccess, existingSecret, or role.enabled" }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Whether cold storage authenticates with keys read from a Secret.
+*/}}
+{{- define "clickhouse.coldStorage.useKeys" -}}
+{{- if and .Values.coldStorage.enabled (not .Values.coldStorage.role.enabled) }}true{{ end }}
+{{- end -}}
+
+{{- define "clickhouse.coldStorage.secretName" -}}
+{{- default (printf "%s-cold-storage" (include "clickhouse.fullname" .)) .Values.coldStorage.existingSecret -}}
+{{- end -}}

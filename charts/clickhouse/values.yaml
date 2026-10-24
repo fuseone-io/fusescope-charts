@@ -435,32 +435,45 @@ additionalVolumes: []
 # -- Additional volume mounts for ClickHouse pod
 additionalVolumeMounts: []
 
-# Cold storage configuration
+# Cold storage configuration: parts older than the move period of each signal go to object storage
+# (policy `tiered`, volume `s3`) and stay queryable. See the FuseScope chart README, "Cold storage".
 coldStorage:
   # -- Whether to enable S3 or GCS cold storage
   enabled: false
   # -- Reserve free space on default disk (in bytes)
   # Default value set below is 10MiB
   defaultKeepFreeSpaceBytes: "10485760"
-  # -- Type of cold storage: s3 or gcs
+  # -- Type of cold storage: s3 (AWS S3 and S3-compatible stores) or gcs (S3-compatible XML API with HMAC keys)
   type: s3
-  # -- Endpoint for S3 or GCS
-  # For S3, if region is us-east-1, endpoint can be https://s3.amazonaws.com
-  #         if region is not us-east-1, endpoint should be https://s3-<region>.amazonaws.com
-  # For GCS, endpoint should be https://storage.googleapis.com/<bucket-name>/data/
-  endpoint: https://<bucket-name>.s3-<region>.amazonaws.com/data/
-  # -- Access Key for S3 or GCS
-  accessKey: <access_key_id>
-  # -- Secret Access Key for S3 or GCS
-  secretAccess: <secret_access_key>
-  # AWS role configuration - to use environment variables instead of passing access and secret keys
+  # -- Bucket URL with a path prefix, required when enabled.
+  # S3: https://<bucket>.s3.<region>.amazonaws.com/data/
+  # GCS: https://storage.googleapis.com/<bucket>/data/
+  # MinIO and other S3-compatible stores: https://<host>/<bucket>/data/
+  endpoint: ""
+  # -- Bucket region; empty lets ClickHouse detect it
+  region: ""
+  # -- Access key ID, stored in a Secret created by the chart. Ignored with existingSecret or role.enabled
+  accessKey: ""
+  # -- Secret access key, stored in a Secret created by the chart. Ignored with existingSecret or role.enabled
+  secretAccess: ""
+  # -- Existing Secret holding the keys, instead of accessKey and secretAccess
+  existingSecret: ""
+  # Keys inside the Secret
+  secretKeys:
+    # -- Key of the access key ID
+    accessKey: accessKey
+    # -- Key of the secret access key
+    secretAccess: secretAccess
+  # Filesystem cache in front of the object storage disk, on the ClickHouse data volume
+  cache:
+    # -- Maximum cache size. Rule of thumb: the larger of 10% of the cold data and 2 days of compressed ingest
+    maxSize: 50Gi
+  # AWS IAM role (IRSA): use environment credentials instead of keys. S3 only
   role:
     # -- Whether to enable AWS IAM ARN role
     enabled: false
-    # -- Annotations to use by service account associated to Clickhouse instance
-    annotations:
-      # aws role arn
-      eks.amazonaws.com/role-arn: arn:aws:iam::******:role/*****
+    # -- Annotations for the ClickHouse service account, e.g. eks.amazonaws.com/role-arn
+    annotations: {}
 
 # -- Clickhouse configuration files.
 #

@@ -57,6 +57,7 @@ spec:
           string created_at = 7;
           string elements_chain = 8;
         }
+      {{- include "clickhouse.coldStorage.validate" . }}
       {{- if .Values.coldStorage.enabled }}
       config.d/storage.xml: |
         <clickhouse>
@@ -73,26 +74,29 @@ spec:
                 -->
                 <keep_free_space_bytes>{{ .Values.coldStorage.defaultKeepFreeSpaceBytes }}</keep_free_space_bytes>
               </default>
-              {{- if eq .Values.coldStorage.type "s3" }}
-              <s3>
+              {{- $cs := .Values.coldStorage }}
+              <{{ $cs.type }}>
                 <type>s3</type>
-                <endpoint>{{ .Values.coldStorage.endpoint }}</endpoint>
-                {{- if .Values.coldStorage.role.enabled }}
+                <endpoint>{{ $cs.endpoint }}</endpoint>
+                {{- if $cs.region }}
+                <region>{{ $cs.region }}</region>
+                {{- end }}
+                {{- if eq $cs.type "gcs" }}
+                <support_batch_delete>false</support_batch_delete>
+                {{- end }}
+                {{- if $cs.role.enabled }}
                 <use_environment_credentials>true</use_environment_credentials>
                 {{- else }}
-                <access_key_id>{{ .Values.coldStorage.accessKey }}</access_key_id>
-                <secret_access_key>{{ .Values.coldStorage.secretAccess }}</secret_access_key>
+                <access_key_id from_env="COLD_STORAGE_ACCESS_KEY_ID" />
+                <secret_access_key from_env="COLD_STORAGE_SECRET_ACCESS_KEY" />
                 {{- end }}
-              </s3>
-              {{- else if eq .Values.coldStorage.type "gcs" }}
-              <gcs>
-                <support_batch_delete>false</support_batch_delete>
-                <type>s3</type>
-                <endpoint>{{ .Values.coldStorage.endpoint }}</endpoint>
-                <access_key_id>{{ .Values.coldStorage.accessKey }}</access_key_id>
-                <secret_access_key>{{ .Values.coldStorage.secretAccess }}</secret_access_key>
-              </gcs>
-              {{- end }}
+              </{{ $cs.type }}>
+              <{{ $cs.type }}_cache>
+                <type>cache</type>
+                <disk>{{ $cs.type }}</disk>
+                <path>/var/lib/clickhouse/caches/{{ $cs.type }}/</path>
+                <max_size>{{ $cs.cache.maxSize }}</max_size>
+              </{{ $cs.type }}_cache>
             </disks>
             <policies>
               <tiered>
@@ -101,7 +105,7 @@ spec:
                     <disk>default</disk>
                   </default>
                   <s3>
-                    <disk>{{ .Values.coldStorage.type }}</disk>
+                    <disk>{{ $cs.type }}_cache</disk>
                     <perform_ttl_move_on_insert>0</perform_ttl_move_on_insert>
                     <prefer_not_to_merge>1</prefer_not_to_merge>
                   </s3>
@@ -110,6 +114,9 @@ spec:
               </tiered>
             </policies>
           </storage_configuration>
+          <merge_tree>
+            <allow_remote_fs_zero_copy_replication>0</allow_remote_fs_zero_copy_replication>
+          </merge_tree>
         </clickhouse>
       {{- end }}
       {{ include "clickhouse.files" . | indent 6 }}
@@ -228,6 +235,19 @@ spec:
                   containerPort: 9000
                 - name: interserver
                   containerPort: 9009
+              {{- if include "clickhouse.coldStorage.useKeys" . }}
+              env:
+                - name: COLD_STORAGE_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "clickhouse.coldStorage.secretName" . }}
+                      key: {{ .Values.coldStorage.secretKeys.accessKey }}
+                - name: COLD_STORAGE_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "clickhouse.coldStorage.secretName" . }}
+                      key: {{ .Values.coldStorage.secretKeys.secretAccess }}
+              {{- end }}
               
               {{- if .Values.startupProbe.enabled }}
               startupProbe:

@@ -1,0 +1,244 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/helm-unittest/helm-unittest/main/schema/helm-testsuite.json
+suite: clickhouse-instance_cold_storage_test.yaml
+templates:
+  - templates/clickhouse-instance/clickhouse-instance.yaml
+  - templates/clickhouse-instance/cold-storage-secret.yaml
+release:
+  name: clickhouse
+  namespace: signoz
+tests:
+  - it: is disabled by default
+    asserts:
+      - isNull:
+          path: spec.configuration.files["config.d/storage.xml"]
+        template: templates/clickhouse-instance/clickhouse-instance.yaml
+      - isNull:
+          path: spec.templates.podTemplates[0].spec.containers[0].env
+        template: templates/clickhouse-instance/clickhouse-instance.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/clickhouse-instance/cold-storage-secret.yaml
+
+  - it: puts a cache disk on the data volume in front of the s3 disk
+    set:
+      coldStorage:
+        enabled: true
+        endpoint: https://bucket.s3.eu-west-1.amazonaws.com/data/
+        accessKey: AKIAEXAMPLE
+        secretAccess: s3cr3t
+    template: templates/clickhouse-instance/clickhouse-instance.yaml
+    asserts:
+      - matchRegex:
+          path: spec.configuration.files["config.d/storage.xml"]
+          pattern: <s3_cache>\s*<type>cache</type>\s*<disk>s3</disk>\s*<path>/var/lib/clickhouse/caches/s3/</path>\s*<max_size>50Gi</max_size>\s*</s3_cache>
+      - matchRegex:
+          path: spec.configuration.files["config.d/storage.xml"]
+          pattern: <tiered>\s*<volumes>\s*<default>\s*<disk>default</disk>\s*</default>\s*<s3>\s*<disk>s3_cache</disk>\s*<perform_ttl_move_on_insert>0</perform_ttl_move_on_insert>\s*<prefer_not_to_merge>1</prefer_not_to_merge>\s*</s3>\s*</volumes>\s*<move_factor>0</move_factor>
+      - matchRegex:
+          path: spec.configuration.files["config.d/storage.xml"]
+          pattern: <allow_remote_fs_zero_copy_replication>0</allow_remote_fs_zero_copy_replication>
+      - notMatchRegex:
+          path: spec.configuration.files["config.d/storage.xml"]
+          pattern: <region>
+
+  - it: sizes the cache and sets the region
+    set:
+      coldStorage:
+        enabled: true
+        endpoint: https://bucket.s3.eu-west-1.amazonaws.com/data/
+        region: eu-west-1
+        accessKey: AKIAEXAMPLE
+        secretAccess: s3cr3t
+        cache:
+          maxSize: 200Gi
+    template: templates/clickhouse-instance/clickhouse-instance.yaml
+    asserts:
+      - matchRegex:
+          path: spec.configuration.files["config.d/storage.xml"]
+          pattern: <max_size>200Gi</max_size>
+      - matchRegex:
+          path: spec.configuration.files["config.d/storage.xml"]
+          pattern: <region>eu-west-1</region>
+
+  - it: reads keys from a chart-created Secret through env vars
+    set:
+      coldStorage:
+        enabled: true
+        endpoint: https://bucket.s3.eu-west-1.amazonaws.com/data/
+        accessKey: AKIAEXAMPLE
+        secretAccess: s3cr3t
+    asserts:
+      - matchRegex:
+          path: spec.configuration.files["config.d/storage.xml"]
+          pattern: <access_key_id from_env="COLD_STORAGE_ACCESS_KEY_ID" />\s*<secret_access_key from_env="COLD_STORAGE_SECRET_ACCESS_KEY" />
+        template: templates/clickhouse-instance/clickhouse-instance.yaml
+      - notMatchRegex:
+          path: spec.configuration.files["config.d/storage.xml"]
+          pattern: AKIAEXAMPLE|s3cr3t
+        template: templates/clickhouse-instance/clickhouse-instance.yaml
+      - contains:
+          path: spec.templates.podTemplates[0].spec.containers[0].env
+          content:
+            name: COLD_STORAGE_ACCESS_KEY_ID
+            valueFrom:
+              secretKeyRef:
+                name: clickhouse-cold-storage
+                key: accessKey
+        template: templates/clickhouse-instance/clickhouse-instance.yaml
+      - contains:
+          path: spec.templates.podTemplates[0].spec.containers[0].env
+          content:
+            name: COLD_STORAGE_SECRET_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: clickhouse-cold-storage
+                key: secretAccess
+        template: templates/clickhouse-instance/clickhouse-instance.yaml
+      - isKind:
+          of: Secret
+        template: templates/clickhouse-instance/cold-storage-secret.yaml
+      - equal:
+          path: metadata.name
+          value: clickhouse-cold-storage
+        template: templates/clickhouse-instance/cold-storage-secret.yaml
+      - equal:
+          path: stringData
+          value:
+            accessKey: AKIAEXAMPLE
+            secretAccess: s3cr3t
+        template: templates/clickhouse-instance/cold-storage-secret.yaml
+
+  - it: reads keys from an existing Secret
+    set:
+      coldStorage:
+        enabled: true
+        endpoint: https://bucket.s3.eu-west-1.amazonaws.com/data/
+        existingSecret: my-bucket-keys
+        secretKeys:
+          accessKey: AWS_ACCESS_KEY_ID
+          secretAccess: AWS_SECRET_ACCESS_KEY
+    asserts:
+      - contains:
+          path: spec.templates.podTemplates[0].spec.containers[0].env
+          content:
+            name: COLD_STORAGE_ACCESS_KEY_ID
+            valueFrom:
+              secretKeyRef:
+                name: my-bucket-keys
+                key: AWS_ACCESS_KEY_ID
+        template: templates/clickhouse-instance/clickhouse-instance.yaml
+      - contains:
+          path: spec.templates.podTemplates[0].spec.containers[0].env
+          content:
+            name: COLD_STORAGE_SECRET_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: my-bucket-keys
+                key: AWS_SECRET_ACCESS_KEY
+        template: templates/clickhouse-instance/clickhouse-instance.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/clickhouse-instance/cold-storage-secret.yaml
+
+  - it: uses environment credentials with an IAM role
+    set:
+      coldStorage:
+        enabled: true
+        endpoint: https://bucket.s3.eu-west-1.amazonaws.com/data/
+        role:
+          enabled: true
+          annotations:
+            eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/clickhouse
+    asserts:
+      - matchRegex:
+          path: spec.configuration.files["config.d/storage.xml"]
+          pattern: <use_environment_credentials>true</use_environment_credentials>
+        template: templates/clickhouse-instance/clickhouse-instance.yaml
+      - notMatchRegex:
+          path: spec.configuration.files["config.d/storage.xml"]
+          pattern: access_key_id
+        template: templates/clickhouse-instance/clickhouse-instance.yaml
+      - isNull:
+          path: spec.templates.podTemplates[0].spec.containers[0].env
+        template: templates/clickhouse-instance/clickhouse-instance.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/clickhouse-instance/cold-storage-secret.yaml
+
+  - it: keeps GCS on the S3 API with HMAC keys and no batch delete
+    set:
+      coldStorage:
+        enabled: true
+        type: gcs
+        endpoint: https://storage.googleapis.com/bucket/data/
+        accessKey: GOOGEXAMPLE
+        secretAccess: hmac-secret
+    template: templates/clickhouse-instance/clickhouse-instance.yaml
+    asserts:
+      - matchRegex:
+          path: spec.configuration.files["config.d/storage.xml"]
+          pattern: <gcs>\s*<type>s3</type>\s*<endpoint>https://storage.googleapis.com/bucket/data/</endpoint>\s*<support_batch_delete>false</support_batch_delete>\s*<access_key_id from_env="COLD_STORAGE_ACCESS_KEY_ID" />
+      - matchRegex:
+          path: spec.configuration.files["config.d/storage.xml"]
+          pattern: <gcs_cache>\s*<type>cache</type>\s*<disk>gcs</disk>\s*<path>/var/lib/clickhouse/caches/gcs/</path>
+      - matchRegex:
+          path: spec.configuration.files["config.d/storage.xml"]
+          pattern: <s3>\s*<disk>gcs_cache</disk>
+
+  - it: fails without an endpoint
+    set:
+      coldStorage:
+        enabled: true
+        accessKey: AKIAEXAMPLE
+        secretAccess: s3cr3t
+    template: templates/clickhouse-instance/clickhouse-instance.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: coldStorage.endpoint is required
+
+  - it: fails without credentials
+    set:
+      coldStorage:
+        enabled: true
+        endpoint: https://bucket.s3.eu-west-1.amazonaws.com/data/
+    template: templates/clickhouse-instance/clickhouse-instance.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: coldStorage needs credentials
+
+  - it: fails with only one of the keys
+    set:
+      coldStorage:
+        enabled: true
+        endpoint: https://bucket.s3.eu-west-1.amazonaws.com/data/
+        accessKey: AKIAEXAMPLE
+    template: templates/clickhouse-instance/clickhouse-instance.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: coldStorage needs credentials
+
+  - it: fails with an IAM role on GCS
+    set:
+      coldStorage:
+        enabled: true
+        type: gcs
+        endpoint: https://storage.googleapis.com/bucket/data/
+        role:
+          enabled: true
+    template: templates/clickhouse-instance/clickhouse-instance.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: coldStorage.role.enabled works only with type s3
+
+  - it: fails with an unknown type
+    set:
+      coldStorage:
+        enabled: true
+        type: azure
+        endpoint: https://account.blob.core.windows.net/data/
+        accessKey: a
+        secretAccess: b
+    template: templates/clickhouse-instance/clickhouse-instance.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: coldStorage.type must be s3 or gcs
