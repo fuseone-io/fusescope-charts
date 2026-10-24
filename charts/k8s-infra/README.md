@@ -1,7 +1,7 @@
 
 # K8s-Infra
 
-![Version: 0.17.1](https://img.shields.io/badge/Version-0.17.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.139.0](https://img.shields.io/badge/AppVersion-0.139.0-informational?style=flat-square)
+![Version: 0.17.2](https://img.shields.io/badge/Version-0.17.2-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.139.0](https://img.shields.io/badge/AppVersion-0.139.0-informational?style=flat-square)
 
 Monitoring your Kubernetes cluster is essential for ensuring performance, stability, and reliability. The SigNoz k8s-infra Helm chart provides a comprehensive solution for collecting and analyzing metrics, logs, and events from your entire Kubernetes environment.
 
@@ -560,7 +560,7 @@ traces:
             <td>Configuration for sending the collector's own telemetry data. By Default, the Collector generates basic metrics about itself and exposes them using the OpenTelemetry Go Prometheus exporter for scraping at http://<otel-collector>:8888/metrics Check out docs for more information: https://opentelemetry.io/docs/collector/internal-telemetry/#otlp-exporter-for-internal-metrics</td>
         </tr>
         <tr>
-            <td id="otelAgent--enabled"><a href="./values.yaml#L570">otelAgent.enabled</a></td>
+            <td id="otelAgent--enabled"><a href="./values.yaml#L579">otelAgent.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">true</pre>
@@ -569,7 +569,7 @@ traces:
             <td>Enable the OtelAgent DaemonSet.</td>
         </tr>
         <tr>
-            <td id="otelAgent--name"><a href="./values.yaml#L573">otelAgent.name</a></td>
+            <td id="otelAgent--name"><a href="./values.yaml#L582">otelAgent.name</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">otel-agent</pre>
@@ -578,7 +578,7 @@ traces:
             <td>Name of the OtelAgent DaemonSet.</td>
         </tr>
         <tr>
-            <td id="otelAgent--image"><a href="./values.yaml#L576">otelAgent.image</a></td>
+            <td id="otelAgent--image"><a href="./values.yaml#L585">otelAgent.image</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">pullPolicy: IfNotPresent
@@ -590,7 +590,7 @@ tag: 0.139.0</pre>
             <td>Image configuration for the OtelAgent.</td>
         </tr>
         <tr>
-            <td id="otelAgent--image--registry"><a href="./values.yaml#L579">otelAgent.image.registry</a></td>
+            <td id="otelAgent--image--registry"><a href="./values.yaml#L588">otelAgent.image.registry</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">docker.io</pre>
@@ -599,7 +599,7 @@ tag: 0.139.0</pre>
             <td>Docker registry for the OtelAgent image.</td>
         </tr>
         <tr>
-            <td id="otelAgent--image--repository"><a href="./values.yaml#L582">otelAgent.image.repository</a></td>
+            <td id="otelAgent--image--repository"><a href="./values.yaml#L591">otelAgent.image.repository</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">otel/opentelemetry-collector-contrib</pre>
@@ -608,7 +608,7 @@ tag: 0.139.0</pre>
             <td>Repository for the OtelAgent image.</td>
         </tr>
         <tr>
-            <td id="otelAgent--image--tag"><a href="./values.yaml#L586">otelAgent.image.tag</a></td>
+            <td id="otelAgent--image--tag"><a href="./values.yaml#L595">otelAgent.image.tag</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">0.139.0</pre>
@@ -617,7 +617,7 @@ tag: 0.139.0</pre>
             <td>Tag for the OtelAgent image. In case of your Host OS is windows, use the `0.123.0-windows-2022-amd64` tag.</td>
         </tr>
         <tr>
-            <td id="otelAgent--image--pullPolicy"><a href="./values.yaml#L589">otelAgent.image.pullPolicy</a></td>
+            <td id="otelAgent--image--pullPolicy"><a href="./values.yaml#L598">otelAgent.image.pullPolicy</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">IfNotPresent</pre>
@@ -626,7 +626,7 @@ tag: 0.139.0</pre>
             <td>Image pull policy for the OtelAgent.</td>
         </tr>
         <tr>
-            <td id="otelAgent--imagePullSecrets"><a href="./values.yaml#L592">otelAgent.imagePullSecrets</a></td>
+            <td id="otelAgent--imagePullSecrets"><a href="./values.yaml#L601">otelAgent.imagePullSecrets</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -635,7 +635,7 @@ tag: 0.139.0</pre>
             <td>Image Pull Secrets for the OtelAgent. Merged with `global.imagePullSecrets`.</td>
         </tr>
         <tr>
-            <td id="otelAgent--command"><a href="./values.yaml#L597">otelAgent.command</a></td>
+            <td id="otelAgent--command"><a href="./values.yaml#L606">otelAgent.command</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">extraArgs: []
@@ -645,7 +645,7 @@ name: /otelcol-contrib</pre>
             <td>Command and arguments for the OtelAgent container.</td>
         </tr>
         <tr>
-            <td id="otelAgent--command--name"><a href="./values.yaml#L600">otelAgent.command.name</a></td>
+            <td id="otelAgent--command--name"><a href="./values.yaml#L609">otelAgent.command.name</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">/otelcol-contrib</pre>
@@ -654,7 +654,7 @@ name: /otelcol-contrib</pre>
             <td>OtelAgent command name.</td>
         </tr>
         <tr>
-            <td id="otelAgent--command--extraArgs"><a href="./values.yaml#L603">otelAgent.command.extraArgs</a></td>
+            <td id="otelAgent--command--extraArgs"><a href="./values.yaml#L612">otelAgent.command.extraArgs</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -663,7 +663,7 @@ name: /otelcol-contrib</pre>
             <td>Extra arguments for the OtelAgent command.</td>
         </tr>
         <tr>
-            <td id="otelAgent--configMap"><a href="./values.yaml#L606">otelAgent.configMap</a></td>
+            <td id="otelAgent--configMap"><a href="./values.yaml#L615">otelAgent.configMap</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">create: true</pre>
@@ -672,7 +672,7 @@ name: /otelcol-contrib</pre>
             <td>ConfigMap configuration for the OtelAgent.</td>
         </tr>
         <tr>
-            <td id="otelAgent--configMap--create"><a href="./values.yaml#L609">otelAgent.configMap.create</a></td>
+            <td id="otelAgent--configMap--create"><a href="./values.yaml#L618">otelAgent.configMap.create</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">true</pre>
@@ -681,7 +681,7 @@ name: /otelcol-contrib</pre>
             <td>Specifies whether a ConfigMap should be created.</td>
         </tr>
         <tr>
-            <td id="otelAgent--service"><a href="./values.yaml#L612">otelAgent.service</a></td>
+            <td id="otelAgent--service"><a href="./values.yaml#L621">otelAgent.service</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">annotations: {}
@@ -692,7 +692,7 @@ type: ClusterIP</pre>
             <td>Service configuration for the OtelAgent.</td>
         </tr>
         <tr>
-            <td id="otelAgent--service--annotations"><a href="./values.yaml#L615">otelAgent.service.annotations</a></td>
+            <td id="otelAgent--service--annotations"><a href="./values.yaml#L624">otelAgent.service.annotations</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -701,7 +701,7 @@ type: ClusterIP</pre>
             <td>Annotations for the OtelAgent service.</td>
         </tr>
         <tr>
-            <td id="otelAgent--service--type"><a href="./values.yaml#L618">otelAgent.service.type</a></td>
+            <td id="otelAgent--service--type"><a href="./values.yaml#L627">otelAgent.service.type</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">ClusterIP</pre>
@@ -710,7 +710,7 @@ type: ClusterIP</pre>
             <td>Service type: `ClusterIP`, `NodePort`, or `LoadBalancer`.</td>
         </tr>
         <tr>
-            <td id="otelAgent--service--internalTrafficPolicy"><a href="./values.yaml#L622">otelAgent.service.internalTrafficPolicy</a></td>
+            <td id="otelAgent--service--internalTrafficPolicy"><a href="./values.yaml#L631">otelAgent.service.internalTrafficPolicy</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">Local</pre>
@@ -719,7 +719,7 @@ type: ClusterIP</pre>
             <td>Internal traffic policy: `Local` or `Cluster`. ref: https://kubernetes.io/docs/reference/networking/virtual-ips/#internal-traffic-policy</td>
         </tr>
         <tr>
-            <td id="otelAgent--serviceAccount"><a href="./values.yaml#L625">otelAgent.serviceAccount</a></td>
+            <td id="otelAgent--serviceAccount"><a href="./values.yaml#L634">otelAgent.serviceAccount</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">annotations: {}
@@ -730,7 +730,7 @@ name: null</pre>
             <td>ServiceAccount configuration for the OtelAgent.</td>
         </tr>
         <tr>
-            <td id="otelAgent--serviceAccount--create"><a href="./values.yaml#L628">otelAgent.serviceAccount.create</a></td>
+            <td id="otelAgent--serviceAccount--create"><a href="./values.yaml#L637">otelAgent.serviceAccount.create</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">true</pre>
@@ -739,7 +739,7 @@ name: null</pre>
             <td>Specifies whether a ServiceAccount should be created.</td>
         </tr>
         <tr>
-            <td id="otelAgent--serviceAccount--annotations"><a href="./values.yaml#L631">otelAgent.serviceAccount.annotations</a></td>
+            <td id="otelAgent--serviceAccount--annotations"><a href="./values.yaml#L640">otelAgent.serviceAccount.annotations</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -748,7 +748,7 @@ name: null</pre>
             <td>Annotations for the ServiceAccount.</td>
         </tr>
         <tr>
-            <td id="otelAgent--serviceAccount--name"><a href="./values.yaml#L634">otelAgent.serviceAccount.name</a></td>
+            <td id="otelAgent--serviceAccount--name"><a href="./values.yaml#L643">otelAgent.serviceAccount.name</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">null</pre>
@@ -757,7 +757,7 @@ name: null</pre>
             <td>The name of the ServiceAccount to use. A name is generated if not set.</td>
         </tr>
         <tr>
-            <td id="otelAgent--annotations"><a href="./values.yaml#L637">otelAgent.annotations</a></td>
+            <td id="otelAgent--annotations"><a href="./values.yaml#L646">otelAgent.annotations</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -766,7 +766,7 @@ name: null</pre>
             <td>Annotations for the OtelAgent DaemonSet.</td>
         </tr>
         <tr>
-            <td id="otelAgent--podAnnotations"><a href="./values.yaml#L640">otelAgent.podAnnotations</a></td>
+            <td id="otelAgent--podAnnotations"><a href="./values.yaml#L649">otelAgent.podAnnotations</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -775,7 +775,7 @@ name: null</pre>
             <td>Annotations for the OtelAgent pods.</td>
         </tr>
         <tr>
-            <td id="otelAgent--additionalEnvs"><a href="./values.yaml#L662">otelAgent.additionalEnvs</a></td>
+            <td id="otelAgent--additionalEnvs"><a href="./values.yaml#L671">otelAgent.additionalEnvs</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -784,7 +784,7 @@ name: null</pre>
             <td>Additional environment variables for the OtelAgent container. You can specify variables in two ways: 1. Flexible structure for advanced configurations (recommended):    Example:      additionalEnvs:        MY_KEY:          value: my-value        SECRET_KEY:          valueFrom:            secretKeyRef:              name: my-secret              key: my-key 2. Simple key-value pairs (backward-compatible):    Example:      additionalEnvs:        MY_KEY: my-value</td>
         </tr>
         <tr>
-            <td id="otelAgent--minReadySeconds"><a href="./values.yaml#L665">otelAgent.minReadySeconds</a></td>
+            <td id="otelAgent--minReadySeconds"><a href="./values.yaml#L674">otelAgent.minReadySeconds</a></td>
             <td>int</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">5</pre>
@@ -793,7 +793,7 @@ name: null</pre>
             <td>Minimum number of seconds for which a newly created Pod should be ready.</td>
         </tr>
         <tr>
-            <td id="otelAgent--updateStrategy"><a href="./values.yaml#L676">otelAgent.updateStrategy</a></td>
+            <td id="otelAgent--updateStrategy"><a href="./values.yaml#L685">otelAgent.updateStrategy</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -802,7 +802,7 @@ name: null</pre>
             <td>DaemonSet update strategy for the OtelAgent. When unset, Kubernetes applies its defaults: type=RollingUpdate, rollingUpdate.maxUnavailable=1, rollingUpdate.maxSurge=0. ref: https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/#update-strategy Example:   updateStrategy:     type: RollingUpdate     rollingUpdate:       maxUnavailable: 25%       maxSurge: 0</td>
         </tr>
         <tr>
-            <td id="otelAgent--clusterRole"><a href="./values.yaml#L680">otelAgent.clusterRole</a></td>
+            <td id="otelAgent--clusterRole"><a href="./values.yaml#L689">otelAgent.clusterRole</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">Please checkout the values.yml for default values</pre>
@@ -811,7 +811,7 @@ name: null</pre>
             <td>ClusterRole configuration for the OtelAgent.</td>
         </tr>
         <tr>
-            <td id="otelAgent--clusterRole--create"><a href="./values.yaml#L683">otelAgent.clusterRole.create</a></td>
+            <td id="otelAgent--clusterRole--create"><a href="./values.yaml#L692">otelAgent.clusterRole.create</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">true</pre>
@@ -820,7 +820,7 @@ name: null</pre>
             <td>Specifies whether a ClusterRole should be created.</td>
         </tr>
         <tr>
-            <td id="otelAgent--clusterRole--annotations"><a href="./values.yaml#L686">otelAgent.clusterRole.annotations</a></td>
+            <td id="otelAgent--clusterRole--annotations"><a href="./values.yaml#L695">otelAgent.clusterRole.annotations</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -829,7 +829,7 @@ name: null</pre>
             <td>Annotations for the ClusterRole.</td>
         </tr>
         <tr>
-            <td id="otelAgent--clusterRole--name"><a href="./values.yaml#L689">otelAgent.clusterRole.name</a></td>
+            <td id="otelAgent--clusterRole--name"><a href="./values.yaml#L698">otelAgent.clusterRole.name</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">""</pre>
@@ -838,7 +838,7 @@ name: null</pre>
             <td>The name of the ClusterRole to use. A name is generated if not set.</td>
         </tr>
         <tr>
-            <td id="otelAgent--clusterRole--rules"><a href="./values.yaml#L694">otelAgent.clusterRole.rules</a></td>
+            <td id="otelAgent--clusterRole--rules"><a href="./values.yaml#L703">otelAgent.clusterRole.rules</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">Please checkout the values.yml for default values</pre>
@@ -847,7 +847,7 @@ name: null</pre>
             <td>RBAC rules for the OtelAgent. ref: https://kubernetes.io/docs/reference/access-authn-authz/rbac/</td>
         </tr>
         <tr>
-            <td id="otelAgent--clusterRole--clusterRoleBinding"><a href="./values.yaml#L724">otelAgent.clusterRole.clusterRoleBinding</a></td>
+            <td id="otelAgent--clusterRole--clusterRoleBinding"><a href="./values.yaml#L733">otelAgent.clusterRole.clusterRoleBinding</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">annotations: {}
@@ -857,7 +857,7 @@ name: ""</pre>
             <td>ClusterRoleBinding configuration for the OtelAgent.</td>
         </tr>
         <tr>
-            <td id="otelAgent--ports"><a href="./values.yaml#L734">otelAgent.ports</a></td>
+            <td id="otelAgent--ports"><a href="./values.yaml#L743">otelAgent.ports</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">Please checkout the values.yml for default values</pre>
@@ -866,7 +866,7 @@ name: ""</pre>
             <td>Port configurations for the OtelAgent.</td>
         </tr>
         <tr>
-            <td id="otelAgent--ports--otlp--enabled"><a href="./values.yaml#L739">otelAgent.ports.otlp.enabled</a></td>
+            <td id="otelAgent--ports--otlp--enabled"><a href="./values.yaml#L748">otelAgent.ports.otlp.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">true</pre>
@@ -875,7 +875,7 @@ name: ""</pre>
             <td>Enable service port for OTLP gRPC.</td>
         </tr>
         <tr>
-            <td id="otelAgent--ports--otlp-http--enabled"><a href="./values.yaml#L754">otelAgent.ports.otlp-http.enabled</a></td>
+            <td id="otelAgent--ports--otlp-http--enabled"><a href="./values.yaml#L763">otelAgent.ports.otlp-http.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">true</pre>
@@ -884,7 +884,7 @@ name: ""</pre>
             <td>Enable service port for OTLP HTTP.</td>
         </tr>
         <tr>
-            <td id="otelAgent--ports--zipkin--enabled"><a href="./values.yaml#L769">otelAgent.ports.zipkin.enabled</a></td>
+            <td id="otelAgent--ports--zipkin--enabled"><a href="./values.yaml#L778">otelAgent.ports.zipkin.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">false</pre>
@@ -893,7 +893,7 @@ name: ""</pre>
             <td>Enable service port for Zipkin.</td>
         </tr>
         <tr>
-            <td id="otelAgent--ports--metrics--enabled"><a href="./values.yaml#L784">otelAgent.ports.metrics.enabled</a></td>
+            <td id="otelAgent--ports--metrics--enabled"><a href="./values.yaml#L793">otelAgent.ports.metrics.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">true</pre>
@@ -902,7 +902,7 @@ name: ""</pre>
             <td>Enable service port for internal metrics.</td>
         </tr>
         <tr>
-            <td id="otelAgent--ports--zpages--enabled"><a href="./values.yaml#L799">otelAgent.ports.zpages.enabled</a></td>
+            <td id="otelAgent--ports--zpages--enabled"><a href="./values.yaml#L808">otelAgent.ports.zpages.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">false</pre>
@@ -911,7 +911,7 @@ name: ""</pre>
             <td>Enable service port for ZPages.</td>
         </tr>
         <tr>
-            <td id="otelAgent--ports--health-check--enabled"><a href="./values.yaml#L814">otelAgent.ports.health-check.enabled</a></td>
+            <td id="otelAgent--ports--health-check--enabled"><a href="./values.yaml#L823">otelAgent.ports.health-check.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">true</pre>
@@ -920,7 +920,7 @@ name: ""</pre>
             <td>Enable service port for health checks.</td>
         </tr>
         <tr>
-            <td id="otelAgent--ports--pprof--enabled"><a href="./values.yaml#L829">otelAgent.ports.pprof.enabled</a></td>
+            <td id="otelAgent--ports--pprof--enabled"><a href="./values.yaml#L838">otelAgent.ports.pprof.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">false</pre>
@@ -929,7 +929,7 @@ name: ""</pre>
             <td>Enable service port for pprof.</td>
         </tr>
         <tr>
-            <td id="otelAgent--hostNetwork"><a href="./values.yaml#L843">otelAgent.hostNetwork</a></td>
+            <td id="otelAgent--hostNetwork"><a href="./values.yaml#L852">otelAgent.hostNetwork</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">false</pre>
@@ -938,7 +938,7 @@ name: ""</pre>
             <td>Host networking requested for this pod. Use the host's network namespace. Please make sure while enabling hostNetwork that the host ports are available as it can lead to port conflicts.</td>
         </tr>
         <tr>
-            <td id="otelAgent--livenessProbe"><a href="./values.yaml#L847">otelAgent.livenessProbe</a></td>
+            <td id="otelAgent--livenessProbe"><a href="./values.yaml#L856">otelAgent.livenessProbe</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">enabled: true
@@ -954,7 +954,7 @@ timeoutSeconds: 5</pre>
             <td>Configure liveness probe. ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/#define-a-liveness-command</td>
         </tr>
         <tr>
-            <td id="otelAgent--readinessProbe"><a href="./values.yaml#L867">otelAgent.readinessProbe</a></td>
+            <td id="otelAgent--readinessProbe"><a href="./values.yaml#L876">otelAgent.readinessProbe</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">enabled: true
@@ -970,7 +970,7 @@ timeoutSeconds: 5</pre>
             <td>Configure readiness probe. ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/#define-readiness-probes</td>
         </tr>
         <tr>
-            <td id="otelAgent--customLivenessProbe"><a href="./values.yaml#L886">otelAgent.customLivenessProbe</a></td>
+            <td id="otelAgent--customLivenessProbe"><a href="./values.yaml#L895">otelAgent.customLivenessProbe</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -979,7 +979,7 @@ timeoutSeconds: 5</pre>
             <td>Custom liveness probe configuration.</td>
         </tr>
         <tr>
-            <td id="otelAgent--customReadinessProbe"><a href="./values.yaml#L889">otelAgent.customReadinessProbe</a></td>
+            <td id="otelAgent--customReadinessProbe"><a href="./values.yaml#L898">otelAgent.customReadinessProbe</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -988,7 +988,7 @@ timeoutSeconds: 5</pre>
             <td>Custom readiness probe configuration.</td>
         </tr>
         <tr>
-            <td id="otelAgent--ingress"><a href="./values.yaml#L892">otelAgent.ingress</a></td>
+            <td id="otelAgent--ingress"><a href="./values.yaml#L901">otelAgent.ingress</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">annotations: {}
@@ -1006,7 +1006,7 @@ tls: []</pre>
             <td>Ingress configuration for the OtelAgent.</td>
         </tr>
         <tr>
-            <td id="otelAgent--ingress--enabled"><a href="./values.yaml#L895">otelAgent.ingress.enabled</a></td>
+            <td id="otelAgent--ingress--enabled"><a href="./values.yaml#L904">otelAgent.ingress.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">false</pre>
@@ -1015,7 +1015,7 @@ tls: []</pre>
             <td>Enable Ingress for the OtelAgent.</td>
         </tr>
         <tr>
-            <td id="otelAgent--ingress--className"><a href="./values.yaml#L898">otelAgent.ingress.className</a></td>
+            <td id="otelAgent--ingress--className"><a href="./values.yaml#L907">otelAgent.ingress.className</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">""</pre>
@@ -1024,7 +1024,7 @@ tls: []</pre>
             <td>Ingress Class Name to be used.</td>
         </tr>
         <tr>
-            <td id="otelAgent--ingress--annotations"><a href="./values.yaml#L901">otelAgent.ingress.annotations</a></td>
+            <td id="otelAgent--ingress--annotations"><a href="./values.yaml#L910">otelAgent.ingress.annotations</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -1033,7 +1033,7 @@ tls: []</pre>
             <td>Annotations for the OtelAgent Ingress.</td>
         </tr>
         <tr>
-            <td id="otelAgent--ingress--hosts"><a href="./values.yaml#L909">otelAgent.ingress.hosts</a></td>
+            <td id="otelAgent--ingress--hosts"><a href="./values.yaml#L918">otelAgent.ingress.hosts</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">- host: otel-agent.domain.com
@@ -1046,7 +1046,7 @@ tls: []</pre>
             <td>OtelAgent Ingress hostnames with their path details.</td>
         </tr>
         <tr>
-            <td id="otelAgent--ingress--tls"><a href="./values.yaml#L917">otelAgent.ingress.tls</a></td>
+            <td id="otelAgent--ingress--tls"><a href="./values.yaml#L926">otelAgent.ingress.tls</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -1055,7 +1055,7 @@ tls: []</pre>
             <td>OtelAgent Ingress TLS configuration.</td>
         </tr>
         <tr>
-            <td id="otelAgent--resources"><a href="./values.yaml#L924">otelAgent.resources</a></td>
+            <td id="otelAgent--resources"><a href="./values.yaml#L933">otelAgent.resources</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">requests:
@@ -1066,7 +1066,7 @@ tls: []</pre>
             <td>Configure resource requests and limits for the OtelAgent. ref: http://kubernetes.io/docs/user-guide/compute-resources/</td>
         </tr>
         <tr>
-            <td id="otelAgent--priorityClassName"><a href="./values.yaml#L934">otelAgent.priorityClassName</a></td>
+            <td id="otelAgent--priorityClassName"><a href="./values.yaml#L943">otelAgent.priorityClassName</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">""</pre>
@@ -1075,7 +1075,7 @@ tls: []</pre>
             <td>OtelAgent Priority Class name.</td>
         </tr>
         <tr>
-            <td id="otelAgent--nodeSelector"><a href="./values.yaml#L937">otelAgent.nodeSelector</a></td>
+            <td id="otelAgent--nodeSelector"><a href="./values.yaml#L946">otelAgent.nodeSelector</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -1084,7 +1084,7 @@ tls: []</pre>
             <td>Node selector for OtelAgent pod assignment.</td>
         </tr>
         <tr>
-            <td id="otelAgent--tolerations"><a href="./values.yaml#L940">otelAgent.tolerations</a></td>
+            <td id="otelAgent--tolerations"><a href="./values.yaml#L949">otelAgent.tolerations</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">- operator: Exists</pre>
@@ -1093,7 +1093,7 @@ tls: []</pre>
             <td>Toleration labels for OtelAgent pod assignment.</td>
         </tr>
         <tr>
-            <td id="otelAgent--affinity"><a href="./values.yaml#L944">otelAgent.affinity</a></td>
+            <td id="otelAgent--affinity"><a href="./values.yaml#L953">otelAgent.affinity</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -1102,7 +1102,7 @@ tls: []</pre>
             <td>Affinity settings for the OtelAgent pod.</td>
         </tr>
         <tr>
-            <td id="otelAgent--podSecurityContext"><a href="./values.yaml#L947">otelAgent.podSecurityContext</a></td>
+            <td id="otelAgent--podSecurityContext"><a href="./values.yaml#L956">otelAgent.podSecurityContext</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -1111,7 +1111,7 @@ tls: []</pre>
             <td>Pod-level security configuration.</td>
         </tr>
         <tr>
-            <td id="otelAgent--securityContext"><a href="./values.yaml#L952">otelAgent.securityContext</a></td>
+            <td id="otelAgent--securityContext"><a href="./values.yaml#L961">otelAgent.securityContext</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -1120,7 +1120,7 @@ tls: []</pre>
             <td>Container-level security configuration.</td>
         </tr>
         <tr>
-            <td id="otelAgent--config"><a href="./values.yaml#L963">otelAgent.config</a></td>
+            <td id="otelAgent--config"><a href="./values.yaml#L972">otelAgent.config</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">Please Checkout the values.yml for default values</pre>
@@ -1129,7 +1129,7 @@ tls: []</pre>
             <td>Base configuration for the OtelAgent Collector.</td>
         </tr>
         <tr>
-            <td id="otelAgent--config--processors--batch"><a href="./values.yaml#L978">otelAgent.config.processors.batch</a></td>
+            <td id="otelAgent--config--processors--batch"><a href="./values.yaml#L987">otelAgent.config.processors.batch</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">send_batch_size: 10000
@@ -1139,7 +1139,7 @@ timeout: 200ms</pre>
             <td>Batch processor config. ref: https://github.com/open-telemetry/opentelemetry-collector/blob/main/processor/batchprocessor/README.md</td>
         </tr>
         <tr>
-            <td id="otelAgent--extraVolumes"><a href="./values.yaml#L1022">otelAgent.extraVolumes</a></td>
+            <td id="otelAgent--extraVolumes"><a href="./values.yaml#L1031">otelAgent.extraVolumes</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -1148,7 +1148,7 @@ timeout: 200ms</pre>
             <td>Additional volumes for the OtelAgent.</td>
         </tr>
         <tr>
-            <td id="otelAgent--extraVolumeMounts"><a href="./values.yaml#L1032">otelAgent.extraVolumeMounts</a></td>
+            <td id="otelAgent--extraVolumeMounts"><a href="./values.yaml#L1041">otelAgent.extraVolumeMounts</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -1287,7 +1287,17 @@ timeout: 200ms</pre>
             <td>Configuration that instructs the file_input operator to split log entries using a pattern other than newlines Please refer to the https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/9f1f674d7af62267f641c0b631d1326815ff80d1/receiver/filelogreceiver/README.md for more details.</td>
         </tr>
         <tr>
-            <td id="presets--logsCollection--blacklist"><a href="./values.yaml#L190">presets.logsCollection.blacklist</a></td>
+            <td id="presets--logsCollection--fusescope"><a href="./values.yaml#L190">presets.logsCollection.fusescope</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">namespace: ""
+release: fusescope</pre>
+</div>
+            </td>
+            <td>The FuseScope release whose pods `signozLogs` excludes (blacklist) or includes (whitelist).</td>
+        </tr>
+        <tr>
+            <td id="presets--logsCollection--blacklist"><a href="./values.yaml#L199">presets.logsCollection.blacklist</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">additionalExclude: []
@@ -1304,7 +1314,7 @@ signozLogs: true</pre>
             <td>Exclude certain log files from being collected.</td>
         </tr>
         <tr>
-            <td id="presets--logsCollection--whitelist"><a href="./values.yaml#L214">presets.logsCollection.whitelist</a></td>
+            <td id="presets--logsCollection--whitelist"><a href="./values.yaml#L223">presets.logsCollection.whitelist</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">additionalInclude: []
@@ -1318,7 +1328,7 @@ signozLogs: true</pre>
             <td>Whitelist certain log files to be collected. If enabled, `include` is ignored.</td>
         </tr>
         <tr>
-            <td id="presets--logsCollection--operators"><a href="./values.yaml#L235">presets.logsCollection.operators</a></td>
+            <td id="presets--logsCollection--operators"><a href="./values.yaml#L244">presets.logsCollection.operators</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">- id: container-parser
@@ -1339,7 +1349,7 @@ signozLogs: true</pre>
     </thead>
     <tbody>
         <tr>
-            <td id="presets--hostMetrics"><a href="./values.yaml#L241">presets.hostMetrics</a></td>
+            <td id="presets--hostMetrics"><a href="./values.yaml#L250">presets.hostMetrics</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">Please check out the values.yml for default values</pre>
@@ -1348,7 +1358,7 @@ signozLogs: true</pre>
             <td>Configuration for collecting host-level metrics from nodes.</td>
         </tr>
         <tr>
-            <td id="presets--hostMetrics--enabled"><a href="./values.yaml#L244">presets.hostMetrics.enabled</a></td>
+            <td id="presets--hostMetrics--enabled"><a href="./values.yaml#L253">presets.hostMetrics.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">true</pre>
@@ -1357,7 +1367,7 @@ signozLogs: true</pre>
             <td>Enable host metrics collection.</td>
         </tr>
         <tr>
-            <td id="presets--hostMetrics--rootPath"><a href="./values.yaml#L248">presets.hostMetrics.rootPath</a></td>
+            <td id="presets--hostMetrics--rootPath"><a href="./values.yaml#L257">presets.hostMetrics.rootPath</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">/hostfs</pre>
@@ -1366,7 +1376,7 @@ signozLogs: true</pre>
             <td>Root path for host metrics collection (Linux only).</td>
         </tr>
         <tr>
-            <td id="presets--hostMetrics--collectionInterval"><a href="./values.yaml#L251">presets.hostMetrics.collectionInterval</a></td>
+            <td id="presets--hostMetrics--collectionInterval"><a href="./values.yaml#L260">presets.hostMetrics.collectionInterval</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">30s</pre>
@@ -1375,7 +1385,7 @@ signozLogs: true</pre>
             <td>Frequency at which to scrape host metrics.</td>
         </tr>
         <tr>
-            <td id="presets--hostMetrics--scrapers"><a href="./values.yaml#L255">presets.hostMetrics.scrapers</a></td>
+            <td id="presets--hostMetrics--scrapers"><a href="./values.yaml#L264">presets.hostMetrics.scrapers</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">Please check out the values.yml for default values</pre>
@@ -1384,7 +1394,7 @@ signozLogs: true</pre>
             <td>Fine-grained control over which host metric scrapers are enabled.</td>
         </tr>
         <tr>
-            <td id="presets--hostMetrics--scrapers--cpu"><a href="./values.yaml#L258">presets.hostMetrics.scrapers.cpu</a></td>
+            <td id="presets--hostMetrics--scrapers--cpu"><a href="./values.yaml#L267">presets.hostMetrics.scrapers.cpu</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -1393,7 +1403,7 @@ signozLogs: true</pre>
             <td>Enable CPU metrics collection.</td>
         </tr>
         <tr>
-            <td id="presets--hostMetrics--scrapers--load"><a href="./values.yaml#L261">presets.hostMetrics.scrapers.load</a></td>
+            <td id="presets--hostMetrics--scrapers--load"><a href="./values.yaml#L270">presets.hostMetrics.scrapers.load</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -1402,7 +1412,7 @@ signozLogs: true</pre>
             <td>Enable load metrics collection.</td>
         </tr>
         <tr>
-            <td id="presets--hostMetrics--scrapers--memory"><a href="./values.yaml#L264">presets.hostMetrics.scrapers.memory</a></td>
+            <td id="presets--hostMetrics--scrapers--memory"><a href="./values.yaml#L273">presets.hostMetrics.scrapers.memory</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -1411,7 +1421,7 @@ signozLogs: true</pre>
             <td>Enable memory metrics collection.</td>
         </tr>
         <tr>
-            <td id="presets--hostMetrics--scrapers--disk"><a href="./values.yaml#L267">presets.hostMetrics.scrapers.disk</a></td>
+            <td id="presets--hostMetrics--scrapers--disk"><a href="./values.yaml#L276">presets.hostMetrics.scrapers.disk</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">exclude:
@@ -1431,7 +1441,7 @@ signozLogs: true</pre>
             <td>Enable disk metrics collection.</td>
         </tr>
         <tr>
-            <td id="presets--hostMetrics--scrapers--network"><a href="./values.yaml#L323">presets.hostMetrics.scrapers.network</a></td>
+            <td id="presets--hostMetrics--scrapers--network"><a href="./values.yaml#L332">presets.hostMetrics.scrapers.network</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">exclude:
@@ -1463,7 +1473,7 @@ signozLogs: true</pre>
     </thead>
     <tbody>
         <tr>
-            <td id="presets--kubeletMetrics"><a href="./values.yaml#L340">presets.kubeletMetrics</a></td>
+            <td id="presets--kubeletMetrics"><a href="./values.yaml#L349">presets.kubeletMetrics</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">Please check out the values.yml for default values</pre>
@@ -1472,7 +1482,7 @@ signozLogs: true</pre>
             <td>Configuration for collecting metrics from Kubelet.</td>
         </tr>
         <tr>
-            <td id="presets--kubeletMetrics--enabled"><a href="./values.yaml#L343">presets.kubeletMetrics.enabled</a></td>
+            <td id="presets--kubeletMetrics--enabled"><a href="./values.yaml#L352">presets.kubeletMetrics.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">true</pre>
@@ -1481,7 +1491,7 @@ signozLogs: true</pre>
             <td>Enable Kubelet metrics collection.</td>
         </tr>
         <tr>
-            <td id="presets--kubeletMetrics--collectionInterval"><a href="./values.yaml#L346">presets.kubeletMetrics.collectionInterval</a></td>
+            <td id="presets--kubeletMetrics--collectionInterval"><a href="./values.yaml#L355">presets.kubeletMetrics.collectionInterval</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">30s</pre>
@@ -1490,7 +1500,7 @@ signozLogs: true</pre>
             <td>Frequency at which to scrape Kubelet metrics.</td>
         </tr>
         <tr>
-            <td id="presets--kubeletMetrics--authType"><a href="./values.yaml#L349">presets.kubeletMetrics.authType</a></td>
+            <td id="presets--kubeletMetrics--authType"><a href="./values.yaml#L358">presets.kubeletMetrics.authType</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">serviceAccount</pre>
@@ -1499,7 +1509,7 @@ signozLogs: true</pre>
             <td>Authentication type to use with Kubelet: `serviceAccount` or `tls`.</td>
         </tr>
         <tr>
-            <td id="presets--kubeletMetrics--endpoint"><a href="./values.yaml#L354">presets.kubeletMetrics.endpoint</a></td>
+            <td id="presets--kubeletMetrics--endpoint"><a href="./values.yaml#L363">presets.kubeletMetrics.endpoint</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">${env:K8S_HOST_IP}:10250</pre>
@@ -1508,7 +1518,7 @@ signozLogs: true</pre>
             <td>Kubelet endpoint. The `kubeletstats` receiver uses `K8S_HOST_IP` by default for IPv4 clusters to avoid DNS resolution issues. On IPv6 or dual-stack clusters, if kubelet scraping fails, switch the endpoint to use `K8S_NODE_NAME` instead.</td>
         </tr>
         <tr>
-            <td id="presets--kubeletMetrics--insecureSkipVerify"><a href="./values.yaml#L357">presets.kubeletMetrics.insecureSkipVerify</a></td>
+            <td id="presets--kubeletMetrics--insecureSkipVerify"><a href="./values.yaml#L366">presets.kubeletMetrics.insecureSkipVerify</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">true</pre>
@@ -1517,7 +1527,7 @@ signozLogs: true</pre>
             <td>Skip verifying Kubelet's certificate.</td>
         </tr>
         <tr>
-            <td id="presets--kubeletMetrics--extraMetadataLabels"><a href="./values.yaml#L362">presets.kubeletMetrics.extraMetadataLabels</a></td>
+            <td id="presets--kubeletMetrics--extraMetadataLabels"><a href="./values.yaml#L371">presets.kubeletMetrics.extraMetadataLabels</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">- container.id
@@ -1527,7 +1537,7 @@ signozLogs: true</pre>
             <td>List of extra metadata labels to collect. For GCP/GKE clusters, extraMetadataLabels may not be available due to kubelet configuration. See documentation for details: https://signoz.io/docs/opentelemetry-collection-agents/k8s/k8s-infra/user-guides/k8s-infra-kubelet-autogke/</td>
         </tr>
         <tr>
-            <td id="presets--kubeletMetrics--metricGroups"><a href="./values.yaml#L367">presets.kubeletMetrics.metricGroups</a></td>
+            <td id="presets--kubeletMetrics--metricGroups"><a href="./values.yaml#L376">presets.kubeletMetrics.metricGroups</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">- container
@@ -1539,7 +1549,7 @@ signozLogs: true</pre>
             <td>Groups of metrics to collect from Kubelet.</td>
         </tr>
         <tr>
-            <td id="presets--kubeletMetrics--metrics"><a href="./values.yaml#L376">presets.kubeletMetrics.metrics</a></td>
+            <td id="presets--kubeletMetrics--metrics"><a href="./values.yaml#L385">presets.kubeletMetrics.metrics</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">container.cpu.usage:
@@ -1590,7 +1600,7 @@ k8s.pod.uptime:
     </thead>
     <tbody>
         <tr>
-            <td id="presets--kubernetesAttributes"><a href="./values.yaml#L412">presets.kubernetesAttributes</a></td>
+            <td id="presets--kubernetesAttributes"><a href="./values.yaml#L421">presets.kubernetesAttributes</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">Please check out the values.yml for default values</pre>
@@ -1599,7 +1609,7 @@ k8s.pod.uptime:
             <td>Processor for adding Kubernetes attributes to telemetry data.</td>
         </tr>
         <tr>
-            <td id="presets--kubernetesAttributes--enabled"><a href="./values.yaml#L415">presets.kubernetesAttributes.enabled</a></td>
+            <td id="presets--kubernetesAttributes--enabled"><a href="./values.yaml#L424">presets.kubernetesAttributes.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">true</pre>
@@ -1608,7 +1618,7 @@ k8s.pod.uptime:
             <td>Enable the Kubernetes attributes processor.</td>
         </tr>
         <tr>
-            <td id="presets--kubernetesAttributes--passthrough"><a href="./values.yaml#L418">presets.kubernetesAttributes.passthrough</a></td>
+            <td id="presets--kubernetesAttributes--passthrough"><a href="./values.yaml#L427">presets.kubernetesAttributes.passthrough</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">false</pre>
@@ -1617,7 +1627,7 @@ k8s.pod.uptime:
             <td>If true, agents will not make k8s API calls, do discovery, or extract metadata.</td>
         </tr>
         <tr>
-            <td id="presets--kubernetesAttributes--filter"><a href="./values.yaml#L421">presets.kubernetesAttributes.filter</a></td>
+            <td id="presets--kubernetesAttributes--filter"><a href="./values.yaml#L430">presets.kubernetesAttributes.filter</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">node_from_env_var: K8S_NODE_NAME</pre>
@@ -1626,7 +1636,7 @@ k8s.pod.uptime:
             <td>Limit agents to query pods based on specific selectors to reduce resource usage.</td>
         </tr>
         <tr>
-            <td id="presets--kubernetesAttributes--filter--node_from_env_var"><a href="./values.yaml#L424">presets.kubernetesAttributes.filter.node_from_env_var</a></td>
+            <td id="presets--kubernetesAttributes--filter--node_from_env_var"><a href="./values.yaml#L433">presets.kubernetesAttributes.filter.node_from_env_var</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">K8S_NODE_NAME</pre>
@@ -1635,7 +1645,7 @@ k8s.pod.uptime:
             <td>Restrict each agent to query pods on the same node.</td>
         </tr>
         <tr>
-            <td id="presets--kubernetesAttributes--podAssociation"><a href="./values.yaml#L427">presets.kubernetesAttributes.podAssociation</a></td>
+            <td id="presets--kubernetesAttributes--podAssociation"><a href="./values.yaml#L436">presets.kubernetesAttributes.podAssociation</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">- sources:
@@ -1651,7 +1661,7 @@ k8s.pod.uptime:
             <td>Rules for tagging telemetry with pod metadata.</td>
         </tr>
         <tr>
-            <td id="presets--kubernetesAttributes--extractMetadatas"><a href="./values.yaml#L438">presets.kubernetesAttributes.extractMetadatas</a></td>
+            <td id="presets--kubernetesAttributes--extractMetadatas"><a href="./values.yaml#L447">presets.kubernetesAttributes.extractMetadatas</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">- k8s.namespace.name
@@ -1670,7 +1680,7 @@ k8s.pod.uptime:
             <td>Pod/namespace metadata to extract from a list of default metadata fields.</td>
         </tr>
         <tr>
-            <td id="presets--kubernetesAttributes--extractLabels"><a href="./values.yaml#L452">presets.kubernetesAttributes.extractLabels</a></td>
+            <td id="presets--kubernetesAttributes--extractLabels"><a href="./values.yaml#L461">presets.kubernetesAttributes.extractLabels</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -1679,7 +1689,7 @@ k8s.pod.uptime:
             <td>Pod labels to extract as attributes.</td>
         </tr>
         <tr>
-            <td id="presets--kubernetesAttributes--extractAnnotations"><a href="./values.yaml#L455">presets.kubernetesAttributes.extractAnnotations</a></td>
+            <td id="presets--kubernetesAttributes--extractAnnotations"><a href="./values.yaml#L464">presets.kubernetesAttributes.extractAnnotations</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -1699,7 +1709,7 @@ k8s.pod.uptime:
     </thead>
     <tbody>
         <tr>
-            <td id="presets--clusterMetrics"><a href="./values.yaml#L459">presets.clusterMetrics</a></td>
+            <td id="presets--clusterMetrics"><a href="./values.yaml#L468">presets.clusterMetrics</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">Please check out the values.yml for default values</pre>
@@ -1708,7 +1718,7 @@ k8s.pod.uptime:
             <td>Configuration for collecting cluster-level metrics.</td>
         </tr>
         <tr>
-            <td id="presets--clusterMetrics--enabled"><a href="./values.yaml#L462">presets.clusterMetrics.enabled</a></td>
+            <td id="presets--clusterMetrics--enabled"><a href="./values.yaml#L471">presets.clusterMetrics.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">true</pre>
@@ -1717,7 +1727,7 @@ k8s.pod.uptime:
             <td>Enable cluster metrics collection.</td>
         </tr>
         <tr>
-            <td id="presets--clusterMetrics--collectionInterval"><a href="./values.yaml#L465">presets.clusterMetrics.collectionInterval</a></td>
+            <td id="presets--clusterMetrics--collectionInterval"><a href="./values.yaml#L474">presets.clusterMetrics.collectionInterval</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">30s</pre>
@@ -1726,7 +1736,7 @@ k8s.pod.uptime:
             <td>Frequency at which to scrape cluster metrics.</td>
         </tr>
         <tr>
-            <td id="presets--clusterMetrics--resourceAttributes"><a href="./values.yaml#L468">presets.clusterMetrics.resourceAttributes</a></td>
+            <td id="presets--clusterMetrics--resourceAttributes"><a href="./values.yaml#L477">presets.clusterMetrics.resourceAttributes</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">container.runtime:
@@ -1744,7 +1754,7 @@ k8s.pod.qos_class:
             <td>Resource attributes to report.</td>
         </tr>
         <tr>
-            <td id="presets--clusterMetrics--nodeConditionsToReport"><a href="./values.yaml#L481">presets.clusterMetrics.nodeConditionsToReport</a></td>
+            <td id="presets--clusterMetrics--nodeConditionsToReport"><a href="./values.yaml#L490">presets.clusterMetrics.nodeConditionsToReport</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">- Ready
@@ -1757,7 +1767,7 @@ k8s.pod.qos_class:
             <td>Node conditions to report as metrics.</td>
         </tr>
         <tr>
-            <td id="presets--clusterMetrics--allocatableTypesToReport"><a href="./values.yaml#L489">presets.clusterMetrics.allocatableTypesToReport</a></td>
+            <td id="presets--clusterMetrics--allocatableTypesToReport"><a href="./values.yaml#L498">presets.clusterMetrics.allocatableTypesToReport</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">- cpu
@@ -1767,7 +1777,7 @@ k8s.pod.qos_class:
             <td>Allocatable resource types to report.</td>
         </tr>
         <tr>
-            <td id="presets--clusterMetrics--metrics"><a href="./values.yaml#L496">presets.clusterMetrics.metrics</a></td>
+            <td id="presets--clusterMetrics--metrics"><a href="./values.yaml#L505">presets.clusterMetrics.metrics</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">k8s.container.status.reason:
@@ -1794,7 +1804,7 @@ k8s.pod.status_reason:
     </thead>
     <tbody>
         <tr>
-            <td id="presets--prometheus"><a href="./values.yaml#L513">presets.prometheus</a></td>
+            <td id="presets--prometheus"><a href="./values.yaml#L522">presets.prometheus</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">annotationsPrefix: signoz.io
@@ -1810,7 +1820,7 @@ scrapeInterval: 60s</pre>
             <td>Configuration for scraping Prometheus metrics from pod annotations.</td>
         </tr>
         <tr>
-            <td id="presets--prometheus--enabled"><a href="./values.yaml#L516">presets.prometheus.enabled</a></td>
+            <td id="presets--prometheus--enabled"><a href="./values.yaml#L525">presets.prometheus.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">false</pre>
@@ -1819,7 +1829,7 @@ scrapeInterval: 60s</pre>
             <td>Enable Prometheus metrics scraping.</td>
         </tr>
         <tr>
-            <td id="presets--prometheus--annotationsPrefix"><a href="./values.yaml#L519">presets.prometheus.annotationsPrefix</a></td>
+            <td id="presets--prometheus--annotationsPrefix"><a href="./values.yaml#L528">presets.prometheus.annotationsPrefix</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">signoz.io</pre>
@@ -1828,7 +1838,7 @@ scrapeInterval: 60s</pre>
             <td>Prefix for the pod annotations used for metrics scraping (e.g., `signoz.io`).</td>
         </tr>
         <tr>
-            <td id="presets--prometheus--scrapeInterval"><a href="./values.yaml#L522">presets.prometheus.scrapeInterval</a></td>
+            <td id="presets--prometheus--scrapeInterval"><a href="./values.yaml#L531">presets.prometheus.scrapeInterval</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">60s</pre>
@@ -1837,7 +1847,7 @@ scrapeInterval: 60s</pre>
             <td>How often to scrape metrics.</td>
         </tr>
         <tr>
-            <td id="presets--prometheus--namespaceScoped"><a href="./values.yaml#L525">presets.prometheus.namespaceScoped</a></td>
+            <td id="presets--prometheus--namespaceScoped"><a href="./values.yaml#L534">presets.prometheus.namespaceScoped</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">false</pre>
@@ -1846,7 +1856,7 @@ scrapeInterval: 60s</pre>
             <td>Only scrape metrics from pods in the same namespace.</td>
         </tr>
         <tr>
-            <td id="presets--prometheus--namespaces"><a href="./values.yaml#L528">presets.prometheus.namespaces</a></td>
+            <td id="presets--prometheus--namespaces"><a href="./values.yaml#L537">presets.prometheus.namespaces</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -1855,7 +1865,7 @@ scrapeInterval: 60s</pre>
             <td>If set, only scrape metrics from pods in the specified namespaces.</td>
         </tr>
         <tr>
-            <td id="presets--prometheus--includePodLabel"><a href="./values.yaml#L531">presets.prometheus.includePodLabel</a></td>
+            <td id="presets--prometheus--includePodLabel"><a href="./values.yaml#L540">presets.prometheus.includePodLabel</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">false</pre>
@@ -1864,7 +1874,7 @@ scrapeInterval: 60s</pre>
             <td>Include all pod labels in the metrics (can cause high cardinality).</td>
         </tr>
         <tr>
-            <td id="presets--prometheus--includeContainerName"><a href="./values.yaml#L534">presets.prometheus.includeContainerName</a></td>
+            <td id="presets--prometheus--includeContainerName"><a href="./values.yaml#L543">presets.prometheus.includeContainerName</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">false</pre>
@@ -1873,7 +1883,7 @@ scrapeInterval: 60s</pre>
             <td>Include container name in metrics (not recommended for multi-container pods).</td>
         </tr>
         <tr>
-            <td id="presets--prometheus--scrapeConfigs"><a href="./values.yaml#L537">presets.prometheus.scrapeConfigs</a></td>
+            <td id="presets--prometheus--scrapeConfigs"><a href="./values.yaml#L546">presets.prometheus.scrapeConfigs</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -1893,7 +1903,7 @@ scrapeInterval: 60s</pre>
     </thead>
     <tbody>
         <tr>
-            <td id="presets--resourceDetection"><a href="./values.yaml#L540">presets.resourceDetection</a></td>
+            <td id="presets--resourceDetection"><a href="./values.yaml#L549">presets.resourceDetection</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">enabled: true
@@ -1905,7 +1915,7 @@ timeout: 2s</pre>
             <td>Processor for detecting resource information from the environment (e.g., cloud provider, k8s).</td>
         </tr>
         <tr>
-            <td id="presets--resourceDetection--enabled"><a href="./values.yaml#L543">presets.resourceDetection.enabled</a></td>
+            <td id="presets--resourceDetection--enabled"><a href="./values.yaml#L552">presets.resourceDetection.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">true</pre>
@@ -1914,7 +1924,7 @@ timeout: 2s</pre>
             <td>Enable the resource detection processor.</td>
         </tr>
         <tr>
-            <td id="presets--resourceDetection--timeout"><a href="./values.yaml#L546">presets.resourceDetection.timeout</a></td>
+            <td id="presets--resourceDetection--timeout"><a href="./values.yaml#L555">presets.resourceDetection.timeout</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">2s</pre>
@@ -1923,7 +1933,7 @@ timeout: 2s</pre>
             <td>Timeout for resource detection.</td>
         </tr>
         <tr>
-            <td id="presets--resourceDetection--override"><a href="./values.yaml#L549">presets.resourceDetection.override</a></td>
+            <td id="presets--resourceDetection--override"><a href="./values.yaml#L558">presets.resourceDetection.override</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">false</pre>
@@ -1932,7 +1942,7 @@ timeout: 2s</pre>
             <td>Whether to override existing resource attributes.</td>
         </tr>
         <tr>
-            <td id="presets--resourceDetection--envResourceAttributes"><a href="./values.yaml#L552">presets.resourceDetection.envResourceAttributes</a></td>
+            <td id="presets--resourceDetection--envResourceAttributes"><a href="./values.yaml#L561">presets.resourceDetection.envResourceAttributes</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">""</pre>
@@ -1952,7 +1962,7 @@ timeout: 2s</pre>
     </thead>
     <tbody>
         <tr>
-            <td id="presets--k8sEvents"><a href="./values.yaml#L555">presets.k8sEvents</a></td>
+            <td id="presets--k8sEvents"><a href="./values.yaml#L564">presets.k8sEvents</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">authType: serviceAccount
@@ -1963,7 +1973,7 @@ namespaces: []</pre>
             <td>Configuration for collecting Kubernetes events as logs.</td>
         </tr>
         <tr>
-            <td id="presets--k8sEvents--enabled"><a href="./values.yaml#L558">presets.k8sEvents.enabled</a></td>
+            <td id="presets--k8sEvents--enabled"><a href="./values.yaml#L567">presets.k8sEvents.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">true</pre>
@@ -1972,7 +1982,7 @@ namespaces: []</pre>
             <td>Enable Kubernetes events collection.</td>
         </tr>
         <tr>
-            <td id="presets--k8sEvents--authType"><a href="./values.yaml#L561">presets.k8sEvents.authType</a></td>
+            <td id="presets--k8sEvents--authType"><a href="./values.yaml#L570">presets.k8sEvents.authType</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">serviceAccount</pre>
@@ -1981,7 +1991,7 @@ namespaces: []</pre>
             <td>Authentication type: `serviceAccount` or `kubeconfig`.</td>
         </tr>
         <tr>
-            <td id="presets--k8sEvents--namespaces"><a href="./values.yaml#L564">presets.k8sEvents.namespaces</a></td>
+            <td id="presets--k8sEvents--namespaces"><a href="./values.yaml#L573">presets.k8sEvents.namespaces</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -2001,7 +2011,7 @@ namespaces: []</pre>
     </thead>
     <tbody>
         <tr>
-            <td id="otelDeployment--enabled"><a href="./values.yaml#L1043">otelDeployment.enabled</a></td>
+            <td id="otelDeployment--enabled"><a href="./values.yaml#L1052">otelDeployment.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">true</pre>
@@ -2010,7 +2020,7 @@ namespaces: []</pre>
             <td>Enable the OtelDeployment.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--name"><a href="./values.yaml#L1046">otelDeployment.name</a></td>
+            <td id="otelDeployment--name"><a href="./values.yaml#L1055">otelDeployment.name</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">otel-deployment</pre>
@@ -2019,7 +2029,7 @@ namespaces: []</pre>
             <td>Name of the OtelDeployment.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--image"><a href="./values.yaml#L1049">otelDeployment.image</a></td>
+            <td id="otelDeployment--image"><a href="./values.yaml#L1058">otelDeployment.image</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">pullPolicy: IfNotPresent
@@ -2031,7 +2041,7 @@ tag: 0.139.0</pre>
             <td>Image configuration for the OtelDeployment.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--image--registry"><a href="./values.yaml#L1052">otelDeployment.image.registry</a></td>
+            <td id="otelDeployment--image--registry"><a href="./values.yaml#L1061">otelDeployment.image.registry</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">docker.io</pre>
@@ -2040,7 +2050,7 @@ tag: 0.139.0</pre>
             <td>Docker registry for the OtelDeployment image.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--image--repository"><a href="./values.yaml#L1055">otelDeployment.image.repository</a></td>
+            <td id="otelDeployment--image--repository"><a href="./values.yaml#L1064">otelDeployment.image.repository</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">otel/opentelemetry-collector-contrib</pre>
@@ -2049,7 +2059,7 @@ tag: 0.139.0</pre>
             <td>Repository for the OtelDeployment image.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--image--tag"><a href="./values.yaml#L1059">otelDeployment.image.tag</a></td>
+            <td id="otelDeployment--image--tag"><a href="./values.yaml#L1068">otelDeployment.image.tag</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">0.139.0</pre>
@@ -2058,7 +2068,7 @@ tag: 0.139.0</pre>
             <td>Tag for the OtelDeployment image. In case of your Host OS is windows, use the `0.123.0-windows-2022-amd64` tag.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--image--pullPolicy"><a href="./values.yaml#L1062">otelDeployment.image.pullPolicy</a></td>
+            <td id="otelDeployment--image--pullPolicy"><a href="./values.yaml#L1071">otelDeployment.image.pullPolicy</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">IfNotPresent</pre>
@@ -2067,7 +2077,7 @@ tag: 0.139.0</pre>
             <td>Image pull policy for the OtelDeployment.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--imagePullSecrets"><a href="./values.yaml#L1065">otelDeployment.imagePullSecrets</a></td>
+            <td id="otelDeployment--imagePullSecrets"><a href="./values.yaml#L1074">otelDeployment.imagePullSecrets</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -2076,7 +2086,7 @@ tag: 0.139.0</pre>
             <td>Image Pull Secrets for the OtelDeployment. Merged with `global.imagePullSecrets`.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--command"><a href="./values.yaml#L1072">otelDeployment.command</a></td>
+            <td id="otelDeployment--command"><a href="./values.yaml#L1081">otelDeployment.command</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">extraArgs: []
@@ -2086,7 +2096,7 @@ name: /otelcol-contrib</pre>
             <td>Command and arguments for the OtelDeployment container.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--command--name"><a href="./values.yaml#L1075">otelDeployment.command.name</a></td>
+            <td id="otelDeployment--command--name"><a href="./values.yaml#L1084">otelDeployment.command.name</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">/otelcol-contrib</pre>
@@ -2095,7 +2105,7 @@ name: /otelcol-contrib</pre>
             <td>OtelDeployment command name.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--command--extraArgs"><a href="./values.yaml#L1078">otelDeployment.command.extraArgs</a></td>
+            <td id="otelDeployment--command--extraArgs"><a href="./values.yaml#L1087">otelDeployment.command.extraArgs</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -2104,7 +2114,7 @@ name: /otelcol-contrib</pre>
             <td>Extra arguments for the OtelDeployment command.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--configMap"><a href="./values.yaml#L1081">otelDeployment.configMap</a></td>
+            <td id="otelDeployment--configMap"><a href="./values.yaml#L1090">otelDeployment.configMap</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">create: true</pre>
@@ -2113,7 +2123,7 @@ name: /otelcol-contrib</pre>
             <td>ConfigMap configuration for the OtelDeployment.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--configMap--create"><a href="./values.yaml#L1084">otelDeployment.configMap.create</a></td>
+            <td id="otelDeployment--configMap--create"><a href="./values.yaml#L1093">otelDeployment.configMap.create</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">true</pre>
@@ -2122,7 +2132,7 @@ name: /otelcol-contrib</pre>
             <td>Specifies whether a ConfigMap should be created.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--service"><a href="./values.yaml#L1087">otelDeployment.service</a></td>
+            <td id="otelDeployment--service"><a href="./values.yaml#L1096">otelDeployment.service</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">annotations: {}
@@ -2132,7 +2142,7 @@ type: ClusterIP</pre>
             <td>Service configuration for the OtelDeployment.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--service--annotations"><a href="./values.yaml#L1090">otelDeployment.service.annotations</a></td>
+            <td id="otelDeployment--service--annotations"><a href="./values.yaml#L1099">otelDeployment.service.annotations</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -2141,7 +2151,7 @@ type: ClusterIP</pre>
             <td>Annotations for the OtelDeployment service.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--service--type"><a href="./values.yaml#L1093">otelDeployment.service.type</a></td>
+            <td id="otelDeployment--service--type"><a href="./values.yaml#L1102">otelDeployment.service.type</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">ClusterIP</pre>
@@ -2150,7 +2160,7 @@ type: ClusterIP</pre>
             <td>Service type.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--serviceAccount"><a href="./values.yaml#L1096">otelDeployment.serviceAccount</a></td>
+            <td id="otelDeployment--serviceAccount"><a href="./values.yaml#L1105">otelDeployment.serviceAccount</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">annotations: {}
@@ -2161,7 +2171,7 @@ name: null</pre>
             <td>ServiceAccount configuration for the OtelDeployment.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--serviceAccount--create"><a href="./values.yaml#L1099">otelDeployment.serviceAccount.create</a></td>
+            <td id="otelDeployment--serviceAccount--create"><a href="./values.yaml#L1108">otelDeployment.serviceAccount.create</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">true</pre>
@@ -2170,7 +2180,7 @@ name: null</pre>
             <td>Specifies whether a ServiceAccount should be created.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--serviceAccount--annotations"><a href="./values.yaml#L1102">otelDeployment.serviceAccount.annotations</a></td>
+            <td id="otelDeployment--serviceAccount--annotations"><a href="./values.yaml#L1111">otelDeployment.serviceAccount.annotations</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -2179,7 +2189,7 @@ name: null</pre>
             <td>Annotations for the ServiceAccount.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--serviceAccount--name"><a href="./values.yaml#L1105">otelDeployment.serviceAccount.name</a></td>
+            <td id="otelDeployment--serviceAccount--name"><a href="./values.yaml#L1114">otelDeployment.serviceAccount.name</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">null</pre>
@@ -2188,7 +2198,7 @@ name: null</pre>
             <td>The name of the ServiceAccount to use. A name is generated if not set.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--annotations"><a href="./values.yaml#L1108">otelDeployment.annotations</a></td>
+            <td id="otelDeployment--annotations"><a href="./values.yaml#L1117">otelDeployment.annotations</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -2197,7 +2207,7 @@ name: null</pre>
             <td>Annotations for the OtelDeployment.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--podAnnotations"><a href="./values.yaml#L1111">otelDeployment.podAnnotations</a></td>
+            <td id="otelDeployment--podAnnotations"><a href="./values.yaml#L1120">otelDeployment.podAnnotations</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -2206,7 +2216,7 @@ name: null</pre>
             <td>Annotations for the OtelDeployment pods.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--additionalEnvs"><a href="./values.yaml#L1118">otelDeployment.additionalEnvs</a></td>
+            <td id="otelDeployment--additionalEnvs"><a href="./values.yaml#L1127">otelDeployment.additionalEnvs</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -2215,7 +2225,7 @@ name: null</pre>
             <td>Additional environment variables for the OtelDeployment container.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--podSecurityContext"><a href="./values.yaml#L1121">otelDeployment.podSecurityContext</a></td>
+            <td id="otelDeployment--podSecurityContext"><a href="./values.yaml#L1130">otelDeployment.podSecurityContext</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -2224,7 +2234,7 @@ name: null</pre>
             <td>Pod-level security configuration.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--securityContext"><a href="./values.yaml#L1126">otelDeployment.securityContext</a></td>
+            <td id="otelDeployment--securityContext"><a href="./values.yaml#L1135">otelDeployment.securityContext</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -2233,7 +2243,7 @@ name: null</pre>
             <td>Container-level security configuration.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--minReadySeconds"><a href="./values.yaml#L1136">otelDeployment.minReadySeconds</a></td>
+            <td id="otelDeployment--minReadySeconds"><a href="./values.yaml#L1145">otelDeployment.minReadySeconds</a></td>
             <td>int</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">5</pre>
@@ -2242,7 +2252,7 @@ name: null</pre>
             <td>Minimum number of seconds for which a newly created Pod should be ready.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--progressDeadlineSeconds"><a href="./values.yaml#L1139">otelDeployment.progressDeadlineSeconds</a></td>
+            <td id="otelDeployment--progressDeadlineSeconds"><a href="./values.yaml#L1148">otelDeployment.progressDeadlineSeconds</a></td>
             <td>int</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">120</pre>
@@ -2251,7 +2261,7 @@ name: null</pre>
             <td>Seconds to wait for the Deployment to progress before it's considered failed.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--ports"><a href="./values.yaml#L1142">otelDeployment.ports</a></td>
+            <td id="otelDeployment--ports"><a href="./values.yaml#L1151">otelDeployment.ports</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">health-check:
@@ -2283,7 +2293,7 @@ zpages:
             <td>Port configurations for the OtelDeployment.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--ports--metrics--enabled"><a href="./values.yaml#L1147">otelDeployment.ports.metrics.enabled</a></td>
+            <td id="otelDeployment--ports--metrics--enabled"><a href="./values.yaml#L1156">otelDeployment.ports.metrics.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">false</pre>
@@ -2292,7 +2302,7 @@ zpages:
             <td>Enable service port for internal metrics.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--ports--zpages--enabled"><a href="./values.yaml#L1160">otelDeployment.ports.zpages.enabled</a></td>
+            <td id="otelDeployment--ports--zpages--enabled"><a href="./values.yaml#L1169">otelDeployment.ports.zpages.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">false</pre>
@@ -2301,7 +2311,7 @@ zpages:
             <td>Enable service port for ZPages.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--ports--health-check--enabled"><a href="./values.yaml#L1173">otelDeployment.ports.health-check.enabled</a></td>
+            <td id="otelDeployment--ports--health-check--enabled"><a href="./values.yaml#L1182">otelDeployment.ports.health-check.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">true</pre>
@@ -2310,7 +2320,7 @@ zpages:
             <td>Enable service port for health checks.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--ports--pprof--enabled"><a href="./values.yaml#L1186">otelDeployment.ports.pprof.enabled</a></td>
+            <td id="otelDeployment--ports--pprof--enabled"><a href="./values.yaml#L1195">otelDeployment.ports.pprof.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">false</pre>
@@ -2319,7 +2329,7 @@ zpages:
             <td>Enable service port for pprof.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--livenessProbe"><a href="./values.yaml#L1197">otelDeployment.livenessProbe</a></td>
+            <td id="otelDeployment--livenessProbe"><a href="./values.yaml#L1206">otelDeployment.livenessProbe</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">enabled: true
@@ -2335,7 +2345,7 @@ timeoutSeconds: 5</pre>
             <td>Configure liveness probe.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--readinessProbe"><a href="./values.yaml#L1216">otelDeployment.readinessProbe</a></td>
+            <td id="otelDeployment--readinessProbe"><a href="./values.yaml#L1225">otelDeployment.readinessProbe</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">enabled: true
@@ -2351,7 +2361,7 @@ timeoutSeconds: 5</pre>
             <td>Configure readiness probe.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--customLivenessProbe"><a href="./values.yaml#L1235">otelDeployment.customLivenessProbe</a></td>
+            <td id="otelDeployment--customLivenessProbe"><a href="./values.yaml#L1244">otelDeployment.customLivenessProbe</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -2360,7 +2370,7 @@ timeoutSeconds: 5</pre>
             <td>Custom liveness probe configuration.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--customReadinessProbe"><a href="./values.yaml#L1238">otelDeployment.customReadinessProbe</a></td>
+            <td id="otelDeployment--customReadinessProbe"><a href="./values.yaml#L1247">otelDeployment.customReadinessProbe</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -2369,7 +2379,7 @@ timeoutSeconds: 5</pre>
             <td>Custom readiness probe configuration.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--ingress"><a href="./values.yaml#L1241">otelDeployment.ingress</a></td>
+            <td id="otelDeployment--ingress"><a href="./values.yaml#L1250">otelDeployment.ingress</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">annotations: {}
@@ -2387,7 +2397,7 @@ tls: []</pre>
             <td>Ingress configuration for the OtelDeployment.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--ingress--enabled"><a href="./values.yaml#L1244">otelDeployment.ingress.enabled</a></td>
+            <td id="otelDeployment--ingress--enabled"><a href="./values.yaml#L1253">otelDeployment.ingress.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">false</pre>
@@ -2396,7 +2406,7 @@ tls: []</pre>
             <td>Enable Ingress for the OtelDeployment.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--ingress--className"><a href="./values.yaml#L1247">otelDeployment.ingress.className</a></td>
+            <td id="otelDeployment--ingress--className"><a href="./values.yaml#L1256">otelDeployment.ingress.className</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">""</pre>
@@ -2405,7 +2415,7 @@ tls: []</pre>
             <td>Ingress Class Name to be used.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--ingress--annotations"><a href="./values.yaml#L1250">otelDeployment.ingress.annotations</a></td>
+            <td id="otelDeployment--ingress--annotations"><a href="./values.yaml#L1259">otelDeployment.ingress.annotations</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -2414,7 +2424,7 @@ tls: []</pre>
             <td>Annotations for the OtelDeployment Ingress.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--ingress--hosts"><a href="./values.yaml#L1253">otelDeployment.ingress.hosts</a></td>
+            <td id="otelDeployment--ingress--hosts"><a href="./values.yaml#L1262">otelDeployment.ingress.hosts</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">- host: otel-deployment.domain.com
@@ -2427,7 +2437,7 @@ tls: []</pre>
             <td>OtelDeployment Ingress hostnames.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--ingress--tls"><a href="./values.yaml#L1261">otelDeployment.ingress.tls</a></td>
+            <td id="otelDeployment--ingress--tls"><a href="./values.yaml#L1270">otelDeployment.ingress.tls</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -2436,7 +2446,7 @@ tls: []</pre>
             <td>OtelDeployment Ingress TLS configuration.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--resources"><a href="./values.yaml#L1267">otelDeployment.resources</a></td>
+            <td id="otelDeployment--resources"><a href="./values.yaml#L1276">otelDeployment.resources</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">requests:
@@ -2447,7 +2457,7 @@ tls: []</pre>
             <td>Configure resource requests and limits for the OtelDeployment.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--priorityClassName"><a href="./values.yaml#L1277">otelDeployment.priorityClassName</a></td>
+            <td id="otelDeployment--priorityClassName"><a href="./values.yaml#L1286">otelDeployment.priorityClassName</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">""</pre>
@@ -2456,7 +2466,7 @@ tls: []</pre>
             <td>OtelDeployment Priority Class name.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--nodeSelector"><a href="./values.yaml#L1280">otelDeployment.nodeSelector</a></td>
+            <td id="otelDeployment--nodeSelector"><a href="./values.yaml#L1289">otelDeployment.nodeSelector</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -2465,7 +2475,7 @@ tls: []</pre>
             <td>Node selector for OtelDeployment pod assignment.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--tolerations"><a href="./values.yaml#L1283">otelDeployment.tolerations</a></td>
+            <td id="otelDeployment--tolerations"><a href="./values.yaml#L1292">otelDeployment.tolerations</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -2474,7 +2484,7 @@ tls: []</pre>
             <td>Toleration labels for OtelDeployment pod assignment.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--affinity"><a href="./values.yaml#L1286">otelDeployment.affinity</a></td>
+            <td id="otelDeployment--affinity"><a href="./values.yaml#L1295">otelDeployment.affinity</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -2483,7 +2493,7 @@ tls: []</pre>
             <td>Affinity settings for the OtelDeployment pod.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--topologySpreadConstraints"><a href="./values.yaml#L1289">otelDeployment.topologySpreadConstraints</a></td>
+            <td id="otelDeployment--topologySpreadConstraints"><a href="./values.yaml#L1298">otelDeployment.topologySpreadConstraints</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -2492,7 +2502,7 @@ tls: []</pre>
             <td>Describes how OtelDeployment pods ought to spread.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--clusterRole"><a href="./values.yaml#L1293">otelDeployment.clusterRole</a></td>
+            <td id="otelDeployment--clusterRole"><a href="./values.yaml#L1302">otelDeployment.clusterRole</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">Please Checkout the values.yml for default values</pre>
@@ -2501,7 +2511,7 @@ tls: []</pre>
             <td>ClusterRole configuration for the OtelDeployment.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--clusterRole--create"><a href="./values.yaml#L1296">otelDeployment.clusterRole.create</a></td>
+            <td id="otelDeployment--clusterRole--create"><a href="./values.yaml#L1305">otelDeployment.clusterRole.create</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">true</pre>
@@ -2510,7 +2520,7 @@ tls: []</pre>
             <td>Specifies whether a ClusterRole should be created.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--clusterRole--annotations"><a href="./values.yaml#L1299">otelDeployment.clusterRole.annotations</a></td>
+            <td id="otelDeployment--clusterRole--annotations"><a href="./values.yaml#L1308">otelDeployment.clusterRole.annotations</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -2519,7 +2529,7 @@ tls: []</pre>
             <td>Annotations for the ClusterRole.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--clusterRole--name"><a href="./values.yaml#L1302">otelDeployment.clusterRole.name</a></td>
+            <td id="otelDeployment--clusterRole--name"><a href="./values.yaml#L1311">otelDeployment.clusterRole.name</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">""</pre>
@@ -2528,7 +2538,7 @@ tls: []</pre>
             <td>The name of the ClusterRole to use. A name is generated if not set.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--clusterRole--rules"><a href="./values.yaml#L1306">otelDeployment.clusterRole.rules</a></td>
+            <td id="otelDeployment--clusterRole--rules"><a href="./values.yaml#L1315">otelDeployment.clusterRole.rules</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">Please checkout the values.yml for default values</pre>
@@ -2537,7 +2547,7 @@ tls: []</pre>
             <td>RBAC rules for the OtelDeployment.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--clusterRole--clusterRoleBinding"><a href="./values.yaml#L1335">otelDeployment.clusterRole.clusterRoleBinding</a></td>
+            <td id="otelDeployment--clusterRole--clusterRoleBinding"><a href="./values.yaml#L1344">otelDeployment.clusterRole.clusterRoleBinding</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">annotations: {}
@@ -2547,7 +2557,7 @@ name: ""</pre>
             <td>ClusterRoleBinding configuration for the OtelDeployment.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--config"><a href="./values.yaml#L1345">otelDeployment.config</a></td>
+            <td id="otelDeployment--config"><a href="./values.yaml#L1354">otelDeployment.config</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">Please Checkout the values.yml for default values</pre>
@@ -2556,7 +2566,7 @@ name: ""</pre>
             <td>Base configuration for the OtelDeployment Collector.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--config--processors--batch"><a href="./values.yaml#L1352">otelDeployment.config.processors.batch</a></td>
+            <td id="otelDeployment--config--processors--batch"><a href="./values.yaml#L1361">otelDeployment.config.processors.batch</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">send_batch_size: 10000
@@ -2566,7 +2576,7 @@ timeout: 1s</pre>
             <td>Batch processor config.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--extraVolumes"><a href="./values.yaml#L1394">otelDeployment.extraVolumes</a></td>
+            <td id="otelDeployment--extraVolumes"><a href="./values.yaml#L1403">otelDeployment.extraVolumes</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -2575,7 +2585,7 @@ timeout: 1s</pre>
             <td>Additional volumes for the OtelDeployment.</td>
         </tr>
         <tr>
-            <td id="otelDeployment--extraVolumeMounts"><a href="./values.yaml#L1404">otelDeployment.extraVolumeMounts</a></td>
+            <td id="otelDeployment--extraVolumeMounts"><a href="./values.yaml#L1413">otelDeployment.extraVolumeMounts</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -2595,7 +2605,7 @@ timeout: 1s</pre>
     </thead>
     <tbody>
         <tr>
-            <td id="otelDeployment--strategy"><a href="./values.yaml#L1069">otelDeployment.strategy</a></td>
+            <td id="otelDeployment--strategy"><a href="./values.yaml#L1078">otelDeployment.strategy</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">RollingUpdate</pre>

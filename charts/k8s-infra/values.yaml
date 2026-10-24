@@ -185,13 +185,22 @@ presets:
       # multiline configuration block must contain exactly one of line_start_pattern or line_end_pattern
       # line_start_pattern: ""
 
+    # presets.logsCollection.fusescope -- The FuseScope release whose pods `signozLogs` excludes (blacklist) or includes (whitelist).
+    # @section -- Logs Collection Presets
+    fusescope:
+      # presets.logsCollection.fusescope.release - Release name of the FuseScope chart. Empty to leave its pods alone.
+      # @section -- Logs Collection Presets
+      release: fusescope
+      # presets.logsCollection.fusescope.namespace - Its namespace. Empty means this release's namespace.
+      # @section -- Logs Collection Presets
+      namespace: ""
     # presets.logsCollection.blacklist -- Exclude certain log files from being collected.
     # @section -- Logs Collection Presets
     blacklist:
       # presets.logsCollection.blacklist.enabled - Enable the blacklist.
       # @section -- Logs Collection Presets
       enabled: true
-      # presets.logsCollection.blacklist.signozLogs - Exclude SigNoz's own logs.
+      # presets.logsCollection.blacklist.signozLogs - Exclude the logs of this chart's collectors and of the FuseScope release.
       # @section -- Logs Collection Presets
       signozLogs: true
       # presets.logsCollection.blacklist.namespaces - List of namespaces to exclude from log collection.
@@ -215,7 +224,7 @@ presets:
       # presets.logsCollection.whitelist.enabled - Enable the whitelist.
       # @section -- Logs Collection Presets
       enabled: false
-      # presets.logsCollection.whitelist.signozLogs - Include SigNoz's own logs.
+      # presets.logsCollection.whitelist.signozLogs - Include the logs of the FuseScope release.
       # @section -- Logs Collection Presets
       signozLogs: true
       # presets.logsCollection.whitelist.namespaces - List of namespaces to include in log collection.

@@ -1,0 +1,86 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/helm-unittest/helm-unittest/main/schema/helm-testsuite.json
+suite: otel-agent own logs exclusion
+templates:
+  - otel-agent/configmap.yaml
+release:
+  name: k8s-infra
+  namespace: fusescope
+set:
+  presets:
+    logsCollection:
+      enabled: true
+
+tests:
+  - it: excludes the agent, the deployment and the fusescope release
+    asserts:
+      - matchRegex:
+          path: data["otel-agent-config.yaml"]
+          pattern: '- /var/log/pods/fusescope_k8s-infra-otel-agent-\*/\*/\*\.log\n'
+      - matchRegex:
+          path: data["otel-agent-config.yaml"]
+          pattern: '- /var/log/pods/fusescope_k8s-infra-otel-deployment-\*/\*/\*\.log\n'
+      - matchRegex:
+          path: data["otel-agent-config.yaml"]
+          pattern: '- /var/log/pods/fusescope_fusescope-\*/\*/\*\.log\n'
+      - notMatchRegex:
+          path: data["otel-agent-config.yaml"]
+          pattern: '-signoz-|\*-k8s-infra-\*'
+
+  - it: follows the release name into the agent and deployment pod names
+    release:
+      name: agents
+    asserts:
+      - matchRegex:
+          path: data["otel-agent-config.yaml"]
+          pattern: '- /var/log/pods/fusescope_agents-k8s-infra-otel-agent-\*/\*/\*\.log\n'
+      - matchRegex:
+          path: data["otel-agent-config.yaml"]
+          pattern: '- /var/log/pods/fusescope_agents-k8s-infra-otel-deployment-\*/\*/\*\.log\n'
+
+  - it: uses the namespace override for the agent pods
+    set:
+      namespace: monitoring
+    asserts:
+      - matchRegex:
+          path: data["otel-agent-config.yaml"]
+          pattern: '- /var/log/pods/monitoring_k8s-infra-otel-agent-\*/\*/\*\.log\n'
+
+  - it: excludes a fusescope release in another namespace
+    set:
+      presets.logsCollection.fusescope.release: observability-stack
+      presets.logsCollection.fusescope.namespace: observability
+    asserts:
+      - matchRegex:
+          path: data["otel-agent-config.yaml"]
+          pattern: '- /var/log/pods/observability_observability-stack-\*/\*/\*\.log\n'
+
+  - it: skips the fusescope release when its name is empty
+    set:
+      presets.logsCollection.fusescope.release: ""
+    asserts:
+      - notMatchRegex:
+          path: data["otel-agent-config.yaml"]
+          pattern: '/var/log/pods/fusescope_-\*'
+      - matchRegex:
+          path: data["otel-agent-config.yaml"]
+          pattern: '- /var/log/pods/fusescope_k8s-infra-otel-agent-\*/\*/\*\.log\n'
+
+  - it: collects its own logs when signozLogs is off
+    set:
+      presets.logsCollection.blacklist.signozLogs: false
+    asserts:
+      - notMatchRegex:
+          path: data["otel-agent-config.yaml"]
+          pattern: 'otel-agent-\*|otel-deployment-\*|fusescope_fusescope-\*'
+
+  - it: includes the fusescope release when whitelisting
+    set:
+      presets.logsCollection.whitelist.enabled: true
+      presets.logsCollection.blacklist.enabled: false
+    asserts:
+      - matchRegex:
+          path: data["otel-agent-config.yaml"]
+          pattern: 'include:\n\s+- /var/log/pods/fusescope_fusescope-\*/\*/\*\.log\n'
+      - notMatchRegex:
+          path: data["otel-agent-config.yaml"]
+          pattern: '-signoz-'
