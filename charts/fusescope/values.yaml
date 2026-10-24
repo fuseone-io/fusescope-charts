@@ -430,40 +430,68 @@ clickhouse:
   #   number: 2
   #   topologyKey: kubernetes.io/hostname
 
-  # clickhouse.coldStorage -- Cold storage configuration.
+  # clickhouse.coldStorage -- Cold storage on object storage: parts older than each signal's move period go to the bucket and stay queryable. See [Cold storage](#cold-storage).
   # @section -- ClickHouse Cold Storage
   coldStorage:
-    # clickhouse.coldStorage.enabled -- Whether to enable S3/GCS cold storage.
+    # clickhouse.coldStorage.enabled -- Whether to enable cold storage on S3, GCS or an S3-compatible store.
+    # @section -- ClickHouse Cold Storage
     # @default -- false
     enabled: false
     # clickhouse.coldStorage.defaultKeepFreeSpaceBytes -- Reserve free space on the default disk (in bytes).
+    # @section -- ClickHouse Cold Storage
     # @default -- "10485760"
     defaultKeepFreeSpaceBytes: "10485760"
-    # clickhouse.coldStorage.type -- Type of cold storage: `s3` or `gcs`.
+    # clickhouse.coldStorage.type -- `s3` (AWS S3 and S3-compatible stores) or `gcs` (S3-compatible XML API, HMAC keys).
+    # @section -- ClickHouse Cold Storage
     # @default -- "s3"
     type: s3
-    # clickhouse.coldStorage.endpoint -- Endpoint for S3 or GCS.
-    # For S3 (us-east-1): https://s3.amazonaws.com
-    # For S3 (other regions): https://s3-<region>.amazonaws.com
-    # For GCS: https://storage.googleapis.com/<bucket-name>/data/
-    # @default -- "https://<bucket-name>.s3-<region>.amazonaws.com/data/"
-    endpoint: https://<bucket-name>.s3-<region>.amazonaws.com/data/
-    # clickhouse.coldStorage.accessKey -- Access Key ID for S3 or GCS.
-    # @default -- "<access_key_id>"
-    accessKey: <access_key_id>
-    # clickhouse.coldStorage.secretAccess -- Secret Access Key for S3 or GCS.
-    # @default -- "<secret_access_key>"
-    secretAccess: <secret_access_key>
-    # clickhouse.coldStorage.role -- AWS IAM role configuration to use environment variables instead of keys.
+    # clickhouse.coldStorage.endpoint -- Bucket URL with a path prefix; required when enabled.
+    # S3: `https://<bucket>.s3.<region>.amazonaws.com/data/`.
+    # GCS: `https://storage.googleapis.com/<bucket>/data/`.
+    # MinIO and other S3-compatible stores: `https://<host>/<bucket>/data/`.
+    # @section -- ClickHouse Cold Storage
+    # @default -- ""
+    endpoint: ""
+    # clickhouse.coldStorage.region -- Bucket region; empty lets ClickHouse detect it.
+    # @section -- ClickHouse Cold Storage
+    # @default -- ""
+    region: ""
+    # clickhouse.coldStorage.accessKey -- Access key ID, stored in a Secret created by the chart. Ignored with `existingSecret` or `role.enabled`.
+    # @section -- ClickHouse Cold Storage
+    # @default -- ""
+    accessKey: ""
+    # clickhouse.coldStorage.secretAccess -- Secret access key, stored in a Secret created by the chart. Ignored with `existingSecret` or `role.enabled`.
+    # @section -- ClickHouse Cold Storage
+    # @default -- ""
+    secretAccess: ""
+    # clickhouse.coldStorage.existingSecret -- Existing Secret holding the keys, instead of `accessKey` and `secretAccess`.
+    # @section -- ClickHouse Cold Storage
+    # @default -- ""
+    existingSecret: ""
+    # clickhouse.coldStorage.secretKeys -- Key names inside the Secret.
+    # @section -- ClickHouse Cold Storage
+    # @default -- { accessKey: accessKey, secretAccess: secretAccess }
+    secretKeys:
+      accessKey: accessKey
+      secretAccess: secretAccess
+    # clickhouse.coldStorage.cache -- Filesystem cache in front of the bucket, on the ClickHouse data volume.
+    # @section -- ClickHouse Cold Storage
+    cache:
+      # clickhouse.coldStorage.cache.maxSize -- Maximum cache size. Rule of thumb: the larger of 10% of the cold data and 2 days of compressed ingest.
+      # @section -- ClickHouse Cold Storage
+      # @default -- 50Gi
+      maxSize: 50Gi
+    # clickhouse.coldStorage.role -- AWS IAM role (IRSA) instead of keys. S3 only.
     # @section -- ClickHouse Cold Storage
     role:
-      # clickhouse.coldStorage.role.enabled -- Whether to enable using an AWS IAM ARN role.
+      # clickhouse.coldStorage.role.enabled -- Use environment credentials (`use_environment_credentials`) instead of keys.
+      # @section -- ClickHouse Cold Storage
       # @default -- false
       enabled: false
-      # clickhouse.coldStorage.role.annotations -- Annotations for the service account to assume the AWS role.
-      # @default -- { eks.amazonaws.com/role-arn: "arn:aws:iam::******:role/****" }
-      annotations:
-        eks.amazonaws.com/role-arn: arn:aws:iam::******:role/*****
+      # clickhouse.coldStorage.role.annotations -- Annotations for the ClickHouse service account, e.g. `eks.amazonaws.com/role-arn`.
+      # @section -- ClickHouse Cold Storage
+      # @default -- {}
+      annotations: {}
   # clickhouse.files -- ClickHouse configuration files.
   # Refs:
   # - https://clickhouse.com/docs/en/operations/configuration-files/

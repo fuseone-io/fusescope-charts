@@ -69,6 +69,37 @@ FuseScope serves the RUM ingestion gateway on its HTTP port (8080): browsers sen
 - **CORS belongs to the gateway.** It answers `OPTIONS` preflights from each application's allowed origins. The ingress or proxy must pass `OPTIONS` and the `Origin` header through and must not add CORS headers of its own. With ingress-nginx, don't set `nginx.ingress.kubernetes.io/enable-cors` on this ingress, and raise `nginx.ingress.kubernetes.io/proxy-body-size` (1m by default) to `signoz.rum.maxBodySize` (4m).
 - **Client IP.** The per-client rate limit (20 req/s, burst 60) keys on the client IP. Behind an ingress or load balancer every browser would share the proxy's IP, so `signoz.rum.trustForwardedFor` defaults to `signoz.ingress.enabled` and the gateway then reads the first `X-Forwarded-For` address. Set it to `true` when another proxy fronts FuseScope, and only when that proxy overwrites the header: a client-supplied address would let a browser pick its own bucket, though it stays within the per-key limit. With ingress-nginx this holds by default (`use-forwarded-headers: false`); keep the real client IP reaching the controller (e.g. `externalTrafficPolicy: Local` or PROXY protocol).
 
+### Cold storage
+
+ClickHouse can keep parts older than each signal's move period on object storage, where they stay queryable. The recommended production layout keeps 7 days on the local disk and the rest of retention in a bucket; metrics stay local unless you opt in. Turn it on with `clickhouse.coldStorage` (see ClickHouse Cold Storage in [Values](#values)), then set **Move to object storage** per signal on the retention settings page.
+
+```yaml
+clickhouse:
+  coldStorage:
+    enabled: true
+    endpoint: https://my-bucket.s3.eu-west-1.amazonaws.com/data/
+    region: eu-west-1
+    existingSecret: fusescope-cold-storage   # keys accessKey and secretAccess
+    cache:
+      maxSize: 50Gi
+```
+
+The chart renders a disk for the bucket, a filesystem cache disk in front of it and a storage policy `tiered` with volumes `default` (local) and `s3` (cache over the bucket). The cold volume does not merge parts (`prefer_not_to_merge`), and zero-copy replication is off, so each replica stores its own copy. Rendering fails when `endpoint` or credentials are missing. Keys reach ClickHouse as environment variables from a Secret, never inline in the ClickHouse config.
+
+| Store | Values | Auth |
+|---|---|---|
+| AWS S3 | `type: s3` | Keys from a Secret, or an IAM role (IRSA) with `role.enabled` and `role.annotations` |
+| GCS | `type: gcs` (S3-compatible XML API, `support_batch_delete = false`) | HMAC keys of a service account (Cloud Storage → Settings → Interoperability). Workload identity is not supported |
+| MinIO, Cloudflare R2, Backblaze B2, Wasabi, Ceph RGW | `type: s3` with the provider endpoint | Keys from a Secret |
+| Azure Blob Storage | Not supported yet | |
+
+- **Sizing.** Set `cache.maxSize` to the larger of 10 % of the cold data and 2 days of compressed ingest. Size the ClickHouse data volume (`clickhouse.persistence.size`) for hot data + cache + about 1 % of the cold data for metadata.
+- **Latency.** The first query on cold data takes up to about a second; repeats are served from the cache and are close to local. After a restart or a cache eviction the first queries are slow again.
+- **Dedicated bucket.** The bucket must have no lifecycle rules and no other writers: deleting objects behind ClickHouse corrupts parts. ClickHouse deletes cold data itself when retention expires.
+- **Backups.** Snapshots or backups of the local volume do not contain cold data.
+- **Network.** On AWS, reach S3 through a gateway VPC endpoint to avoid NAT gateway charges.
+- **External ClickHouse.** With `externalClickhouse`, define the storage policy yourself with the same names, policy `tiered` and volume `s3`: FuseScope depends on them.
+
 > [!WARNING]
 > ### Breaking Changes
 > #### Version 0.131.0
