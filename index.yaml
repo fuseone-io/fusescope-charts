@@ -589,6 +589,30 @@ entries:
   k8s-infra:
   - apiVersion: v2
     appVersion: 0.139.0
+    created: "2026-10-24T01:52:36.733744621Z"
+    description: Helm chart for collecting metrics and logs in K8s
+    digest: 9662e2dbfb9fce09f9b23e14b6eb97a3e7f5ac1d5e6084e77ca431aad2d081c2
+    home: https://github.com/fuseone-io/fusescope-charts
+    icon: https://raw.githubusercontent.com/fuseone-io/fusescope/main/docs/brand/fusescope-app-icon.svg
+    keywords:
+    - SigNoz
+    - OpenTelemetry
+    - apm
+    - monitoring
+    - logs
+    maintainers:
+    - name: FuseOne
+      url: https://github.com/fuseone-io
+    name: k8s-infra
+    sources:
+    - https://github.com/fuseone-io/fusescope-charts
+    - https://github.com/open-telemetry/opentelemetry-collector-contrib
+    type: application
+    urls:
+    - https://github.com/fuseone-io/fusescope-charts/releases/download/k8s-infra-0.17.2/k8s-infra-0.17.2.tgz
+    version: 0.17.2
+  - apiVersion: v2
+    appVersion: 0.139.0
     created: "2026-10-16T23:38:45.566212375Z"
     description: Helm chart for collecting metrics and logs in K8s
     digest: dc59221f942327a3ac429ee18539b5a16de3f6b7cd235984f8da6cad48d6c913
@@ -670,4 +694,4 @@ entries:
     urls:
     - https://github.com/fuseone-io/fusescope-charts/releases/download/zookeeper-0.0.1/zookeeper-0.0.1.tgz
     version: 0.0.1
-generated: "2026-10-24T00:34:19.053375304Z"
+generated: "2026-10-24T01:52:36.733811967Z"
