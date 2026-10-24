@@ -546,6 +546,15 @@ receivers:
 {{- $config | toYaml }}
 {{- end }}
 
+{{/*
+Log files of the FuseScope release's pods, or nothing when no release is set.
+*/}}
+{{- define "logsCollection.fusescopePods" -}}
+{{- with .Values.presets.logsCollection.fusescope.release }}
+- /var/log/pods/{{ default $.Release.Namespace $.Values.presets.logsCollection.fusescope.namespace }}_{{ . }}-*/*/*.log
+{{- end }}
+{{- end }}
+
 {{- define "opentelemetry-collector.logsCollectionConfig" -}}
 receivers:
   filelog/k8s:
@@ -560,10 +569,7 @@ receivers:
       # Include specific container's logs using whitelist config.
       # The file format is /var/log/pods/<namespace_name>_<pod_name>_<pod_uid>/<container_name>/<run_id>.log
       {{- if .Values.presets.logsCollection.whitelist.signozLogs }}
-      - /var/log/pods/{{ .Release.Namespace }}_{{ .Release.Name }}*-signoz-*/*/*.log
-      {{- if and .Values.namespace (ne .Release.Namespace .Values.namespace) }}
-      - /var/log/pods/{{ .Release.Namespace }}_{{ .Release.Name }}*-signoz-*/*/*.log
-      {{- end }}
+      {{- include "logsCollection.fusescopePods" . | nindent 6 }}
       {{- end }}
       {{- range $namespace := $namespaces }}
       - /var/log/pods/{{ $namespace }}_*/*/*.log
@@ -590,12 +596,9 @@ receivers:
     # The file format is /var/log/pods/<namespace_name>_<pod_name>_<pod_uid>/<container_name>/<run_id>.log
     exclude:
       {{- if .Values.presets.logsCollection.blacklist.signozLogs }}
-      - /var/log/pods/{{ .Release.Namespace }}_{{ .Release.Name }}*-signoz-*/*/*.log
-      - /var/log/pods/{{ .Release.Namespace }}_{{ .Release.Name }}*-k8s-infra-*/*/*.log
-      {{- if and .Values.namespace (ne .Release.Namespace .Values.namespace) }}
-      - /var/log/pods/{{ .Release.Namespace }}_{{ .Release.Name }}*-signoz-*/*/*.log
-      - /var/log/pods/{{ .Values.namespace }}_{{ .Release.Name }}*-k8s-infra-*/*/*.log
-      {{- end }}
+      - /var/log/pods/{{ include "k8s-infra.namespace" . }}_{{ include "otelAgent.fullname" . }}-*/*/*.log
+      - /var/log/pods/{{ include "k8s-infra.namespace" . }}_{{ include "otelDeployment.fullname" . }}-*/*/*.log
+      {{- include "logsCollection.fusescopePods" . | nindent 6 }}
       {{- end }}
       {{- range $namespace := $namespaces }}
       - /var/log/pods/{{ $namespace }}_*/*/*.log
