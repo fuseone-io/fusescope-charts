@@ -792,8 +792,8 @@ signoz:
     # @default -- "fuseone-io/fusescope"
     repository: fuseone-io/fusescope
     # signoz.image.tag - The container image tag.
-    # @default -- "0.155.0"
-    tag: 0.155.0
+    # @default -- "0.156.0"
+    tag: 0.156.0
     # signoz.image.pullPolicy - The image pull policy.
     # @default -- "IfNotPresent"
     pullPolicy: IfNotPresent
