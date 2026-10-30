@@ -1,7 +1,7 @@
 
 # FuseScope
 
-![Version: 0.158.0](https://img.shields.io/badge/Version-0.158.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.158.0](https://img.shields.io/badge/AppVersion-0.158.0-informational?style=flat-square)
+![Version: 0.158.1](https://img.shields.io/badge/Version-0.158.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.158.0](https://img.shields.io/badge/AppVersion-0.158.0-informational?style=flat-square)
 
 FuseScope is an open-source observability platform native to OpenTelemetry, with logs, traces and metrics in a single application. It is a hard fork of [SigNoz](https://github.com/SigNoz/signoz) maintained by FuseOne.
 
@@ -1488,6 +1488,26 @@ servicePort: 8082</pre>
 </div>
             </td>
             <td>Enable or disable the PostgreSQL for signoz. For more details, check out the postgresql chart: https://github.com/SigNoz/charts/tree/main/charts/postgresql</td>
+        </tr>
+    </tbody>
+</table>
+<h3>FuseScope engine</h3>
+<table>
+    <thead>
+        <th>Key</th>
+        <th>Type</th>
+        <th>Default</th>
+        <th>Description</th>
+    </thead>
+    <tbody>
+        <tr>
+            <td id="engine--enabled"><a href="./values.yaml#L1840">engine.enabled</a></td>
+            <td>bool</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">false</pre>
+</div>
+            </td>
+            <td>Install the FuseScope engine, the Parquet storage and query layer that will replace ClickHouse. Experimental and under construction: leave it off. Its settings are the fusescope-engine chart's values under `engine`.</td>
         </tr>
     </tbody>
 </table>

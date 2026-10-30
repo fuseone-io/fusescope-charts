@@ -1,0 +1,39 @@
+name: FuseScope engine chart
+
+# The engine chart is not in ct.yaml: an install needs Secrets and an image
+# a kind cluster does not have. This checks what it renders instead, alone
+# and under the fusescope chart. The
+# engine's own CI runs the same script against the image it builds, which
+# also validates each rendered configuration with the engine.
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - charts/fusescope-engine/**
+      - charts/fusescope/**
+      - scripts/fusescope-engine-chart-check.sh
+      - .github/workflows/fusescope-engine-chart.yaml
+  push:
+    branches:
+      - main
+    paths:
+      - charts/fusescope-engine/**
+      - charts/fusescope/**
+      - scripts/fusescope-engine-chart-check.sh
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.12.1
+      - name: install kubeconform
+        run: |
+          curl -fsSL https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM}/kubeconform-linux-amd64.tar.gz \
+            | sudo tar -xz -C /usr/local/bin kubeconform
+        env:
+          KUBECONFORM: v0.7.0
+      - run: scripts/fusescope-engine-chart-check.sh

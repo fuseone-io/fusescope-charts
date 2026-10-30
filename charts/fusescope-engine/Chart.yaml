@@ -1,0 +1,19 @@
+apiVersion: v2
+name: fusescope-engine
+version: 0.1.0
+appVersion: "0.0.1"
+description: FuseScope engine, the Parquet storage and query layer that will replace ClickHouse. Experimental and under construction; not for production.
+type: application
+home: https://github.com/fuseone-io/fusescope-engine
+sources:
+  - https://github.com/fuseone-io/fusescope-engine
+  - https://github.com/fuseone-io/fusescope-charts
+keywords:
+  - FuseScope
+  - opentelemetry
+  - parquet
+maintainers:
+  - name: FuseOne
+    url: https://github.com/fuseone-io
+annotations:
+  fusescope.io/status: experimental

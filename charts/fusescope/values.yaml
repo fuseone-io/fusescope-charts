@@ -1829,3 +1829,12 @@ postgresql:
   # @default -- false
   # @section -- Postgres
   enabled: false
+
+# @section -- FuseScope engine
+engine:
+  # engine.enabled -- Install the FuseScope engine, the Parquet storage and query
+  # layer that will replace ClickHouse. Experimental and under construction: leave
+  # it off. Its settings are the fusescope-engine chart's values under `engine`.
+  # @default -- false
+  # @section -- FuseScope engine
+  enabled: false

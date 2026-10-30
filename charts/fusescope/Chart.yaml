@@ -1,6 +1,6 @@
 apiVersion: v2
 name: fusescope
-version: 0.158.0
+version: 0.158.1
 appVersion: "0.158.0"
 description: FuseScope observability platform (APM, traces, metrics and logs) Helm chart
 type: application
@@ -26,6 +26,11 @@ dependencies:
     repository: file://../postgresql
     condition: postgresql.enabled
     version: 0.0.3
+  - name: fusescope-engine
+    alias: engine
+    repository: file://../fusescope-engine
+    condition: engine.enabled
+    version: 0.1.0
 maintainers:
   - name: FuseOne
     url: https://github.com/fuseone-io

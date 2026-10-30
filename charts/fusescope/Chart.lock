@@ -5,5 +5,8 @@ dependencies:
 - name: postgresql
   repository: file://../postgresql
   version: 0.0.3
-digest: sha256:2dc0395f4f3da3f4b247d58e94bde7503f00cd5780fda4b238b4fa8a998eb020
-generated: "2026-10-24T19:53:01.335055024-03:00"
+- name: fusescope-engine
+  repository: file://../fusescope-engine
+  version: 0.1.0
+digest: sha256:6eef3200899564bedd5322f78445647a458d0b2f31b791f640765d2e5407777b
+generated: "2026-10-30T14:01:45.53963347-03:00"
