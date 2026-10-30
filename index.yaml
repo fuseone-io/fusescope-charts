@@ -70,6 +70,47 @@ entries:
   fusescope:
   - apiVersion: v2
     appVersion: 0.158.0
+    created: "2026-10-30T17:25:43.656904786Z"
+    dependencies:
+    - condition: clickhouse.enabled
+      name: clickhouse
+      repository: file://../clickhouse
+      version: 24.1.20
+    - condition: postgresql.enabled
+      name: postgresql
+      repository: file://../postgresql
+      version: 0.0.3
+    - alias: engine
+      condition: engine.enabled
+      name: fusescope-engine
+      repository: file://../fusescope-engine
+      version: 0.1.0
+    description: FuseScope observability platform (APM, traces, metrics and logs)
+      Helm chart
+    digest: f0759905612dd275fc561c295fd4935dac097f96a13a67c28144e7de1ffc3c30
+    home: https://github.com/fuseone-io/fusescope
+    icon: https://raw.githubusercontent.com/fuseone-io/fusescope/main/docs/brand/fusescope-app-icon.svg
+    keywords:
+    - FuseScope
+    - opentelemetry
+    - apm
+    - monitoring
+    - distributed tracing
+    - distributed logging
+    maintainers:
+    - name: FuseOne
+      url: https://github.com/fuseone-io
+    name: fusescope
+    sources:
+    - https://github.com/fuseone-io/fusescope-charts
+    - https://github.com/fuseone-io/fusescope
+    - https://github.com/fuseone-io/fusescope-otel-collector
+    type: application
+    urls:
+    - https://github.com/fuseone-io/fusescope-charts/releases/download/fusescope-0.158.1/fusescope-0.158.1.tgz
+    version: 0.158.1
+  - apiVersion: v2
+    appVersion: 0.158.0
     created: "2026-10-30T12:49:18.028723014Z"
     dependencies:
     - condition: clickhouse.enabled
@@ -824,6 +865,31 @@ entries:
     urls:
     - https://github.com/fuseone-io/fusescope-charts/releases/download/fusescope-0.147.0/fusescope-0.147.0.tgz
     version: 0.147.0
+  fusescope-engine:
+  - annotations:
+      fusescope.io/status: experimental
+    apiVersion: v2
+    appVersion: 0.0.1
+    created: "2026-10-30T17:25:43.862885262Z"
+    description: FuseScope engine, the Parquet storage and query layer that will replace
+      ClickHouse. Experimental and under construction; not for production.
+    digest: 148ed3b8b1f01181049f100499dce8d63f2c2a1dbee94899e94ad3b36faf4628
+    home: https://github.com/fuseone-io/fusescope-engine
+    keywords:
+    - FuseScope
+    - opentelemetry
+    - parquet
+    maintainers:
+    - name: FuseOne
+      url: https://github.com/fuseone-io
+    name: fusescope-engine
+    sources:
+    - https://github.com/fuseone-io/fusescope-engine
+    - https://github.com/fuseone-io/fusescope-charts
+    type: application
+    urls:
+    - https://github.com/fuseone-io/fusescope-charts/releases/download/fusescope-engine-0.1.0/fusescope-engine-0.1.0.tgz
+    version: 0.1.0
   k8s-infra:
   - apiVersion: v2
     appVersion: 0.139.0
@@ -932,4 +998,4 @@ entries:
     urls:
     - https://github.com/fuseone-io/fusescope-charts/releases/download/zookeeper-0.0.1/zookeeper-0.0.1.tgz
     version: 0.0.1
-generated: "2026-10-30T12:49:18.028901667Z"
+generated: "2026-10-30T17:25:43.863039296Z"
