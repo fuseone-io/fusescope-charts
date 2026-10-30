@@ -1491,4 +1491,24 @@ servicePort: 8082</pre>
         </tr>
     </tbody>
 </table>
+<h3>FuseScope engine</h3>
+<table>
+    <thead>
+        <th>Key</th>
+        <th>Type</th>
+        <th>Default</th>
+        <th>Description</th>
+    </thead>
+    <tbody>
+        <tr>
+            <td id="engine--enabled"><a href="./values.yaml#L1840">engine.enabled</a></td>
+            <td>bool</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">false</pre>
+</div>
+            </td>
+            <td>Install the FuseScope engine, the Parquet storage and query layer that will replace ClickHouse. Experimental and under construction: leave it off. Its settings are the fusescope-engine chart's values under `engine`.</td>
+        </tr>
+    </tbody>
+</table>
 

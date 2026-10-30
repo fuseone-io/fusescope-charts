@@ -26,6 +26,11 @@ dependencies:
     repository: file://../postgresql
     condition: postgresql.enabled
     version: 0.0.3
+  - name: fusescope-engine
+    alias: engine
+    repository: file://../fusescope-engine
+    condition: engine.enabled
+    version: 0.1.0
 maintainers:
   - name: FuseOne
     url: https://github.com/fuseone-io
