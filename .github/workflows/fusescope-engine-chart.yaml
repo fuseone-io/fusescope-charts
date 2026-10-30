@@ -1,7 +1,8 @@
 name: FuseScope engine chart
 
 # The engine chart is not in ct.yaml: an install needs Secrets and an image
-# a kind cluster does not have. This checks what it renders instead. The
+# a kind cluster does not have. This checks what it renders instead, alone
+# and under the fusescope chart. The
 # engine's own CI runs the same script against the image it builds, which
 # also validates each rendered configuration with the engine.
 on:
@@ -10,6 +11,7 @@ on:
       - main
     paths:
       - charts/fusescope-engine/**
+      - charts/fusescope/**
       - scripts/fusescope-engine-chart-check.sh
       - .github/workflows/fusescope-engine-chart.yaml
   push:
@@ -17,6 +19,7 @@ on:
       - main
     paths:
       - charts/fusescope-engine/**
+      - charts/fusescope/**
       - scripts/fusescope-engine-chart-check.sh
 
 jobs:

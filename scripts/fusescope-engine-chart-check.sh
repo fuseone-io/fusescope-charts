@@ -120,6 +120,7 @@ refuse -f "$chart/ci/staging-values.yaml" --set tls.clientCASecret=fusescope-eng
 refuse -f "$chart/ci/staging-values.yaml" --set tls.clientCASecret=fusescope-engine-compactor
 refuse -f "$chart/ci/staging-values.yaml" --set secrets.migrator=fusescope-engine-querier
 refuse -f "$chart/ci/staging-values.yaml" --set secrets.migrator=
+refuse -f "$chart/ci/staging-values.yaml" --set image.repository=
 refuse -f "$chart/ci/staging-values.yaml" --set startupTimeoutSecs=0
 refuse -f "$chart/ci/staging-values.yaml" --set startupTimeoutSecs=86401
 refuse -f "$chart/ci/staging-values.yaml" --set migration.backoffLimit=-1
@@ -142,4 +143,47 @@ PY
 for bound in 1 86400; do
     helm template check "$chart" -f "$chart/ci/staging-values.yaml" --set startupTimeoutSecs=$bound >/dev/null
 done
-echo "chart refuses a release without its secrets, any two Secrets alike (roles, migrator, client CAs, identities), a startup budget outside 1..86400, a migration backoff outside 0..10, jwt without tls, or an unknown auth mode; without the migration Job it needs no migrator and no role migrates"
+echo "chart refuses a release without its image repository or its secrets, any two Secrets alike (roles, migrator, client CAs, identities), a startup budget outside 1..86400, a migration backoff outside 0..10, jwt without tls, or an unknown auth mode; without the migration Job it needs no migrator and no role migrates"
+
+# Under the fusescope chart, through the package helm dependency build
+# embeds there, which is what a release of that chart carries.
+umbrella=${UMBRELLA:-charts/fusescope}
+if [ -d "$umbrella" ]; then
+    version=$(helm show chart "$chart" | sed -n 's/^version: //p')
+    helm dependency build "$umbrella" >/dev/null
+    embedded="$umbrella/charts/fusescope-engine-$version.tgz"
+    [ -f "$embedded" ] || { echo "the fusescope chart embeds no fusescope-engine $version" >&2; exit 1; }
+    set -- --set otelCollectorEndpoint=check:4317
+    helm template check "$umbrella" "$@" > "$work/umbrella-off.yaml"
+    python3 - "$chart/ci/staging-values.yaml" "$work/umbrella-on-values.yaml" <<'PY'
+import sys, yaml
+values = yaml.safe_load(open(sys.argv[1]))
+values["enabled"] = True
+yaml.safe_dump({"engine": values}, open(sys.argv[2], "w"))
+PY
+    helm template check "$umbrella" "$@" -f "$work/umbrella-on-values.yaml" > "$work/umbrella-on.yaml"
+    if helm template check "$umbrella" "$@" --set engine.enabled=true >/dev/null 2>&1; then
+        echo "the fusescope chart rendered the engine with no values" >&2
+        exit 1
+    fi
+    python3 - "$work/umbrella-off.yaml" "$work/umbrella-on.yaml" <<'PY'
+import sys, yaml
+from collections import Counter
+def engine(path):
+    docs = [d for d in yaml.safe_load_all(open(path)) if d]
+    return Counter(
+        (d["kind"], d["metadata"].get("labels", {}).get("app.kubernetes.io/component"))
+        for d in docs
+        if d["metadata"].get("labels", {}).get("app.kubernetes.io/name") == "fusescope-engine"
+    )
+off, on = engine(sys.argv[1]), engine(sys.argv[2])
+if off:
+    sys.exit(f"the fusescope chart renders engine objects by default: {dict(off)}")
+want = {("StatefulSet", "ingester"), ("Deployment", "querier"), ("Deployment", "compactor"), ("Job", "migrator"),
+        ("ServiceAccount", "ingester"), ("ServiceAccount", "querier"), ("ServiceAccount", "compactor")}
+missing = want - set(on)
+if missing:
+    sys.exit(f"the fusescope chart with the engine on misses {sorted(missing)}")
+PY
+    echo "under the fusescope chart: no engine object by default, every role, the migrator and the ServiceAccounts with engine.enabled, refused without its values"
+fi

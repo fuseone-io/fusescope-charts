@@ -1,5 +1,8 @@
 # What a staging release sets: mTLS and the backend's JWTs on, as the
 # defaults have them, with the cluster's names.
+image:
+  repository: registry.example.com/fusescope-engine
+  tag: "0.0.1"
 secrets:
   ingester: fusescope-engine-ingester
   querier: fusescope-engine-querier

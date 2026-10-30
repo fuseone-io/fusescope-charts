@@ -19,6 +19,7 @@ app.kubernetes.io/component: {{ .role }}
 {{/* Refuses a release that would run half-configured or insecurely. */}}
 {{- define "fse.validate" -}}
 {{- $v := .Values -}}
+{{- $_ := required "image.repository: no official engine image is published yet; set the repository (and tag) of one built from fuseone-io/fusescope-engine" $v.image.repository -}}
 {{- $needed := list "ingester" "querier" "compactor" -}}
 {{- if $v.migration.enabled -}}
 {{- $needed = append $needed "migrator" -}}

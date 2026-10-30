@@ -4,6 +4,11 @@
 > storage and query layer that will replace ClickHouse in FuseScope. It is
 > not ready for production, its configuration still changes, and the
 > `fusescope` chart installs it only with `engine.enabled=true`. Leave it off.
+>
+> **No official image is published yet.** `image.repository` is required:
+> build the image from the engine repository (`make image`), push it to a
+> registry the cluster pulls from, and set `image.repository` and
+> `image.tag`.
 
 Its source, design and operations live in
 [fuseone-io/fusescope-engine](https://github.com/fuseone-io/fusescope-engine):
@@ -20,9 +25,11 @@ runbook, `docs/ops/dashboard.md` for the Grafana dashboard.
 | migrator | pre-install and pre-upgrade hook Job | none | none |
 
 Every pod runs as `65532:65532` with a read-only root, no privilege
-escalation, all capabilities dropped and the default seccomp profile, its
-own ServiceAccount and no API token, and a startup probe ahead of liveness
-and readiness on port 9464.
+escalation, all capabilities dropped, the default seccomp profile and no
+API token. Each pod of the three roles has its own ServiceAccount and a
+startup probe ahead of liveness and readiness on port 9464; the migration
+Job runs under the namespace's `default` ServiceAccount, its token not
+mounted either.
 
 ## What a release names
 
@@ -54,7 +61,11 @@ same values sit under `engine`.
 
 ## Checks
 
-`scripts/fusescope-engine-chart-check.sh` lints the chart strictly with each
+`scripts/fusescope-engine-chart-check.sh` checks the chart under the
+`fusescope` chart too, through the packaged dependency `helm dependency
+build` embeds: off by default it renders no engine object, on with the
+staging values under `engine` it renders every role, the migration Job and
+the ServiceAccounts, and on without them it is refused. Alone, it lints the chart strictly with each
 `ci/` values file, validates the rendered objects with `kubeconform`,
 checks that the roles keep their own Secret, ServiceAccount and identity,
 mount no API token, never migrate and have a startup probe, and that every

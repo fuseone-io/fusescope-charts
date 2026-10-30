@@ -4,7 +4,10 @@
 # tenant JWTs on Flight SQL; development overrides it (ci/dev-values.yaml).
 
 image:
-  repository: ghcr.io/fuseone-io/fusescope-engine
+  # Required. No official image is published yet: build one from
+  # fuseone-io/fusescope-engine (`make image`) and push it to a registry
+  # the cluster pulls from.
+  repository: ""
   # Defaults to the chart's appVersion.
   tag: ""
   pullPolicy: IfNotPresent
