@@ -1859,7 +1859,7 @@ mcpServer:
     # @section -- MCP Server
     secretKey: api-key
   # mcpServer.docsRefreshInterval -- (string) Incremental refresh of the docs index from
-  # fuseone-io.github.io (`FUSESCOPE_DOCS_REFRESH_INTERVAL`); `"0"` turns it off.
+  # docs.fusescope.fuseone.io (`FUSESCOPE_DOCS_REFRESH_INTERVAL`); `"0"` turns it off.
   # @default -- "6h"
   # @section -- MCP Server
   docsRefreshInterval: ""
