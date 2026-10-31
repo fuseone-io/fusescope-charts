@@ -1,7 +1,7 @@
 
 # FuseScope
 
-![Version: 0.158.1](https://img.shields.io/badge/Version-0.158.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.158.0](https://img.shields.io/badge/AppVersion-0.158.0-informational?style=flat-square)
+![Version: 0.158.2](https://img.shields.io/badge/Version-0.158.2-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.158.0](https://img.shields.io/badge/AppVersion-0.158.0-informational?style=flat-square)
 
 FuseScope is an open-source observability platform native to OpenTelemetry, with logs, traces and metrics in a single application. It is a hard fork of [SigNoz](https://github.com/SigNoz/signoz) maintained by FuseOne.
 
@@ -68,6 +68,24 @@ FuseScope serves the RUM ingestion gateway on its HTTP port (8080): browsers sen
 - **Public endpoint.** Browsers must reach `/rum/` on the FuseScope URL. The default ingress path `/` already routes it to the backend; if you narrow `signoz.ingress.hosts[].paths`, add `/rum` (`Prefix`, port 8080).
 - **CORS belongs to the gateway.** It answers `OPTIONS` preflights from each application's allowed origins. The ingress or proxy must pass `OPTIONS` and the `Origin` header through and must not add CORS headers of its own. With ingress-nginx, don't set `nginx.ingress.kubernetes.io/enable-cors` on this ingress, and raise `nginx.ingress.kubernetes.io/proxy-body-size` (1m by default) to `signoz.rum.maxBodySize` (4m).
 - **Client IP.** The per-client rate limit (20 req/s, burst 60) keys on the client IP. Behind an ingress or load balancer every browser would share the proxy's IP, so `signoz.rum.trustForwardedFor` defaults to `signoz.ingress.enabled` and the gateway then reads the first `X-Forwarded-For` address. Set it to `true` when another proxy fronts FuseScope, and only when that proxy overwrites the header: a client-supplied address would let a browser pick its own bucket, though it stays within the per-key limit. With ingress-nginx this holds by default (`use-forwarded-headers: false`); keep the real client IP reaching the controller (e.g. `externalTrafficPolicy: Local` or PROXY protocol).
+
+### MCP server
+
+The [FuseScope MCP server](https://github.com/fuseone-io/fusescope-mcp-server) lets AI assistants (Claude, Cursor, VS Code, …) query FuseScope. With `mcpServer.enabled` the chart runs it in HTTP mode, calling only this release's backend Service; `/mcp` on the FuseScope host routes to it when the ingress is on (see MCP Server in [Values](#values)).
+
+```yaml
+mcpServer:
+  enabled: true
+  ingress:
+    enabled: true   # same host and TLS as signoz.ingress
+```
+
+- **Per-user keys.** No key is stored by default: each client sends its own FuseScope API key in the `SIGNOZ-API-KEY` header (or `Authorization: Bearer`), so each user gets their own role. For example `claude mcp add --transport http fusescope https://fusescope.example.com/mcp --header "SIGNOZ-API-KEY: <key>"`.
+- **Shared key.** `mcpServer.apiKey.existingSecret` gives the server a key for clients that send none. Everyone who reaches the endpoint then acts with that key's role: use a Viewer service account and keep the endpoint private.
+- **Pinned backend.** `FUSESCOPE_URL` and `FUSESCOPE_INSTANCE_URL_ALLOWLIST` are both the backend Service (`mcpServer.fusescopeUrl` overrides them), so a client's `X-SigNoz-URL` cannot point the server at another host.
+- **Path.** The server serves `/mcp` itself, so the ingress forwards the path unchanged; no rewrite or base path is needed. Set `mcpServer.ingress.hosts` (and `tls`) for a dedicated host instead.
+- **OAuth** is not configured by the chart: its sign-in page asks each user for a FuseScope URL, which the allowlist pins to the in-cluster Service.
+- **NetworkPolicy.** `mcpServer.networkPolicy.enabled` admits this namespace and `ingress-nginx` (`ingressFrom`), and allows egress to the backend, DNS, and HTTPS to public addresses for the docs index refresh from `fuseone-io.github.io`. Set `docsRefreshInterval` and `docsFullRefreshInterval` to `"0"` to serve the bundled docs and drop that egress.
 
 ### Cold storage
 
@@ -1471,6 +1489,296 @@ servicePort: 8082</pre>
         </tr>
     </tbody>
 </table>
+<h3>MCP Server</h3>
+<table>
+    <thead>
+        <th>Key</th>
+        <th>Type</th>
+        <th>Default</th>
+        <th>Description</th>
+    </thead>
+    <tbody>
+        <tr>
+            <td id="mcpServer--enabled"><a href="./values.yaml#L1831">mcpServer.enabled</a></td>
+            <td>bool</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">false</pre>
+</div>
+            </td>
+            <td>Install the FuseScope MCP server in HTTP mode.</td>
+        </tr>
+        <tr>
+            <td id="mcpServer--replicaCount"><a href="./values.yaml#L1834">mcpServer.replicaCount</a></td>
+            <td>int</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">1</pre>
+</div>
+            </td>
+            <td>Number of replicas. The server is stateless.</td>
+        </tr>
+        <tr>
+            <td id="mcpServer--image"><a href="./values.yaml#L1837">mcpServer.image</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">digest: ""
+pullPolicy: IfNotPresent
+registry: ghcr.io
+repository: fuseone-io/fusescope-mcp-server
+tag: 0.18.0</pre>
+</div>
+            </td>
+            <td>MCP server image. Set `digest` to pin it; it takes precedence over `tag`.</td>
+        </tr>
+        <tr>
+            <td id="mcpServer--imagePullSecrets"><a href="./values.yaml#L1845">mcpServer.imagePullSecrets</a></td>
+            <td>list</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
+</div>
+            </td>
+            <td>Image pull secrets. Overrides the root and global values.</td>
+        </tr>
+        <tr>
+            <td id="mcpServer--fusescopeUrl"><a href="./values.yaml#L1850">mcpServer.fusescopeUrl</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">http://RELEASE-fusescope:8080, the backend Service</pre>
+</div>
+            </td>
+            <td>FuseScope URL the server calls, and the only one it accepts in a client's `X-SigNoz-URL` header (`FUSESCOPE_INSTANCE_URL_ALLOWLIST`).</td>
+        </tr>
+        <tr>
+            <td id="mcpServer--apiKey--existingSecret"><a href="./values.yaml#L1857">mcpServer.apiKey.existingSecret</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">""</pre>
+</div>
+            </td>
+            <td>Secret holding a key the server uses for clients that send none. WARNING: anyone who can reach the endpoint then acts with this key's role. Use a Viewer service account, and keep the endpoint private (NetworkPolicy, no public ingress).</td>
+        </tr>
+        <tr>
+            <td id="mcpServer--apiKey--secretKey"><a href="./values.yaml#L1860">mcpServer.apiKey.secretKey</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">api-key</pre>
+</div>
+            </td>
+            <td>Key in `existingSecret` holding the API key.</td>
+        </tr>
+        <tr>
+            <td id="mcpServer--docsRefreshInterval"><a href="./values.yaml#L1865">mcpServer.docsRefreshInterval</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">6h</pre>
+</div>
+            </td>
+            <td>Incremental refresh of the docs index from fuseone-io.github.io (`FUSESCOPE_DOCS_REFRESH_INTERVAL`); `"0"` turns it off.</td>
+        </tr>
+        <tr>
+            <td id="mcpServer--docsFullRefreshInterval"><a href="./values.yaml#L1871">mcpServer.docsFullRefreshInterval</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">24h</pre>
+</div>
+            </td>
+            <td>Full rebuild of the docs index (`FUSESCOPE_DOCS_FULL_REFRESH_INTERVAL`); `"0"` turns it off. With both off the server serves the docs bundled with its release and needs no egress to the internet.</td>
+        </tr>
+        <tr>
+            <td id="mcpServer--logLevel"><a href="./values.yaml#L1874">mcpServer.logLevel</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">info</pre>
+</div>
+            </td>
+            <td>`debug`, `info`, `warn` or `error`.</td>
+        </tr>
+        <tr>
+            <td id="mcpServer--extraEnv"><a href="./values.yaml#L1878">mcpServer.extraEnv</a></td>
+            <td>list</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
+</div>
+            </td>
+            <td>Extra environment variables, e.g. `OTEL_EXPORTER_OTLP_ENDPOINT`, or `FUSESCOPE_CUSTOM_HEADERS` from a Secret.</td>
+        </tr>
+        <tr>
+            <td id="mcpServer--serviceAccount"><a href="./values.yaml#L1881">mcpServer.serviceAccount</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">annotations: {}
+create: true
+name: ""</pre>
+</div>
+            </td>
+            <td>Service account. No API token is mounted.</td>
+        </tr>
+        <tr>
+            <td id="mcpServer--service"><a href="./values.yaml#L1887">mcpServer.service</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">annotations: {}
+port: 8000
+type: ClusterIP</pre>
+</div>
+            </td>
+            <td>Service for the MCP endpoint.</td>
+        </tr>
+        <tr>
+            <td id="mcpServer--ingress"><a href="./values.yaml#L1894">mcpServer.ingress</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">annotations: {}
+className: ""
+enabled: false
+hosts: []
+path: /mcp
+pathType: Prefix
+tls: []</pre>
+</div>
+            </td>
+            <td>Ingress for `/mcp`. Without `hosts`, it uses the hosts, TLS and class of `signoz.ingress`. Its annotations are not inherited: don't repeat a cert-manager issuer there.</td>
+        </tr>
+        <tr>
+            <td id="mcpServer--networkPolicy"><a href="./values.yaml#L1906">mcpServer.networkPolicy</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">docsEgress:
+    cidr: 0.0.0.0/0
+    except:
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 192.168.0.0/16
+enabled: false
+extraEgress: []
+ingressFrom:
+    - podSelector: {}
+    - namespaceSelector:
+        matchLabels:
+            kubernetes.io/metadata.name: ingress-nginx</pre>
+</div>
+            </td>
+            <td>NetworkPolicy. Ingress on the MCP port from `ingressFrom`; egress to the backend, DNS, HTTPS to `docsEgress` while a docs refresh is on, and `extraEgress`. The default `ingressFrom` admits this namespace and the `ingress-nginx` namespace.</td>
+        </tr>
+        <tr>
+            <td id="mcpServer--resources"><a href="./values.yaml#L1922">mcpServer.resources</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">limits:
+    memory: 512Mi
+requests:
+    cpu: 50m
+    memory: 256Mi</pre>
+</div>
+            </td>
+            <td>Resources. Building the docs index takes about 130 MiB above the baseline.</td>
+        </tr>
+        <tr>
+            <td id="mcpServer--podSecurityContext"><a href="./values.yaml#L1930">mcpServer.podSecurityContext</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">fsGroup: 1001
+runAsGroup: 1001
+runAsNonRoot: true
+runAsUser: 1001
+seccompProfile:
+    type: RuntimeDefault</pre>
+</div>
+            </td>
+            <td>Pod security context. The image runs as uid 1001.</td>
+        </tr>
+        <tr>
+            <td id="mcpServer--securityContext"><a href="./values.yaml#L1939">mcpServer.securityContext</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">allowPrivilegeEscalation: false
+capabilities:
+    drop:
+        - ALL
+readOnlyRootFilesystem: true</pre>
+</div>
+            </td>
+            <td>Container security context.</td>
+        </tr>
+        <tr>
+            <td id="mcpServer--livenessProbe"><a href="./values.yaml#L1947">mcpServer.livenessProbe</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">failureThreshold: 6
+initialDelaySeconds: 5
+periodSeconds: 10
+timeoutSeconds: 5</pre>
+</div>
+            </td>
+            <td>Liveness probe timing on `/livez`.</td>
+        </tr>
+        <tr>
+            <td id="mcpServer--readinessProbe"><a href="./values.yaml#L1954">mcpServer.readinessProbe</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">failureThreshold: 6
+initialDelaySeconds: 5
+periodSeconds: 10
+timeoutSeconds: 5</pre>
+</div>
+            </td>
+            <td>Readiness probe timing on `/readyz`, ready once the docs index is built.</td>
+        </tr>
+        <tr>
+            <td id="mcpServer--podAnnotations"><a href="./values.yaml#L1961">mcpServer.podAnnotations</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
+</div>
+            </td>
+            <td>Pod annotations.</td>
+        </tr>
+        <tr>
+            <td id="mcpServer--priorityClassName"><a href="./values.yaml#L1964">mcpServer.priorityClassName</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">""</pre>
+</div>
+            </td>
+            <td>Priority class.</td>
+        </tr>
+        <tr>
+            <td id="mcpServer--nodeSelector"><a href="./values.yaml#L1967">mcpServer.nodeSelector</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
+</div>
+            </td>
+            <td>Node selector.</td>
+        </tr>
+        <tr>
+            <td id="mcpServer--tolerations"><a href="./values.yaml#L1970">mcpServer.tolerations</a></td>
+            <td>list</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
+</div>
+            </td>
+            <td>Tolerations.</td>
+        </tr>
+        <tr>
+            <td id="mcpServer--affinity"><a href="./values.yaml#L1973">mcpServer.affinity</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
+</div>
+            </td>
+            <td>Affinity.</td>
+        </tr>
+        <tr>
+            <td id="mcpServer--topologySpreadConstraints"><a href="./values.yaml#L1976">mcpServer.topologySpreadConstraints</a></td>
+            <td>list</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
+</div>
+            </td>
+            <td>Topology spread constraints.</td>
+        </tr>
+    </tbody>
+</table>
 <h3>Postgres</h3>
 <table>
     <thead>
@@ -1481,7 +1789,7 @@ servicePort: 8082</pre>
     </thead>
     <tbody>
         <tr>
-            <td id="postgresql--enabled"><a href="./values.yaml#L1831">postgresql.enabled</a></td>
+            <td id="postgresql--enabled"><a href="./values.yaml#L1984">postgresql.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">false</pre>
@@ -1501,7 +1809,7 @@ servicePort: 8082</pre>
     </thead>
     <tbody>
         <tr>
-            <td id="engine--enabled"><a href="./values.yaml#L1840">engine.enabled</a></td>
+            <td id="engine--enabled"><a href="./values.yaml#L1993">engine.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">false</pre>

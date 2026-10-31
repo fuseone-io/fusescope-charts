@@ -1822,6 +1822,159 @@ otelCollector:
           receivers: [signozmeter]
           processors: [batch/meter]
           exporters: [signozclickhousemeter]
+# MCP server: lets AI assistants (Claude, Cursor, VS Code, ...) query FuseScope over
+# the Model Context Protocol. Clients connect to `/mcp` and send their own FuseScope
+# API key in the `SIGNOZ-API-KEY` header; the server calls only this release's backend.
+mcpServer:
+  # mcpServer.enabled -- Install the FuseScope MCP server in HTTP mode.
+  # @section -- MCP Server
+  enabled: false
+  # mcpServer.replicaCount -- Number of replicas. The server is stateless.
+  # @section -- MCP Server
+  replicaCount: 1
+  # mcpServer.image -- MCP server image. Set `digest` to pin it; it takes precedence over `tag`.
+  # @section -- MCP Server
+  image:
+    registry: ghcr.io
+    repository: fuseone-io/fusescope-mcp-server
+    tag: 0.18.0
+    digest: ""
+    pullPolicy: IfNotPresent
+  # mcpServer.imagePullSecrets -- Image pull secrets. Overrides the root and global values.
+  # @section -- MCP Server
+  imagePullSecrets: []
+  # mcpServer.fusescopeUrl -- (string) FuseScope URL the server calls, and the only one it
+  # accepts in a client's `X-SigNoz-URL` header (`FUSESCOPE_INSTANCE_URL_ALLOWLIST`).
+  # @default -- "http://RELEASE-fusescope:8080, the backend Service"
+  # @section -- MCP Server
+  fusescopeUrl: ""
+  # Shared API key, off by default: each client then sends its own key.
+  apiKey:
+    # mcpServer.apiKey.existingSecret -- Secret holding a key the server uses for clients that
+    # send none. WARNING: anyone who can reach the endpoint then acts with this key's role. Use a
+    # Viewer service account, and keep the endpoint private (NetworkPolicy, no public ingress).
+    # @section -- MCP Server
+    existingSecret: ""
+    # mcpServer.apiKey.secretKey -- Key in `existingSecret` holding the API key.
+    # @section -- MCP Server
+    secretKey: api-key
+  # mcpServer.docsRefreshInterval -- (string) Incremental refresh of the docs index from
+  # fuseone-io.github.io (`FUSESCOPE_DOCS_REFRESH_INTERVAL`); `"0"` turns it off.
+  # @default -- "6h"
+  # @section -- MCP Server
+  docsRefreshInterval: ""
+  # mcpServer.docsFullRefreshInterval -- (string) Full rebuild of the docs index
+  # (`FUSESCOPE_DOCS_FULL_REFRESH_INTERVAL`); `"0"` turns it off. With both off the server
+  # serves the docs bundled with its release and needs no egress to the internet.
+  # @default -- "24h"
+  # @section -- MCP Server
+  docsFullRefreshInterval: ""
+  # mcpServer.logLevel -- `debug`, `info`, `warn` or `error`.
+  # @section -- MCP Server
+  logLevel: info
+  # mcpServer.extraEnv -- Extra environment variables, e.g. `OTEL_EXPORTER_OTLP_ENDPOINT`, or
+  # `FUSESCOPE_CUSTOM_HEADERS` from a Secret.
+  # @section -- MCP Server
+  extraEnv: []
+  # mcpServer.serviceAccount -- Service account. No API token is mounted.
+  # @section -- MCP Server
+  serviceAccount:
+    create: true
+    annotations: {}
+    name: ""
+  # mcpServer.service -- Service for the MCP endpoint.
+  # @section -- MCP Server
+  service:
+    type: ClusterIP
+    port: 8000
+    annotations: {}
+  # mcpServer.ingress -- Ingress for `/mcp`. Without `hosts`, it uses the hosts, TLS and class of
+  # `signoz.ingress`. Its annotations are not inherited: don't repeat a cert-manager issuer there.
+  # @section -- MCP Server
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    hosts: []
+    path: /mcp
+    pathType: Prefix
+    tls: []
+  # mcpServer.networkPolicy -- NetworkPolicy. Ingress on the MCP port from `ingressFrom`; egress to
+  # the backend, DNS, HTTPS to `docsEgress` while a docs refresh is on, and `extraEgress`.
+  # The default `ingressFrom` admits this namespace and the `ingress-nginx` namespace.
+  # @section -- MCP Server
+  networkPolicy:
+    enabled: false
+    ingressFrom:
+      - podSelector: {}
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: ingress-nginx
+    docsEgress:
+      cidr: 0.0.0.0/0
+      except:
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 192.168.0.0/16
+    extraEgress: []
+  # mcpServer.resources -- Resources. Building the docs index takes about 130 MiB above the baseline.
+  # @section -- MCP Server
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  # mcpServer.podSecurityContext -- Pod security context. The image runs as uid 1001.
+  # @section -- MCP Server
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    fsGroup: 1001
+    seccompProfile:
+      type: RuntimeDefault
+  # mcpServer.securityContext -- Container security context.
+  # @section -- MCP Server
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+  # mcpServer.livenessProbe -- Liveness probe timing on `/livez`.
+  # @section -- MCP Server
+  livenessProbe:
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+  # mcpServer.readinessProbe -- Readiness probe timing on `/readyz`, ready once the docs index is built.
+  # @section -- MCP Server
+  readinessProbe:
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+  # mcpServer.podAnnotations -- Pod annotations.
+  # @section -- MCP Server
+  podAnnotations: {}
+  # mcpServer.priorityClassName -- Priority class.
+  # @section -- MCP Server
+  priorityClassName: ""
+  # mcpServer.nodeSelector -- Node selector.
+  # @section -- MCP Server
+  nodeSelector: {}
+  # mcpServer.tolerations -- Tolerations.
+  # @section -- MCP Server
+  tolerations: []
+  # mcpServer.affinity -- Affinity.
+  # @section -- MCP Server
+  affinity: {}
+  # mcpServer.topologySpreadConstraints -- Topology spread constraints.
+  # @section -- MCP Server
+  topologySpreadConstraints: []
+
 # @section -- Postgres
 postgresql:
   # postgresql.enabled -- Enable or disable the PostgreSQL for signoz.

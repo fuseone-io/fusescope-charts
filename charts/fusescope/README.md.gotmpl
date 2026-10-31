@@ -69,6 +69,24 @@ FuseScope serves the RUM ingestion gateway on its HTTP port (8080): browsers sen
 - **CORS belongs to the gateway.** It answers `OPTIONS` preflights from each application's allowed origins. The ingress or proxy must pass `OPTIONS` and the `Origin` header through and must not add CORS headers of its own. With ingress-nginx, don't set `nginx.ingress.kubernetes.io/enable-cors` on this ingress, and raise `nginx.ingress.kubernetes.io/proxy-body-size` (1m by default) to `signoz.rum.maxBodySize` (4m).
 - **Client IP.** The per-client rate limit (20 req/s, burst 60) keys on the client IP. Behind an ingress or load balancer every browser would share the proxy's IP, so `signoz.rum.trustForwardedFor` defaults to `signoz.ingress.enabled` and the gateway then reads the first `X-Forwarded-For` address. Set it to `true` when another proxy fronts FuseScope, and only when that proxy overwrites the header: a client-supplied address would let a browser pick its own bucket, though it stays within the per-key limit. With ingress-nginx this holds by default (`use-forwarded-headers: false`); keep the real client IP reaching the controller (e.g. `externalTrafficPolicy: Local` or PROXY protocol).
 
+### MCP server
+
+The [FuseScope MCP server](https://github.com/fuseone-io/fusescope-mcp-server) lets AI assistants (Claude, Cursor, VS Code, …) query FuseScope. With `mcpServer.enabled` the chart runs it in HTTP mode, calling only this release's backend Service; `/mcp` on the FuseScope host routes to it when the ingress is on (see MCP Server in [Values](#values)).
+
+```yaml
+mcpServer:
+  enabled: true
+  ingress:
+    enabled: true   # same host and TLS as signoz.ingress
+```
+
+- **Per-user keys.** No key is stored by default: each client sends its own FuseScope API key in the `SIGNOZ-API-KEY` header (or `Authorization: Bearer`), so each user gets their own role. For example `claude mcp add --transport http fusescope https://fusescope.example.com/mcp --header "SIGNOZ-API-KEY: <key>"`.
+- **Shared key.** `mcpServer.apiKey.existingSecret` gives the server a key for clients that send none. Everyone who reaches the endpoint then acts with that key's role: use a Viewer service account and keep the endpoint private.
+- **Pinned backend.** `FUSESCOPE_URL` and `FUSESCOPE_INSTANCE_URL_ALLOWLIST` are both the backend Service (`mcpServer.fusescopeUrl` overrides them), so a client's `X-SigNoz-URL` cannot point the server at another host.
+- **Path.** The server serves `/mcp` itself, so the ingress forwards the path unchanged; no rewrite or base path is needed. Set `mcpServer.ingress.hosts` (and `tls`) for a dedicated host instead.
+- **OAuth** is not configured by the chart: its sign-in page asks each user for a FuseScope URL, which the allowlist pins to the in-cluster Service.
+- **NetworkPolicy.** `mcpServer.networkPolicy.enabled` admits this namespace and `ingress-nginx` (`ingressFrom`), and allows egress to the backend, DNS, and HTTPS to public addresses for the docs index refresh from `fuseone-io.github.io`. Set `docsRefreshInterval` and `docsFullRefreshInterval` to `"0"` to serve the bundled docs and drop that egress.
+
 ### Cold storage
 
 ClickHouse can keep parts older than each signal's move period on object storage, where they stay queryable. The recommended production layout keeps 7 days on the local disk and the rest of retention in a bucket; metrics stay local unless you opt in. Turn it on with `clickhouse.coldStorage` (see ClickHouse Cold Storage in [Values](#values)), then set **Move to object storage** per signal on the retention settings page.

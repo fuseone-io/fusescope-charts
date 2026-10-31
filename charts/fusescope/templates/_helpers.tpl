@@ -575,3 +575,73 @@ Function to render environment variables
 {{- end -}}
 {{- end -}}
 {{- end -}}
+
+{{/*
+MCP server
+*/}}
+{{- define "mcpServer.fullname" -}}
+{{- printf "%s-mcp-server" (include "signoz.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{- define "mcpServer.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "signoz.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: mcp-server
+{{- end -}}
+
+{{- define "mcpServer.labels" -}}
+helm.sh/chart: {{ include "signoz.chart" . }}
+{{ include "mcpServer.selectorLabels" . }}
+app.kubernetes.io/version: {{ .Values.mcpServer.image.tag | quote }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end -}}
+
+{{- define "mcpServer.serviceAccountName" -}}
+{{- if .Values.mcpServer.serviceAccount.create -}}
+{{- default (include "mcpServer.fullname" .) .Values.mcpServer.serviceAccount.name -}}
+{{- else -}}
+{{- default "default" .Values.mcpServer.serviceAccount.name -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "mcpServer.image" -}}
+{{- $image := .Values.mcpServer.image -}}
+{{- $registry := default $image.registry .Values.global.imageRegistry -}}
+{{- $name := ternary (printf "%s/%s" $registry $image.repository) $image.repository (not (empty $registry)) -}}
+{{- if $image.digest -}}
+{{- printf "%s@%s" $name $image.digest -}}
+{{- else -}}
+{{- printf "%s:%s" $name (toString $image.tag) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+FuseScope URL the MCP server calls; the in-cluster backend Service unless set.
+*/}}
+{{- define "mcpServer.fusescopeUrl" -}}
+{{- default (printf "http://%s" (include "signoz.url" .)) .Values.mcpServer.fusescopeUrl | trimSuffix "/" -}}
+{{- end -}}
+
+{{- define "mcpServer.docsRefreshEnabled" -}}
+{{- $off := list "0" "off" "disabled" "false" -}}
+{{- if and (has (toString .Values.mcpServer.docsRefreshInterval | lower) $off) (has (toString .Values.mcpServer.docsFullRefreshInterval | lower) $off) -}}
+{{- else -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/*
+Hosts of the MCP server ingress: its own, else the FuseScope ingress hosts.
+*/}}
+{{- define "mcpServer.ingressHosts" -}}
+{{- $hosts := .Values.mcpServer.ingress.hosts -}}
+{{- if and (not $hosts) .Values.signoz.ingress.enabled -}}
+{{- range .Values.signoz.ingress.hosts -}}
+{{- $hosts = append $hosts .host -}}
+{{- end -}}
+{{- end -}}
+{{- if not $hosts -}}
+{{- fail "mcpServer.ingress.hosts is required unless signoz.ingress is enabled" -}}
+{{- end -}}
+{{- toJson (uniq $hosts) -}}
+{{- end -}}
