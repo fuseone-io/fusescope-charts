@@ -1,0 +1,117 @@
+{{- if .Values.mcpServer.enabled }}
+{{- $mcp := .Values.mcpServer -}}
+{{- $url := include "mcpServer.fusescopeUrl" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mcpServer.fullname" . }}
+  labels:
+    {{- include "mcpServer.labels" . | nindent 4 }}
+spec:
+  replicas: {{ $mcp.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "mcpServer.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mcpServer.selectorLabels" . | nindent 8 }}
+      {{- with $mcp.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with $mcp.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range . }}
+        - name: {{ . | quote }}
+      {{- end }}
+      {{- else }}
+      {{- include "signoz.imagePullSecrets" . | nindent 6 }}
+      {{- end }}
+      serviceAccountName: {{ include "mcpServer.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- with $mcp.priorityClassName }}
+      priorityClassName: {{ . | quote }}
+      {{- end }}
+      {{- with $mcp.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $mcp.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $mcp.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $mcp.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml $mcp.podSecurityContext | nindent 8 }}
+      containers:
+        - name: mcp-server
+          image: {{ include "mcpServer.image" . }}
+          imagePullPolicy: {{ $mcp.image.pullPolicy }}
+          securityContext:
+            {{- toYaml $mcp.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ $mcp.service.port }}
+              protocol: TCP
+          env:
+            - name: TRANSPORT_MODE
+              value: http
+            - name: MCP_SERVER_PORT
+              value: {{ $mcp.service.port | quote }}
+            - name: FUSESCOPE_URL
+              value: {{ $url | quote }}
+            - name: FUSESCOPE_INSTANCE_URL_ALLOWLIST
+              value: {{ $url | quote }}
+            - name: LOG_LEVEL
+              value: {{ $mcp.logLevel | quote }}
+            {{- with $mcp.apiKey.existingSecret }}
+            - name: FUSESCOPE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . }}
+                  key: {{ $mcp.apiKey.secretKey }}
+            {{- end }}
+            {{- if not (kindIs "invalid" $mcp.docsRefreshInterval) }}
+            {{- if ne (toString $mcp.docsRefreshInterval) "" }}
+            - name: FUSESCOPE_DOCS_REFRESH_INTERVAL
+              value: {{ $mcp.docsRefreshInterval | toString | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if not (kindIs "invalid" $mcp.docsFullRefreshInterval) }}
+            {{- if ne (toString $mcp.docsFullRefreshInterval) "" }}
+            - name: FUSESCOPE_DOCS_FULL_REFRESH_INTERVAL
+              value: {{ $mcp.docsFullRefreshInterval | toString | quote }}
+            {{- end }}
+            {{- end }}
+            {{- with $mcp.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: http
+            {{- toYaml $mcp.livenessProbe | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            {{- toYaml $mcp.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml $mcp.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+{{- end }}
