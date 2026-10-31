@@ -35,7 +35,7 @@ tests:
           value: fusescope-mcp-server
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/fuseone-io/fusescope-mcp-server:0.18.0
+          value: ghcr.io/fuseone-io/fusescope-mcp-server:0.18.1
       - contains:
           path: spec.template.spec.containers[0].env
           content:

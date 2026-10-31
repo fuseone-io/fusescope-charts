@@ -1524,7 +1524,7 @@ servicePort: 8082</pre>
 pullPolicy: IfNotPresent
 registry: ghcr.io
 repository: fuseone-io/fusescope-mcp-server
-tag: 0.18.0</pre>
+tag: 0.18.1</pre>
 </div>
             </td>
             <td>MCP server image. Set `digest` to pin it; it takes precedence over `tag`.</td>

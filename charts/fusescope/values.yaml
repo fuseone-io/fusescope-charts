@@ -1837,7 +1837,7 @@ mcpServer:
   image:
     registry: ghcr.io
     repository: fuseone-io/fusescope-mcp-server
-    tag: 0.18.0
+    tag: 0.18.1
     digest: ""
     pullPolicy: IfNotPresent
   # mcpServer.imagePullSecrets -- Image pull secrets. Overrides the root and global values.
