@@ -720,7 +720,9 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- $image := .Values.fusescopeCollector.image -}}
 {{- $registry := default $image.registry .Values.global.imageRegistry -}}
 {{- $name := ternary (printf "%s/%s" $registry $image.repository) $image.repository (not (empty $registry)) -}}
-{{- if $image.digest -}}
+{{- if and $image.digest $image.tag -}}
+{{- printf "%s:%s@%s" $name (toString $image.tag) $image.digest -}}
+{{- else if $image.digest -}}
 {{- printf "%s@%s" $name $image.digest -}}
 {{- else -}}
 {{- printf "%s:%s" $name (toString $image.tag) -}}

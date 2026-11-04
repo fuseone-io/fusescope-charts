@@ -43,7 +43,7 @@ tests:
           value: fusescope-collector
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/fuseone-io/fusescope-collector:sha-92c555fae01f
+          value: ghcr.io/fuseone-io/fusescope-collector:0.1.0@sha256:894e8718ceb8c6785997f49014fe8efea9c246122f175504ed980e51afcea028
       - equal:
           path: spec.template.spec.containers[0].args
           value:
@@ -67,6 +67,24 @@ tests:
           value: 65532
       - exists:
           path: spec.template.metadata.annotations["checksum/config"]
+
+  - it: should take the image by tag alone
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.image.digest: ""
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/fuseone-io/fusescope-collector:0.1.0
+
+  - it: should take the image by digest alone
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.image.tag: ""
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/fuseone-io/fusescope-collector@sha256:894e8718ceb8c6785997f49014fe8efea9c246122f175504ed980e51afcea028
 
   - it: should mount the token, both certificates and the ClickHouse password as files
     template: templates/fusescope-collector/deployment.yaml
