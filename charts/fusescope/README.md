@@ -1,7 +1,7 @@
 
 # FuseScope
 
-![Version: 0.159.1](https://img.shields.io/badge/Version-0.159.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.159.0](https://img.shields.io/badge/AppVersion-0.159.0-informational?style=flat-square)
+![Version: 0.160.0](https://img.shields.io/badge/Version-0.160.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.159.0](https://img.shields.io/badge/AppVersion-0.159.0-informational?style=flat-square)
 
 FuseScope is an open-source observability platform native to OpenTelemetry, with logs, traces and metrics in a single application. It is a hard fork of [SigNoz](https://github.com/SigNoz/signoz) maintained by FuseOne.
 
@@ -1982,7 +1982,25 @@ renewBefore: 360h</pre>
             <td>Refuse RUM requests, and report not ready, once the policy held was last received longer ago than this, e.g. `1h`. Empty, a policy held keeps working through a FuseScope outage.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--serviceAccount"><a href="./values.yaml#L2090">fusescopeCollector.serviceAccount</a></td>
+            <td id="fusescopeCollector--selfMetrics--enabled"><a href="./values.yaml#L2093">fusescopeCollector.selfMetrics.enabled</a></td>
+            <td>bool</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">true</pre>
+</div>
+            </td>
+            <td>Write the collector's own telemetry (receivers, processors, exporters, queues, memory) to ClickHouse as `otelcol_*` metrics. It is read from its listener on 127.0.0.1:8888, which is never exposed.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--selfMetrics--scrapeInterval"><a href="./values.yaml#L2096">fusescopeCollector.selfMetrics.scrapeInterval</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">60s</pre>
+</div>
+            </td>
+            <td>How often the telemetry is read.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--serviceAccount"><a href="./values.yaml#L2099">fusescopeCollector.serviceAccount</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">annotations: {}
@@ -1993,7 +2011,7 @@ name: ""</pre>
             <td>Service account. No API token is mounted.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--service"><a href="./values.yaml#L2096">fusescopeCollector.service</a></td>
+            <td id="fusescopeCollector--service"><a href="./values.yaml#L2105">fusescopeCollector.service</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">annotations: {}
@@ -2003,7 +2021,7 @@ type: ClusterIP</pre>
             <td>Service for the RUM listener.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--ingress"><a href="./values.yaml#L2105">fusescopeCollector.ingress</a></td>
+            <td id="fusescopeCollector--ingress"><a href="./values.yaml#L2114">fusescopeCollector.ingress</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">annotations:
@@ -2018,7 +2036,7 @@ tls: []</pre>
             <td>Ingress for `/rum/v1/traces` and `/rum/v1/logs`, `Exact`, so the browser SDK FuseScope serves at `/rum/v1/sdk/` stays on its ingress. It re-encrypts to the collector's TLS listener. Without `hosts`, it uses the hosts, TLS and class of `signoz.ingress`. Its annotations are not inherited; the defaults tell ingress-nginx the backend speaks HTTPS and raise its 1m body limit to `rum.maxBodySize`; another controller needs its own equivalents.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--storage"><a href="./values.yaml#L2117">fusescopeCollector.storage</a></td>
+            <td id="fusescopeCollector--storage"><a href="./values.yaml#L2126">fusescopeCollector.storage</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">sizeLimit: 64Mi</pre>
@@ -2027,7 +2045,7 @@ tls: []</pre>
             <td>Volume of the OpAMP state: the instance UID, the cached ingest policy and the report sequence. An emptyDir keeps them across container restarts; on a new pod the collector registers as a new agent and waits for the policy before it is ready.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--resources"><a href="./values.yaml#L2122">fusescopeCollector.resources</a></td>
+            <td id="fusescopeCollector--resources"><a href="./values.yaml#L2131">fusescopeCollector.resources</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">limits:
@@ -2040,7 +2058,7 @@ requests:
             <td>Resources. The memory limit is also what `memory_limiter` refuses data above (80%).</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--podSecurityContext"><a href="./values.yaml#L2131">fusescopeCollector.podSecurityContext</a></td>
+            <td id="fusescopeCollector--podSecurityContext"><a href="./values.yaml#L2140">fusescopeCollector.podSecurityContext</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">fsGroup: 65532
@@ -2054,7 +2072,7 @@ seccompProfile:
             <td>Pod security context. The image is distroless and runs as uid 65532.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--securityContext"><a href="./values.yaml#L2140">fusescopeCollector.securityContext</a></td>
+            <td id="fusescopeCollector--securityContext"><a href="./values.yaml#L2149">fusescopeCollector.securityContext</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">allowPrivilegeEscalation: false
@@ -2067,7 +2085,7 @@ readOnlyRootFilesystem: true</pre>
             <td>Container security context.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--livenessProbe"><a href="./values.yaml#L2148">fusescopeCollector.livenessProbe</a></td>
+            <td id="fusescopeCollector--livenessProbe"><a href="./values.yaml#L2157">fusescopeCollector.livenessProbe</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">failureThreshold: 6
@@ -2079,7 +2097,7 @@ timeoutSeconds: 5</pre>
             <td>Liveness probe timing, a TCP check of the health port.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--readinessProbe"><a href="./values.yaml#L2156">fusescopeCollector.readinessProbe</a></td>
+            <td id="fusescopeCollector--readinessProbe"><a href="./values.yaml#L2165">fusescopeCollector.readinessProbe</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">failureThreshold: 3
@@ -2091,7 +2109,7 @@ timeoutSeconds: 5</pre>
             <td>Readiness probe timing on the health status, ready only while the collector holds a valid ingest policy.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--podAnnotations"><a href="./values.yaml#L2163">fusescopeCollector.podAnnotations</a></td>
+            <td id="fusescopeCollector--podAnnotations"><a href="./values.yaml#L2172">fusescopeCollector.podAnnotations</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -2100,7 +2118,7 @@ timeoutSeconds: 5</pre>
             <td>Pod annotations.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--priorityClassName"><a href="./values.yaml#L2166">fusescopeCollector.priorityClassName</a></td>
+            <td id="fusescopeCollector--priorityClassName"><a href="./values.yaml#L2175">fusescopeCollector.priorityClassName</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">""</pre>
@@ -2109,7 +2127,7 @@ timeoutSeconds: 5</pre>
             <td>Priority class.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--nodeSelector"><a href="./values.yaml#L2169">fusescopeCollector.nodeSelector</a></td>
+            <td id="fusescopeCollector--nodeSelector"><a href="./values.yaml#L2178">fusescopeCollector.nodeSelector</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -2118,7 +2136,7 @@ timeoutSeconds: 5</pre>
             <td>Node selector.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--tolerations"><a href="./values.yaml#L2172">fusescopeCollector.tolerations</a></td>
+            <td id="fusescopeCollector--tolerations"><a href="./values.yaml#L2181">fusescopeCollector.tolerations</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -2127,7 +2145,7 @@ timeoutSeconds: 5</pre>
             <td>Tolerations.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--affinity"><a href="./values.yaml#L2175">fusescopeCollector.affinity</a></td>
+            <td id="fusescopeCollector--affinity"><a href="./values.yaml#L2184">fusescopeCollector.affinity</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -2136,7 +2154,7 @@ timeoutSeconds: 5</pre>
             <td>Affinity.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--topologySpreadConstraints"><a href="./values.yaml#L2178">fusescopeCollector.topologySpreadConstraints</a></td>
+            <td id="fusescopeCollector--topologySpreadConstraints"><a href="./values.yaml#L2187">fusescopeCollector.topologySpreadConstraints</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -2156,7 +2174,7 @@ timeoutSeconds: 5</pre>
     </thead>
     <tbody>
         <tr>
-            <td id="postgresql--enabled"><a href="./values.yaml#L2186">postgresql.enabled</a></td>
+            <td id="postgresql--enabled"><a href="./values.yaml#L2195">postgresql.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">false</pre>
@@ -2176,7 +2194,7 @@ timeoutSeconds: 5</pre>
     </thead>
     <tbody>
         <tr>
-            <td id="engine--enabled"><a href="./values.yaml#L2195">engine.enabled</a></td>
+            <td id="engine--enabled"><a href="./values.yaml#L2204">engine.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">false</pre>
