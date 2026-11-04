@@ -1,0 +1,247 @@
+suite: Test the ingest policy listener of FuseScope
+
+templates:
+  - templates/signoz/statefulset.yaml
+  - templates/signoz/service.yaml
+
+release:
+  name: fusescope
+  namespace: platform
+
+tests:
+  - it: should serve no ingest policy and no RUM gateway settings by default
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_INGEST__POLICY_TOKEN__FILE
+          any: true
+        template: templates/signoz/statefulset.yaml
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_ENABLED
+          any: true
+        template: templates/signoz/statefulset.yaml
+      - notContains:
+          path: spec.template.spec.containers[0].ports
+          content:
+            name: opamp-ingest
+          any: true
+        template: templates/signoz/statefulset.yaml
+      - notContains:
+          path: spec.ports
+          content:
+            name: opamp-ingest
+          any: true
+        template: templates/signoz/service.yaml
+
+  - it: should serve the listener with TLS when a token Secret is set
+    set:
+      signoz:
+        ingestPolicy:
+          tokens:
+            existingSecret: ingest-tokens
+          tls:
+            existingSecret: ingest-tls
+    template: templates/signoz/statefulset.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_INGEST__POLICY_TOKEN__FILE
+            value: /etc/fusescope/ingest/tokens/tokens
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_INGEST__POLICY_LISTEN
+            value: 0.0.0.0:4321
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_INGEST__POLICY_TLS_CERT__FILE
+            value: /etc/fusescope/ingest/tls/tls.crt
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_INGEST__POLICY_TLS_KEY__FILE
+            value: /etc/fusescope/ingest/tls/tls.key
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_INGEST__POLICY_TLS_CLIENT__CA__FILE
+          any: true
+      - contains:
+          path: spec.template.spec.containers[0].ports
+          content:
+            name: opamp-ingest
+            containerPort: 4321
+            protocol: TCP
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: ingest-tokens
+            secret:
+              secretName: ingest-tokens
+              defaultMode: 0440
+              items:
+                - key: tokens
+                  path: tokens
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: ingest-tls
+            secret:
+              secretName: ingest-tls
+              defaultMode: 0440
+              items:
+                - key: tls.crt
+                  path: tls.crt
+                - key: tls.key
+                  path: tls.key
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: ingest-tls
+            mountPath: /etc/fusescope/ingest/tls
+            readOnly: true
+
+  - it: should expose the listener on the Service
+    set:
+      signoz:
+        ingestPolicy:
+          port: 14321
+          tokens:
+            existingSecret: ingest-tokens
+          tls:
+            existingSecret: ingest-tls
+    template: templates/signoz/service.yaml
+    asserts:
+      - contains:
+          path: spec.ports
+          content:
+            name: opamp-ingest
+            port: 14321
+            protocol: TCP
+            targetPort: opamp-ingest
+          any: true
+
+  - it: should ask collectors for a client certificate with a client CA
+    set:
+      signoz:
+        ingestPolicy:
+          tokens:
+            existingSecret: ingest-tokens
+          tls:
+            existingSecret: ingest-tls
+            clientCA:
+              existingSecret: collectors-ca
+    template: templates/signoz/statefulset.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_INGEST__POLICY_TLS_CLIENT__CA__FILE
+            value: /etc/fusescope/ingest/client-ca/ca.crt
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: ingest-client-ca
+            secret:
+              secretName: collectors-ca
+              items:
+                - key: ca.crt
+                  path: ca.crt
+
+  - it: should use the cert-manager Secret
+    set:
+      signoz:
+        ingestPolicy:
+          tokens:
+            existingSecret: ingest-tokens
+          tls:
+            certManager:
+              enabled: true
+              issuerRef:
+                name: internal-ca
+    template: templates/signoz/statefulset.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.volumes[?(@.name == "ingest-tls")].secret.secretName
+          value: fusescope-ingest-tls
+
+  - it: should refuse tokens without a certificate
+    set:
+      signoz:
+        ingestPolicy:
+          tokens:
+            existingSecret: ingest-tokens
+    template: templates/signoz/statefulset.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: "ingest tokens travel only over TLS"
+
+  - it: should require the tokens with the FuseScope collector
+    set:
+      fusescopeCollector:
+        enabled: true
+      signoz:
+        ingestPolicy:
+          tls:
+            existingSecret: ingest-tls
+    template: templates/signoz/statefulset.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: "signoz.ingestPolicy.tokens.existingSecret is required"
+
+  - it: should keep public dashboards trusting X-Forwarded-For behind the ingress
+    set:
+      signoz.ingress.enabled: true
+    template: templates/signoz/statefulset.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_DASHBOARD_PUBLIC_RATELIMIT_TRUST__FORWARDED__FOR
+            value: "true"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_RATELIMIT_TRUST__FORWARDED__FOR
+            value: "true"
+
+  - it: should not trust X-Forwarded-For without the ingress
+    template: templates/signoz/statefulset.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_DASHBOARD_PUBLIC_RATELIMIT_TRUST__FORWARDED__FOR
+            value: "false"
+
+  - it: should point the onboarding check at the in-chart collector, also for older releases
+    set:
+      otelCollector.ports.otlp-http.servicePort: 14318
+    template: templates/signoz/statefulset.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_ONBOARDING_COLLECTOR__ENDPOINT
+            value: http://fusescope-otel-collector:14318
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_COLLECTOR__ENDPOINT
+            value: http://fusescope-otel-collector:14318
+
+  - it: should let signoz.env override the onboarding endpoint
+    set:
+      signoz.env.signoz_onboarding_collector__endpoint: http://other:4318
+    template: templates/signoz/statefulset.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_ONBOARDING_COLLECTOR__ENDPOINT
+            value: http://other:4318

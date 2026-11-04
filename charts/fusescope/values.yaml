@@ -792,8 +792,8 @@ signoz:
     # @default -- "fuseone-io/fusescope"
     repository: fuseone-io/fusescope
     # signoz.image.tag - The container image tag.
-    # @default -- "0.158.0"
-    tag: 0.158.0
+    # @default -- "0.159.0"
+    tag: 0.159.0
     # signoz.image.pullPolicy - The image pull policy.
     # @default -- "IfNotPresent"
     pullPolicy: IfNotPresent
@@ -993,42 +993,54 @@ signoz:
   # @default -- "The collector ingress (https when its host has TLS), else http://RELEASE-otel-collector.NAMESPACE.svc:4318"
   # @section -- SigNoz Networking
   ingestionUrl: ""
-  # Real User Monitoring ingestion gateway, served by FuseScope at /rum/v1 on the HTTP port.
-  # Other gateway settings (`forward_timeout`, `key_cache_ttl`, `usage_flush_interval`) go in
-  # `signoz.env`, e.g. `signoz_rum_forward__timeout: 10s`; `signoz.env` overrides these values.
-  rum:
-    # signoz.rum.enabled -- Serve the RUM ingestion gateway (`/rum/v1/traces`, `/rum/v1/logs`).
-    # @section -- SigNoz RUM
-    enabled: true
-    # signoz.rum.collectorEndpoint -- (string) Base URL of the collector OTLP/HTTP receiver the gateway forwards to.
-    # @default -- "http://RELEASE-otel-collector:4318, from otelCollector.ports.otlp-http"
-    # @section -- SigNoz RUM
-    collectorEndpoint: ""
-    # signoz.rum.trustForwardedFor -- (bool) Take the client IP for the per-client rate limit from the first
-    # `X-Forwarded-For` address. Must be true behind an ingress or load balancer, or every browser shares one
-    # limit; only enable it behind a proxy that sets the header.
-    # @default -- "signoz.ingress.enabled"
-    # @section -- SigNoz RUM
-    trustForwardedFor:
-    # signoz.rum.maxBodySize -- Largest accepted request body in bytes, before and after gzip decoding.
-    # @default -- "4194304 (4 MiB)"
-    # @section -- SigNoz RUM
-    maxBodySize: 4194304
-    rateLimit:
-      key:
-        # signoz.rum.rateLimit.key.rate -- (float) Requests per second shared by every client of one application key.
-        # @section -- SigNoz RUM
-        rate: 500
-        # signoz.rum.rateLimit.key.burst -- Burst size of the per-key limit.
-        # @section -- SigNoz RUM
-        burst: 1000
-      client:
-        # signoz.rum.rateLimit.client.rate -- (float) Requests per second per application key and client IP.
-        # @section -- SigNoz RUM
-        rate: 20
-        # signoz.rum.rateLimit.client.burst -- Burst size of the per-client limit.
-        # @section -- SigNoz RUM
-        burst: 60
+  # OpAMP listener with TLS 1.3 for ingress collectors (`rum.ingest_policy`), on which FuseScope
+  # publishes the ingest policy (RUM applications and keys) and reads the ingest reports that feed
+  # the RUM setup screen. Tokens are read only there, never on the plaintext OpAMP port. It is on
+  # when `tokens.existingSecret` is set or `fusescopeCollector.enabled` is true, and then needs a
+  # certificate: `tls.existingSecret` or `tls.certManager`.
+  # @section -- SigNoz Ingest Policy
+  ingestPolicy:
+    # signoz.ingestPolicy.port -- Port of the OpAMP listener with TLS.
+    # @section -- SigNoz Ingest Policy
+    port: 4321
+    tokens:
+      # signoz.ingestPolicy.tokens.existingSecret -- (string) Secret holding the ingress collectors'
+      # tokens, one per line, 32 to 256 characters each, so a new token can be added before the old
+      # one is removed. The FuseScope collector presents the same Secret's token unless
+      # `fusescopeCollector.ingestToken` names another; it then needs exactly one token in it.
+      # @section -- SigNoz Ingest Policy
+      existingSecret: ""
+      # signoz.ingestPolicy.tokens.secretKey -- Key in `existingSecret` holding the tokens.
+      # @section -- SigNoz Ingest Policy
+      secretKey: tokens
+    tls:
+      # signoz.ingestPolicy.tls.existingSecret -- (string) `kubernetes.io/tls` Secret with the
+      # listener's `tls.crt` and `tls.key` for the FuseScope Service name, and the `ca.crt` the
+      # FuseScope collector verifies it with. Read again when it changes: a renewal needs no restart.
+      # @section -- SigNoz Ingest Policy
+      existingSecret: ""
+      # signoz.ingestPolicy.tls.caKey -- Key in the Secret holding the CA the FuseScope collector
+      # trusts; empty, the collector trusts the system roots.
+      # @section -- SigNoz Ingest Policy
+      caKey: ca.crt
+      # signoz.ingestPolicy.tls.certManager -- A cert-manager Certificate for the FuseScope Service
+      # names, in `RELEASE-fusescope-ingest-tls`, instead of `existingSecret`. The issuer must set
+      # `ca.crt` (a CA or self-signed issuer) unless `caKey` is empty.
+      # @section -- SigNoz Ingest Policy
+      certManager:
+        enabled: false
+        issuerRef:
+          name: ""
+          kind: Issuer
+          group: cert-manager.io
+        duration: 2160h
+        renewBefore: 360h
+      # signoz.ingestPolicy.tls.clientCA -- (object) Secret and key of a CA collectors must present a
+      # client certificate from (mutual TLS); unset, none is asked for.
+      # @section -- SigNoz Ingest Policy
+      clientCA:
+        existingSecret: ""
+        secretKey: ca.crt
   # Default retention, in days, that FuseScope sets on startup for each signal no organization has a
   # retention set for yet, through the same path as Settings > Retention. A value set in the UI is never
   # overridden. Like a change from the UI, the ClickHouse TTL applies to new parts only.
@@ -1973,6 +1985,194 @@ mcpServer:
   affinity: {}
   # mcpServer.topologySpreadConstraints -- Topology spread constraints.
   # @section -- MCP Server
+  topologySpreadConstraints: []
+
+# @section -- FuseScope Collector
+fusescopeCollector:
+  # fusescopeCollector.enabled -- Install the FuseScope collector as the ingress for Real User
+  # Monitoring: it serves `/rum/v1/traces` and `/rum/v1/logs`, takes the ingest policy from
+  # FuseScope over OpAMP with TLS (`signoz.ingestPolicy`) and writes ClickHouse directly. Needs
+  # a FuseScope release with the ingest policy listener (fuseone-io/fusescope#314),
+  # `signoz.ingestPolicy.tokens` and both TLS certificates.
+  # @section -- FuseScope Collector
+  enabled: false
+  # fusescopeCollector.replicaCount -- Number of replicas. Each holds its own copy of the policy
+  # and reports its own counts; rate limits apply per replica.
+  # @section -- FuseScope Collector
+  replicaCount: 1
+  # fusescopeCollector.image -- Collector image. Set `digest` to pin it; it takes precedence over `tag`.
+  # @section -- FuseScope Collector
+  image:
+    registry: ghcr.io
+    repository: fuseone-io/fusescope-collector
+    tag: sha-92c555fae01f
+    digest: ""
+    pullPolicy: IfNotPresent
+  # fusescopeCollector.imagePullSecrets -- Image pull secrets. Overrides the root and global values.
+  # @section -- FuseScope Collector
+  imagePullSecrets: []
+  ingestToken:
+    # fusescopeCollector.ingestToken.existingSecret -- (string) Secret holding the one token, 32 to
+    # 256 characters, the collector presents to FuseScope.
+    # @default -- "signoz.ingestPolicy.tokens.existingSecret"
+    # @section -- FuseScope Collector
+    existingSecret: ""
+    # fusescopeCollector.ingestToken.secretKey -- (string) Key in `existingSecret` holding the token.
+    # @default -- "signoz.ingestPolicy.tokens.secretKey"
+    # @section -- FuseScope Collector
+    secretKey: ""
+  opamp:
+    # fusescopeCollector.opamp.endpoint -- (string) OpAMP endpoint of FuseScope with TLS.
+    # @default -- "wss://RELEASE-fusescope:4321/v1/opamp, from signoz.ingestPolicy.port"
+    # @section -- FuseScope Collector
+    endpoint: ""
+    # fusescopeCollector.opamp.clientCertSecret -- (string) `kubernetes.io/tls` Secret with the
+    # client certificate the collector presents when `signoz.ingestPolicy.tls.clientCA` is set.
+    # @section -- FuseScope Collector
+    clientCertSecret: ""
+  rum:
+    # fusescopeCollector.rum.port -- Port of the RUM listener, TLS 1.3 only.
+    # @section -- FuseScope Collector
+    port: 4319
+    tls:
+      # fusescopeCollector.rum.tls.existingSecret -- (string) `kubernetes.io/tls` Secret with the
+      # RUM listener's `tls.crt` and `tls.key`. Behind the ingress it is the certificate between
+      # the ingress controller and the collector, so a cluster-internal one does.
+      # @section -- FuseScope Collector
+      existingSecret: ""
+      # fusescopeCollector.rum.tls.certManager -- A cert-manager Certificate for the collector
+      # Service names, in `RELEASE-fusescope-collector-rum-tls`, instead of `existingSecret`.
+      # @section -- FuseScope Collector
+      certManager:
+        enabled: false
+        issuerRef:
+          name: ""
+          kind: Issuer
+          group: cert-manager.io
+        duration: 2160h
+        renewBefore: 360h
+    # fusescopeCollector.rum.trustedProxies -- (list) CIDRs whose `X-Forwarded-For` is read for the
+    # per-client rate limit, walked from the right past the trusted addresses. Behind an ingress or
+    # load balancer it must cover them, or every browser shares one limit.
+    # @default -- "10.0.0.0/8, 172.16.0.0/12 and 192.168.0.0/16 with the ingress on, else none"
+    # @section -- FuseScope Collector
+    trustedProxies:
+    # fusescopeCollector.rum.maxBodySize -- Largest accepted request body in bytes, before and after
+    # gzip decoding.
+    # @section -- FuseScope Collector
+    maxBodySize: 4194304
+    rateLimit:
+      key:
+        # fusescopeCollector.rum.rateLimit.key.rate -- (float) Requests per second shared by every
+        # client of one key, per replica, when the policy gives the key no limit.
+        # @section -- FuseScope Collector
+        rate: 500
+        # fusescopeCollector.rum.rateLimit.key.burst -- Burst size of the per-key limit.
+        # @section -- FuseScope Collector
+        burst: 1000
+      client:
+        # fusescopeCollector.rum.rateLimit.client.rate -- (float) Requests per second per key and
+        # client IP, per replica.
+        # @section -- FuseScope Collector
+        rate: 20
+        # fusescopeCollector.rum.rateLimit.client.burst -- Burst size of the per-client limit.
+        # @section -- FuseScope Collector
+        burst: 60
+    # fusescopeCollector.rum.maxStaleness -- (string) Refuse RUM requests, and report not ready, once
+    # the policy held was last received longer ago than this, e.g. `1h`. Empty, a policy held keeps
+    # working through a FuseScope outage.
+    # @section -- FuseScope Collector
+    maxStaleness: ""
+  # fusescopeCollector.serviceAccount -- Service account. No API token is mounted.
+  # @section -- FuseScope Collector
+  serviceAccount:
+    create: true
+    annotations: {}
+    name: ""
+  # fusescopeCollector.service -- Service for the RUM listener.
+  # @section -- FuseScope Collector
+  service:
+    type: ClusterIP
+    annotations: {}
+  # fusescopeCollector.ingress -- Ingress for `/rum/v1/traces` and `/rum/v1/logs`, `Exact`, so the
+  # browser SDK FuseScope serves at `/rum/v1/sdk/` stays on its ingress. It re-encrypts to the collector's TLS
+  # listener. Without `hosts`, it uses the hosts, TLS and class of `signoz.ingress`. Its annotations
+  # are not inherited; the defaults tell ingress-nginx the backend speaks HTTPS and raise its 1m
+  # body limit to `rum.maxBodySize`; another controller needs its own equivalents.
+  # @section -- FuseScope Collector
+  ingress:
+    enabled: false
+    className: ""
+    annotations:
+      nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+      nginx.ingress.kubernetes.io/proxy-body-size: 4m
+    hosts: []
+    tls: []
+  # fusescopeCollector.storage -- Volume of the OpAMP state: the instance UID, the cached ingest
+  # policy and the report sequence. An emptyDir keeps them across container restarts; on a new pod
+  # the collector registers as a new agent and waits for the policy before it is ready.
+  # @section -- FuseScope Collector
+  storage:
+    sizeLimit: 64Mi
+  # fusescopeCollector.resources -- Resources. The memory limit is also what `memory_limiter`
+  # refuses data above (80%).
+  # @section -- FuseScope Collector
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  # fusescopeCollector.podSecurityContext -- Pod security context. The image is distroless and runs
+  # as uid 65532.
+  # @section -- FuseScope Collector
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    fsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+  # fusescopeCollector.securityContext -- Container security context.
+  # @section -- FuseScope Collector
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+  # fusescopeCollector.livenessProbe -- Liveness probe timing, a TCP check of the health port.
+  # @section -- FuseScope Collector
+  livenessProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+  # fusescopeCollector.readinessProbe -- Readiness probe timing on the health status, ready only
+  # while the collector holds a valid ingest policy.
+  # @section -- FuseScope Collector
+  readinessProbe:
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 3
+  # fusescopeCollector.podAnnotations -- Pod annotations.
+  # @section -- FuseScope Collector
+  podAnnotations: {}
+  # fusescopeCollector.priorityClassName -- Priority class.
+  # @section -- FuseScope Collector
+  priorityClassName: ""
+  # fusescopeCollector.nodeSelector -- Node selector.
+  # @section -- FuseScope Collector
+  nodeSelector: {}
+  # fusescopeCollector.tolerations -- Tolerations.
+  # @section -- FuseScope Collector
+  tolerations: []
+  # fusescopeCollector.affinity -- Affinity.
+  # @section -- FuseScope Collector
+  affinity: {}
+  # fusescopeCollector.topologySpreadConstraints -- Topology spread constraints.
+  # @section -- FuseScope Collector
   topologySpreadConstraints: []
 
 # @section -- Postgres

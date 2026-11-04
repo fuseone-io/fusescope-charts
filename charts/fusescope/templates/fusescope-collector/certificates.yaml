@@ -1,0 +1,52 @@
+{{- $clusterDomain := default "cluster.local" .Values.global.clusterDomain -}}
+{{- $policy := .Values.signoz.ingestPolicy.tls.certManager -}}
+{{- if and (include "signoz.ingestPolicyEnabled" .) $policy.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "signoz.ingestPolicyTLSSecret" . }}
+  labels:
+    {{- include "signoz.labels" . | nindent 4 }}
+spec:
+  secretName: {{ include "signoz.ingestPolicyTLSSecret" . }}
+  dnsNames:
+    {{- include "fusescope.serviceDNSNames" (dict "name" (include "signoz.fullname" .) "namespace" .Release.Namespace "clusterDomain" $clusterDomain) | fromJsonArray | toYaml | nindent 4 }}
+  duration: {{ $policy.duration }}
+  renewBefore: {{ $policy.renewBefore }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - server auth
+  issuerRef:
+    name: {{ required "signoz.ingestPolicy.tls.certManager.issuerRef.name is required" $policy.issuerRef.name }}
+    kind: {{ $policy.issuerRef.kind }}
+    group: {{ $policy.issuerRef.group }}
+{{- end }}
+{{- $rum := .Values.fusescopeCollector.rum.tls.certManager -}}
+{{- if and .Values.fusescopeCollector.enabled $rum.enabled }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "fusescopeCollector.rumTLSSecret" . }}
+  labels:
+    {{- include "fusescopeCollector.labels" . | nindent 4 }}
+spec:
+  secretName: {{ include "fusescopeCollector.rumTLSSecret" . }}
+  dnsNames:
+    {{- include "fusescope.serviceDNSNames" (dict "name" (include "fusescopeCollector.fullname" .) "namespace" .Release.Namespace "clusterDomain" $clusterDomain) | fromJsonArray | toYaml | nindent 4 }}
+  duration: {{ $rum.duration }}
+  renewBefore: {{ $rum.renewBefore }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - server auth
+  issuerRef:
+    name: {{ required "fusescopeCollector.rum.tls.certManager.issuerRef.name is required" $rum.issuerRef.name }}
+    kind: {{ $rum.issuerRef.kind }}
+    group: {{ $rum.issuerRef.group }}
+{{- end }}

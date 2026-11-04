@@ -63,11 +63,34 @@ kubectl delete namespace platform
 
 ### Real User Monitoring
 
-FuseScope serves the RUM ingestion gateway on its HTTP port (8080): browsers send OTLP/HTTP to `POST /rum/v1/traces` and `POST /rum/v1/logs` directly, authenticated by the application's public key. The gateway forwards to the in-chart collector (`signoz.rum.collectorEndpoint`) and is configured under `signoz.rum` (see SigNoz RUM in [Values](#values)).
+The FuseScope collector (`fusescopeCollector`) receives RUM: browsers and apps send OTLP/HTTP to `POST /rum/v1/traces` and `POST /rum/v1/logs`, authenticated by the application's public key, and the collector writes ClickHouse directly. The chart no longer configures the FuseScope backend's own RUM gateway, which is being removed. The collector takes the RUM applications and keys from FuseScope as the ingest policy, over OpAMP with TLS 1.3 on a second FuseScope listener (`signoz.ingestPolicy`, port 4321), and reports what it accepted for the RUM setup screen. It needs a FuseScope release with that listener (fuseone-io/fusescope#314).
 
-- **Public endpoint.** Browsers must reach `/rum/` on the FuseScope URL. The default ingress path `/` already routes it to the backend; if you narrow `signoz.ingress.hosts[].paths`, add `/rum` (`Prefix`, port 8080).
-- **CORS belongs to the gateway.** It answers `OPTIONS` preflights from each application's allowed origins. The ingress or proxy must pass `OPTIONS` and the `Origin` header through and must not add CORS headers of its own. With ingress-nginx, don't set `nginx.ingress.kubernetes.io/enable-cors` on this ingress, and raise `nginx.ingress.kubernetes.io/proxy-body-size` (1m by default) to `signoz.rum.maxBodySize` (4m).
-- **Client IP.** The per-client rate limit (20 req/s, burst 60) keys on the client IP. Behind an ingress or load balancer every browser would share the proxy's IP, so `signoz.rum.trustForwardedFor` defaults to `signoz.ingress.enabled` and the gateway then reads the first `X-Forwarded-For` address. Set it to `true` when another proxy fronts FuseScope, and only when that proxy overwrites the header: a client-supplied address would let a browser pick its own bucket, though it stays within the per-key limit. With ingress-nginx this holds by default (`use-forwarded-headers: false`); keep the real client IP reaching the controller (e.g. `externalTrafficPolicy: Local` or PROXY protocol).
+```yaml
+signoz:
+  ingestPolicy:
+    tokens:
+      existingSecret: fusescope-ingest-tokens   # key "tokens": one token per line, 32-256 characters
+    tls:
+      certManager:
+        enabled: true
+        issuerRef: {name: internal-ca}          # a CA issuer, so ca.crt is set for the collector
+fusescopeCollector:
+  enabled: true
+  rum:
+    tls:
+      certManager:
+        enabled: true
+        issuerRef: {name: internal-ca}
+  ingress:
+    enabled: true                               # /rum/v1/traces and /rum/v1/logs on the signoz.ingress hosts and TLS
+```
+
+- **Token.** Create the Secret before installing, e.g. `kubectl create secret generic fusescope-ingest-tokens --from-literal=tokens=$(openssl rand -hex 32)`. FuseScope accepts any token in it and the collector presents the same one; to rotate, give the collector its own Secret (`fusescopeCollector.ingestToken`), add the new token to FuseScope's, switch the collector, then remove the old one. FuseScope reads the tokens at start.
+- **Certificates.** Both listeners are TLS 1.3 only, with a certificate from a Secret (`existingSecret`, a `kubernetes.io/tls` Secret) or a cert-manager Certificate. The collector verifies FuseScope's against the Secret's `ca.crt`; set `signoz.ingestPolicy.tls.caKey: ""` for a certificate from a public CA. Renewals are picked up without a restart.
+- **Readiness.** The collector is ready only while it holds a valid ingest policy, so RUM reaches it only once FuseScope has published one. Until then, and if FuseScope never does (no token, wrong certificate), the pod runs but stays out of the Service; its log says why.
+- **Ingress.** The collector's Ingress re-encrypts to its TLS listener. The default annotations are ingress-nginx's (`backend-protocol: HTTPS`, `proxy-body-size: 4m`); set the equivalents for another controller. It takes only `/rum/v1/traces` and `/rum/v1/logs` (`Exact`), more specific than the FuseScope ingress's `/`, so both share a host and the browser SDK FuseScope serves at `/rum/v1/sdk/` stays on the FuseScope ingress.
+- **CORS belongs to the collector.** It answers `OPTIONS` preflights from each application's allowed origins. The ingress must pass `OPTIONS` and the `Origin` header through and must not add CORS headers of its own: with ingress-nginx, don't set `nginx.ingress.kubernetes.io/enable-cors`.
+- **Client IP.** The per-client rate limit (20 req/s, burst 60) keys on the client IP, taken from `X-Forwarded-For` only when the peer is in `fusescopeCollector.rum.trustedProxies`, walking the header from the right past trusted addresses. With the ingress on, the private ranges are trusted by default; keep the real client IP reaching the controller (e.g. `externalTrafficPolicy: Local` or PROXY protocol).
 
 ### MCP server
 

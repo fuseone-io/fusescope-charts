@@ -40,5 +40,12 @@ spec:
       nodePort: {{ .opampInternalNodePort }}
       {{- end }}
 {{- end }}
+    {{- if include "signoz.ingestPolicyEnabled" . }}
+    - name: opamp-ingest
+      port: {{ .Values.signoz.ingestPolicy.port }}
+      {{- include "signoz.service.ifClusterIP" .Values.signoz.service.type | indent 6 }}
+      protocol: TCP
+      targetPort: opamp-ingest
+    {{- end }}
   selector:
     {{- include "signoz.selectorLabels" . | nindent 4 }}

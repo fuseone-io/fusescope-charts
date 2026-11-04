@@ -77,6 +77,11 @@ spec:
             - name: opamp-internal
               containerPort: {{ default 4320 .Values.signoz.service.opampPort }}
               protocol: TCP
+            {{- if include "signoz.ingestPolicyEnabled" . }}
+            - name: opamp-ingest
+              containerPort: {{ .Values.signoz.ingestPolicy.port }}
+              protocol: TCP
+            {{- end }}
           env:
             {{- include "snippet.clickhouse-credentials" . | nindent 12 }}
             {{- include "signoz.env" . | nindent 12 }}
@@ -124,6 +129,19 @@ spec:
               mountPath: /etc/fusescope
               readOnly: true
           {{- end }}
+          {{- if include "signoz.ingestPolicyEnabled" . }}
+            - name: ingest-tokens
+              mountPath: {{ include "signoz.ingestPolicyDir" . }}/tokens
+              readOnly: true
+            - name: ingest-tls
+              mountPath: {{ include "signoz.ingestPolicyDir" . }}/tls
+              readOnly: true
+            {{- if .Values.signoz.ingestPolicy.tls.clientCA.existingSecret }}
+            - name: ingest-client-ca
+              mountPath: {{ include "signoz.ingestPolicyDir" . }}/client-ca
+              readOnly: true
+            {{- end }}
+          {{- end }}
           {{- if .Values.signoz.additionalVolumeMounts }}
             {{- toYaml .Values.signoz.additionalVolumeMounts | nindent 12 }}
           {{- end }}
@@ -144,6 +162,34 @@ spec:
         - name: config
           configMap:
             name: {{ include "signoz.fullname" . }}-config
+        {{- end }}
+        {{- if include "signoz.ingestPolicyEnabled" . }}
+        {{- $policy := .Values.signoz.ingestPolicy }}
+        # Mounted as directories, not subPath, so a rotated Secret reaches the pod.
+        - name: ingest-tokens
+          secret:
+            secretName: {{ include "signoz.ingestPolicyTokensSecret" . }}
+            defaultMode: 0440
+            items:
+              - key: {{ $policy.tokens.secretKey }}
+                path: tokens
+        - name: ingest-tls
+          secret:
+            secretName: {{ include "signoz.ingestPolicyTLSSecret" . }}
+            defaultMode: 0440
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+        {{- with $policy.tls.clientCA.existingSecret }}
+        - name: ingest-client-ca
+          secret:
+            secretName: {{ . }}
+            items:
+              - key: {{ $policy.tls.clientCA.secretKey }}
+                path: ca.crt
+        {{- end }}
         {{- end }}
         {{- if .Values.signoz.additionalVolumes }}
           {{- toYaml .Values.signoz.additionalVolumes | nindent 8 }}
