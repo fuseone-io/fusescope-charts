@@ -1,0 +1,351 @@
+suite: Test the FuseScope collector
+
+templates:
+  - templates/fusescope-collector/configmap.yaml
+  - templates/fusescope-collector/deployment.yaml
+  - templates/fusescope-collector/service.yaml
+  - templates/fusescope-collector/serviceaccount.yaml
+  - templates/fusescope-collector/secret-clickhouse.yaml
+  - templates/fusescope-collector/ingress.yaml
+  - templates/fusescope-collector/certificates.yaml
+
+release:
+  name: fusescope
+  namespace: platform
+
+capabilities:
+  majorVersion: 1
+  minorVersion: 30
+  apiVersions:
+    - networking.k8s.io/v1
+    - cert-manager.io/v1
+
+values:
+  - ./values/fusescope-collector.yaml
+
+tests:
+  - it: should render nothing by default
+    set:
+      fusescopeCollector.enabled: false
+      signoz.ingestPolicy.tokens.existingSecret: ""
+      signoz.ingestPolicy.tls.existingSecret: ""
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: should run as an ingress collector configured from its file over OpAMP
+    template: templates/fusescope-collector/deployment.yaml
+    asserts:
+      - isKind:
+          of: Deployment
+      - equal:
+          path: metadata.name
+          value: fusescope-collector
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/fuseone-io/fusescope-collector:sha-92c555fae01f
+      - equal:
+          path: spec.template.spec.containers[0].args
+          value:
+            - --config=fusescopeopamp:/etc/fusescope-collector/config/config.yaml
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet
+          value:
+            path: /health/status
+            port: health
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.tcpSocket.port
+          value: health
+      - equal:
+          path: spec.template.spec.automountServiceAccountToken
+          value: false
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem
+          value: true
+      - equal:
+          path: spec.template.spec.securityContext.runAsUser
+          value: 65532
+      - exists:
+          path: spec.template.metadata.annotations["checksum/config"]
+
+  - it: should mount the token, both certificates and the ClickHouse password as files
+    template: templates/fusescope-collector/deployment.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: ingest-token
+            secret:
+              secretName: ingest-tokens
+              defaultMode: 0440
+              items:
+                - key: tokens
+                  path: token
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: rum-tls
+            secret:
+              secretName: rum-tls
+              defaultMode: 0440
+              items:
+                - key: tls.crt
+                  path: tls.crt
+                - key: tls.key
+                  path: tls.key
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: opamp-ca
+            secret:
+              secretName: ingest-tls
+              items:
+                - key: ca.crt
+                  path: ca.crt
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: clickhouse
+            secret:
+              secretName: fusescope-collector-clickhouse
+              defaultMode: 0440
+              items:
+                - key: password
+                  path: password
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: storage
+            emptyDir:
+              sizeLimit: 64Mi
+
+  - it: should configure OpAMP with TLS, the ingress role and the token file
+    template: templates/fusescope-collector/configmap.yaml
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "fusescope_opamp:\\n  endpoint: wss://fusescope:4321/v1/opamp\\n  tls:\\n    min_version: \"1.3\"\\n    ca_file: /etc/fusescope-collector/opamp-ca/ca.crt\\n"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "\\n  role: ingress\\n  auth:\\n    token_file: /etc/fusescope-collector/ingest-token/token\\n"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "insecure: true\\n  storage"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "\\$\\{"
+
+  - it: should serve RUM with TLS 1.3 from the ingest policy and write ClickHouse
+    template: templates/fusescope-collector/configmap.yaml
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "  rum:\\n    endpoint: 0.0.0.0:4319\\n    tls:\\n      min_version: \"1.3\"\\n      cert_file: /etc/fusescope-collector/rum-tls/tls.crt\\n      key_file: /etc/fusescope-collector/rum-tls/tls.key\\n    ingest_policy: fusescope_opamp\\n"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "    trusted_proxies: \\[\\]\\n"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "  fusescope_clickhouse:\\n    endpoint: fusescope-clickhouse:9000\\n    username: \"admin\"\\n    password_file: /etc/fusescope-collector/clickhouse/password\\n    tls:\\n      insecure: true\\n"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "include_recoverable_errors: true\\n      recovery_duration: 0s"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "traces:\\n      receivers: \\[rum\\]\\n      processors: \\[memory_limiter, signozspanmapper, signozllmpricing\\]\\n      exporters: \\[fusescope_clickhouse, fusescope_spanmetrics\\]"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "logs:\\n      receivers: \\[rum\\]"
+
+  - it: should write the in-chart ClickHouse password into its own Secret
+    template: templates/fusescope-collector/secret-clickhouse.yaml
+    asserts:
+      - equal:
+          path: data.password
+          value: MjdmZjAzOTktMGQzYS00YmQ4LTkxOWQtMTdjMjE4MWU2ZmI5
+
+  - it: should read an external ClickHouse password from its existing Secret, over TLS
+    set:
+      clickhouse.enabled: false
+      externalClickhouse:
+        host: ch.example.com
+        cluster: main
+        user: writer
+        secure: true
+        existingSecret: ch-credentials
+        existingSecretPasswordKey: pass
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: templates/fusescope-collector/secret-clickhouse.yaml
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: clickhouse
+            secret:
+              secretName: ch-credentials
+              defaultMode: 0440
+              items:
+                - key: pass
+                  path: password
+        template: templates/fusescope-collector/deployment.yaml
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "endpoint: ch.example.com:9000\\n    username: \"writer\"\\n    password_file: /etc/fusescope-collector/clickhouse/password\\n    tls:\\n      insecure: false\\n"
+        template: templates/fusescope-collector/configmap.yaml
+
+  - it: should take the token from the collector's own Secret
+    set:
+      fusescopeCollector.ingestToken.existingSecret: collector-token
+    template: templates/fusescope-collector/deployment.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: ingest-token
+            secret:
+              secretName: collector-token
+              defaultMode: 0440
+              items:
+                - key: token
+                  path: token
+
+  - it: should trust the system roots and present a client certificate when asked
+    set:
+      signoz.ingestPolicy.tls.caKey: ""
+      fusescopeCollector.opamp.clientCertSecret: collector-client
+      fusescopeCollector.opamp.endpoint: wss://fusescope.example.com:4321/v1/opamp
+    asserts:
+      - notContains:
+          path: spec.template.spec.volumes
+          content:
+            name: opamp-ca
+          any: true
+        template: templates/fusescope-collector/deployment.yaml
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: opamp-client
+            secret:
+              secretName: collector-client
+              defaultMode: 0440
+              items:
+                - key: tls.crt
+                  path: tls.crt
+                - key: tls.key
+                  path: tls.key
+        template: templates/fusescope-collector/deployment.yaml
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "endpoint: wss://fusescope.example.com:4321/v1/opamp\\n  tls:\\n    min_version: \"1.3\"\\n    cert_file: /etc/fusescope-collector/opamp-client/tls.crt\\n    key_file: /etc/fusescope-collector/opamp-client/tls.key\\n"
+        template: templates/fusescope-collector/configmap.yaml
+
+  - it: should pass the RUM limits and the staleness bound
+    set:
+      fusescopeCollector.rum:
+        maxBodySize: 1048576
+        maxStaleness: 1h
+        trustedProxies: [10.42.0.0/16]
+        rateLimit:
+          key: {rate: 50, burst: 100}
+          client: {rate: 5, burst: 10}
+    template: templates/fusescope-collector/configmap.yaml
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "max_body_size: 1048576\\n    rate_limit:\\n      key: \\{rate: 50, burst: 100\\}\\n      client: \\{rate: 5, burst: 10\\}\\n    trusted_proxies: \\[\"10.42.0.0/16\"\\]\\n    max_staleness: 1h\\n"
+
+  - it: should route /rum/v1 on the FuseScope hosts to the TLS listener, trusting private proxies
+    set:
+      signoz.ingress:
+        enabled: true
+        className: nginx
+        hosts:
+          - host: fusescope.example.com
+            paths: [{path: /, pathType: ImplementationSpecific, port: 8080}]
+        tls:
+          - secretName: fusescope-tls
+            hosts: [fusescope.example.com]
+      fusescopeCollector.ingress.enabled: true
+    asserts:
+      - equal:
+          path: spec
+          value:
+            ingressClassName: nginx
+            tls:
+              - hosts: [fusescope.example.com]
+                secretName: fusescope-tls
+            rules:
+              - host: fusescope.example.com
+                http:
+                  paths:
+                    - path: /rum/v1
+                      pathType: Prefix
+                      backend:
+                        service:
+                          name: fusescope-collector
+                          port:
+                            number: 4319
+        template: templates/fusescope-collector/ingress.yaml
+      - equal:
+          path: metadata.annotations
+          value:
+            nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+            nginx.ingress.kubernetes.io/proxy-body-size: 4m
+        template: templates/fusescope-collector/ingress.yaml
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "trusted_proxies: \\[\"10.0.0.0/8\",\"172.16.0.0/12\",\"192.168.0.0/16\"\\]"
+        template: templates/fusescope-collector/configmap.yaml
+
+  - it: should refuse an ingress without hosts
+    set:
+      fusescopeCollector.ingress.enabled: true
+    template: templates/fusescope-collector/ingress.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: "fusescopeCollector.ingress.hosts is required"
+
+  - it: should issue both certificates with cert-manager
+    set:
+      signoz.ingestPolicy.tls.existingSecret: ""
+      signoz.ingestPolicy.tls.certManager: {enabled: true, issuerRef: {name: internal-ca}}
+      fusescopeCollector.rum.tls.existingSecret: ""
+      fusescopeCollector.rum.tls.certManager: {enabled: true, issuerRef: {name: internal-ca, kind: ClusterIssuer}}
+    asserts:
+      - hasDocuments:
+          count: 2
+        template: templates/fusescope-collector/certificates.yaml
+      - equal:
+          path: spec.dnsNames
+          value: [fusescope, fusescope.platform, fusescope.platform.svc, fusescope.platform.svc.cluster.local]
+        documentIndex: 0
+        template: templates/fusescope-collector/certificates.yaml
+      - equal:
+          path: spec.issuerRef
+          value: {name: internal-ca, kind: ClusterIssuer, group: cert-manager.io}
+        documentIndex: 1
+        template: templates/fusescope-collector/certificates.yaml
+      - equal:
+          path: spec.secretName
+          value: fusescope-collector-rum-tls
+        documentIndex: 1
+        template: templates/fusescope-collector/certificates.yaml
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: opamp-ca
+            secret:
+              secretName: fusescope-ingest-tls
+              items:
+                - key: ca.crt
+                  path: ca.crt
+        template: templates/fusescope-collector/deployment.yaml
+
+  - it: should refuse a RUM listener without a certificate
+    set:
+      fusescopeCollector.rum.tls.existingSecret: ""
+    template: templates/fusescope-collector/deployment.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: "the RUM listener is TLS only"

@@ -1,0 +1,58 @@
+{{- if and .Values.fusescopeCollector.enabled .Values.fusescopeCollector.ingress.enabled }}
+{{- $ing := .Values.fusescopeCollector.ingress -}}
+{{- $fullName := include "fusescopeCollector.fullname" . -}}
+{{- $port := .Values.fusescopeCollector.rum.port -}}
+{{- $className := default .Values.signoz.ingress.className $ing.className -}}
+{{- $tls := $ing.tls -}}
+{{- if and (not $tls) (not $ing.hosts) .Values.signoz.ingress.enabled -}}
+{{- $tls = .Values.signoz.ingress.tls -}}
+{{- end -}}
+{{- $hosts := $ing.hosts -}}
+{{- if and (not $hosts) .Values.signoz.ingress.enabled -}}
+{{- range .Values.signoz.ingress.hosts -}}
+{{- $hosts = append $hosts .host -}}
+{{- end -}}
+{{- end -}}
+{{- if not $hosts -}}
+{{- fail "fusescopeCollector.ingress.hosts is required unless signoz.ingress is enabled" -}}
+{{- end -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "fusescopeCollector.labels" . | nindent 4 }}
+  {{- with $ing.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with $className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with $tls }}
+  tls:
+    {{- range . }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      {{- with .secretName }}
+      secretName: {{ . }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range uniq $hosts }}
+    - host: {{ . | quote }}
+      http:
+        paths:
+          - path: {{ $ing.path }}
+            pathType: {{ $ing.pathType }}
+            backend:
+              service:
+                name: {{ $fullName }}
+                port:
+                  number: {{ $port }}
+    {{- end }}
+{{- end }}

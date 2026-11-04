@@ -1,0 +1,162 @@
+{{- if .Values.fusescopeCollector.enabled }}
+{{- $c := .Values.fusescopeCollector -}}
+{{- $ch := include "fusescopeCollector.clickhouse" . | fromJson -}}
+{{- $policy := .Values.signoz.ingestPolicy -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fusescopeCollector.fullname" . }}
+  labels:
+    {{- include "fusescopeCollector.labels" . | nindent 4 }}
+spec:
+  replicas: {{ $c.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "fusescopeCollector.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "fusescopeCollector.selectorLabels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/fusescope-collector/configmap.yaml") . | sha256sum }}
+        {{- with $c.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with $c.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range . }}
+        - name: {{ . | quote }}
+      {{- end }}
+      {{- else }}
+      {{- include "signoz.imagePullSecrets" . | nindent 6 }}
+      {{- end }}
+      serviceAccountName: {{ include "fusescopeCollector.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- with $c.priorityClassName }}
+      priorityClassName: {{ . | quote }}
+      {{- end }}
+      {{- with $c.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $c.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $c.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $c.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml $c.podSecurityContext | nindent 8 }}
+      containers:
+        - name: collector
+          image: {{ include "fusescopeCollector.image" . }}
+          imagePullPolicy: {{ $c.image.pullPolicy }}
+          args:
+            - --config=fusescopeopamp:/etc/fusescope-collector/config/config.yaml
+          securityContext:
+            {{- toYaml $c.securityContext | nindent 12 }}
+          ports:
+            - name: rum
+              containerPort: {{ $c.rum.port }}
+              protocol: TCP
+            - name: health
+              containerPort: 13133
+              protocol: TCP
+          livenessProbe:
+            tcpSocket:
+              port: health
+            {{- toYaml $c.livenessProbe | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /health/status
+              port: health
+            {{- toYaml $c.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml $c.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/fusescope-collector/config
+              readOnly: true
+            - name: storage
+              mountPath: /var/lib/fusescope-collector
+            - name: ingest-token
+              mountPath: /etc/fusescope-collector/ingest-token
+              readOnly: true
+            - name: rum-tls
+              mountPath: /etc/fusescope-collector/rum-tls
+              readOnly: true
+            {{- if $policy.tls.caKey }}
+            - name: opamp-ca
+              mountPath: /etc/fusescope-collector/opamp-ca
+              readOnly: true
+            {{- end }}
+            {{- if $c.opamp.clientCertSecret }}
+            - name: opamp-client
+              mountPath: /etc/fusescope-collector/opamp-client
+              readOnly: true
+            {{- end }}
+            {{- if $ch.secret }}
+            - name: clickhouse
+              mountPath: /etc/fusescope-collector/clickhouse
+              readOnly: true
+            {{- end }}
+      # Secrets as directories, not subPath, so a renewed certificate reaches the pod.
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "fusescopeCollector.fullname" . }}
+        - name: storage
+          emptyDir:
+            sizeLimit: {{ $c.storage.sizeLimit }}
+        - name: ingest-token
+          secret:
+            secretName: {{ include "fusescopeCollector.tokenSecret" . }}
+            defaultMode: 0440
+            items:
+              - key: {{ include "fusescopeCollector.tokenKey" . }}
+                path: token
+        - name: rum-tls
+          secret:
+            secretName: {{ include "fusescopeCollector.rumTLSSecret" . }}
+            defaultMode: 0440
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+        {{- if $policy.tls.caKey }}
+        - name: opamp-ca
+          secret:
+            secretName: {{ include "signoz.ingestPolicyTLSSecret" . }}
+            items:
+              - key: {{ $policy.tls.caKey }}
+                path: ca.crt
+        {{- end }}
+        {{- with $c.opamp.clientCertSecret }}
+        - name: opamp-client
+          secret:
+            secretName: {{ . }}
+            defaultMode: 0440
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+        {{- end }}
+        {{- if $ch.secret }}
+        - name: clickhouse
+          secret:
+            secretName: {{ $ch.secret }}
+            defaultMode: 0440
+            items:
+              - key: {{ $ch.key }}
+                path: password
+        {{- end }}
+{{- end }}

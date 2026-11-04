@@ -433,7 +433,7 @@ Create Env
     "signoz_telemetrystore_clickhouse_cluster" (include "clickhouse.cluster" .)
 }}
 
-{{- $defaultEnv = merge $defaultEnv (include "signoz.rumEnv" . | fromYaml) -}}
+{{- $defaultEnv = merge $defaultEnv (include "signoz.ingestPolicyEnv" . | fromYaml) -}}
 {{- $_ := set $defaultEnv "signoz_global_ingestion__url" (include "signoz.ingestionUrl" .) -}}
 {{- $defaultEnv = merge $defaultEnv (include "signoz.retentionEnv" . | fromYaml) -}}
 
@@ -512,30 +512,57 @@ port), else the collector's in-cluster service.
 {{- end -}}
 
 {{/*
-RUM gateway env, as a YAML map. trustForwardedFor follows signoz.ingress.enabled unless set.
+Ingest policy env, as a YAML map: the OpAMP listener with TLS, its tokens and certificate.
 */}}
-{{- define "signoz.rumEnv" -}}
-{{- $rum := .Values.signoz.rum | default dict -}}
-{{- $enabled := ternary true $rum.enabled (kindIs "invalid" $rum.enabled) -}}
-signoz_rum_enabled: {{ $enabled | quote }}
-{{- if $enabled }}
-{{- $endpoint := $rum.collectorEndpoint | default (printf "http://%s:%v" (include "otelCollector.fullname" .) (index .Values.otelCollector.ports "otlp-http" "servicePort")) }}
-signoz_rum_collector__endpoint: {{ $endpoint | quote }}
-{{- $trust := ternary .Values.signoz.ingress.enabled $rum.trustForwardedFor (kindIs "invalid" $rum.trustForwardedFor) }}
-signoz_rum_ratelimit_trust__forwarded__for: {{ $trust | quote }}
-{{- with $rum.maxBodySize }}
-signoz_rum_max__body__size: {{ int64 . | quote }}
-{{- end }}
-{{- range $scope := list "key" "client" }}
-{{- $limit := index ($rum.rateLimit | default dict) $scope | default dict }}
-{{- with $limit.rate }}
-signoz_rum_ratelimit_{{ $scope }}_rate: {{ . | quote }}
-{{- end }}
-{{- with $limit.burst }}
-signoz_rum_ratelimit_{{ $scope }}_burst: {{ int64 . | quote }}
+{{- define "signoz.ingestPolicyEnv" -}}
+{{- if include "signoz.ingestPolicyEnabled" . }}
+{{- $policy := .Values.signoz.ingestPolicy }}
+signoz_rum_ingest__policy_token__file: {{ printf "%s/%s" (include "signoz.ingestPolicyDir" .) "tokens/tokens" | quote }}
+signoz_rum_ingest__policy_listen: {{ printf "0.0.0.0:%v" $policy.port | quote }}
+signoz_rum_ingest__policy_tls_cert__file: {{ printf "%s/%s" (include "signoz.ingestPolicyDir" .) "tls/tls.crt" | quote }}
+signoz_rum_ingest__policy_tls_key__file: {{ printf "%s/%s" (include "signoz.ingestPolicyDir" .) "tls/tls.key" | quote }}
+{{- if $policy.tls.clientCA.existingSecret }}
+signoz_rum_ingest__policy_tls_client__ca__file: {{ printf "%s/%s" (include "signoz.ingestPolicyDir" .) "client-ca/ca.crt" | quote }}
 {{- end }}
 {{- end }}
-{{- end }}
+{{- end -}}
+
+{{/*
+True when FuseScope serves the ingest policy: a token Secret is set or the FuseScope collector is on.
+*/}}
+{{- define "signoz.ingestPolicyEnabled" -}}
+{{- if or .Values.signoz.ingestPolicy.tokens.existingSecret .Values.fusescopeCollector.enabled -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{- define "signoz.ingestPolicyDir" -}}
+/etc/fusescope/ingest
+{{- end -}}
+
+{{/*
+Secret of the ingest policy listener's certificate.
+*/}}
+{{- define "signoz.ingestPolicyTLSSecret" -}}
+{{- $tls := .Values.signoz.ingestPolicy.tls -}}
+{{- if $tls.certManager.enabled -}}
+{{- printf "%s-ingest-tls" (include "signoz.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- else -}}
+{{- required "signoz.ingestPolicy.tls.existingSecret or signoz.ingestPolicy.tls.certManager.enabled is required: ingest tokens travel only over TLS" $tls.existingSecret -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "signoz.ingestPolicyTokensSecret" -}}
+{{- required "signoz.ingestPolicy.tokens.existingSecret is required with fusescopeCollector.enabled" .Values.signoz.ingestPolicy.tokens.existingSecret -}}
+{{- end -}}
+
+{{/*
+DNS names of a Service in the release namespace, for a certificate.
+*/}}
+{{- define "fusescope.serviceDNSNames" -}}
+{{- $name := .name -}}
+{{- $ns := .namespace -}}
+{{- toJson (list $name (printf "%s.%s" $name $ns) (printf "%s.%s.svc" $name $ns) (printf "%s.%s.svc.%s" $name $ns .clusterDomain)) -}}
 {{- end -}}
 
 {{/*
@@ -644,4 +671,106 @@ Hosts of the MCP server ingress: its own, else the FuseScope ingress hosts.
 {{- fail "mcpServer.ingress.hosts is required unless signoz.ingress is enabled" -}}
 {{- end -}}
 {{- toJson (uniq $hosts) -}}
+{{- end -}}
+
+{{/*
+FuseScope collector
+*/}}
+{{- define "fusescopeCollector.fullname" -}}
+{{- printf "%s-collector" (include "signoz.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{- define "fusescopeCollector.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "signoz.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: fusescope-collector
+{{- end -}}
+
+{{- define "fusescopeCollector.labels" -}}
+helm.sh/chart: {{ include "signoz.chart" . }}
+{{ include "fusescopeCollector.selectorLabels" . }}
+app.kubernetes.io/version: {{ .Values.fusescopeCollector.image.tag | quote }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end -}}
+
+{{- define "fusescopeCollector.serviceAccountName" -}}
+{{- if .Values.fusescopeCollector.serviceAccount.create -}}
+{{- default (include "fusescopeCollector.fullname" .) .Values.fusescopeCollector.serviceAccount.name -}}
+{{- else -}}
+{{- default "default" .Values.fusescopeCollector.serviceAccount.name -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "fusescopeCollector.image" -}}
+{{- $image := .Values.fusescopeCollector.image -}}
+{{- $registry := default $image.registry .Values.global.imageRegistry -}}
+{{- $name := ternary (printf "%s/%s" $registry $image.repository) $image.repository (not (empty $registry)) -}}
+{{- if $image.digest -}}
+{{- printf "%s@%s" $name $image.digest -}}
+{{- else -}}
+{{- printf "%s:%s" $name (toString $image.tag) -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "fusescopeCollector.rumTLSSecret" -}}
+{{- $tls := .Values.fusescopeCollector.rum.tls -}}
+{{- if $tls.certManager.enabled -}}
+{{- printf "%s-rum-tls" (include "fusescopeCollector.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- else -}}
+{{- required "fusescopeCollector.rum.tls.existingSecret or fusescopeCollector.rum.tls.certManager.enabled is required: the RUM listener is TLS only" $tls.existingSecret -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Secret and key of the ingest token the collector presents.
+*/}}
+{{- define "fusescopeCollector.tokenSecret" -}}
+{{- default (include "signoz.ingestPolicyTokensSecret" .) .Values.fusescopeCollector.ingestToken.existingSecret -}}
+{{- end -}}
+
+{{- define "fusescopeCollector.tokenKey" -}}
+{{- if .Values.fusescopeCollector.ingestToken.existingSecret -}}
+{{- default "token" .Values.fusescopeCollector.ingestToken.secretKey -}}
+{{- else -}}
+{{- default .Values.signoz.ingestPolicy.tokens.secretKey .Values.fusescopeCollector.ingestToken.secretKey -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "fusescopeCollector.opampEndpoint" -}}
+{{- default (printf "wss://%s:%v/v1/opamp" (include "signoz.fullname" .) .Values.signoz.ingestPolicy.port) .Values.fusescopeCollector.opamp.endpoint -}}
+{{- end -}}
+
+{{- define "fusescopeCollector.trustedProxies" -}}
+{{- $proxies := .Values.fusescopeCollector.rum.trustedProxies -}}
+{{- if kindIs "invalid" $proxies -}}
+{{- $proxies = ternary (list "10.0.0.0/8" "172.16.0.0/12" "192.168.0.0/16") (list) .Values.fusescopeCollector.ingress.enabled -}}
+{{- end -}}
+{{- toJson $proxies -}}
+{{- end -}}
+
+{{/*
+ClickHouse as the collector's exporter sees it: endpoint, user, TLS, databases, and where its
+password comes from (a Secret and key, or none).
+*/}}
+{{- define "fusescopeCollector.clickhouse" -}}
+{{- $ch := ternary .Values.clickhouse .Values.externalClickhouse .Values.clickhouse.enabled -}}
+{{- $host := ternary (include "clickhouse.servicename" .) $ch.host .Values.clickhouse.enabled -}}
+{{- $out := dict
+    "endpoint" (printf "%s:%s" (required "externalClickhouse.host is required if not clickhouse.enabled" $host) (include "clickhouse.tcpPort" .))
+    "user" (toString $ch.user)
+    "secure" $ch.secure
+    "traces" (default "signoz_traces" $ch.traceDatabase)
+    "logs" (default "signoz_logs" $ch.logDatabase)
+    "metrics" (default "signoz_metrics" $ch.database)
+-}}
+{{- if .Values.clickhouse.enabled -}}
+{{- if .Values.clickhouse.password -}}
+{{- $_ := set $out "secret" (printf "%s-clickhouse" (include "fusescopeCollector.fullname" .)) -}}
+{{- $_ := set $out "key" "password" -}}
+{{- end -}}
+{{- else if or .Values.externalClickhouse.existingSecret .Values.externalClickhouse.password -}}
+{{- $_ := set $out "secret" (include "clickhouse.secretName" . | trimAll "\"") -}}
+{{- $_ := set $out "key" (include "clickhouse.secretPasswordKey" . | trimAll "\"") -}}
+{{- end -}}
+{{- toJson $out -}}
 {{- end -}}

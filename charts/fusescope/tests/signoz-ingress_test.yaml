@@ -14,7 +14,7 @@ capabilities:
     - networking.k8s.io/v1
 
 tests:
-  - it: should route every path, /rum/ included, to the backend HTTP port by default
+  - it: should route every path to the backend HTTP port by default
     set:
       signoz:
         ingress:

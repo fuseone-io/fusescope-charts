@@ -1,0 +1,11 @@
+signoz:
+  ingestPolicy:
+    tokens:
+      existingSecret: ingest-tokens
+    tls:
+      existingSecret: ingest-tls
+fusescopeCollector:
+  enabled: true
+  rum:
+    tls:
+      existingSecret: rum-tls

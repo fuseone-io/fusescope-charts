@@ -1,0 +1,21 @@
+{{- if .Values.fusescopeCollector.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "fusescopeCollector.fullname" . }}
+  labels:
+    {{- include "fusescopeCollector.labels" . | nindent 4 }}
+  {{- with .Values.fusescopeCollector.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.fusescopeCollector.service.type }}
+  ports:
+    - name: rum
+      port: {{ .Values.fusescopeCollector.rum.port }}
+      targetPort: rum
+      protocol: TCP
+  selector:
+    {{- include "fusescopeCollector.selectorLabels" . | nindent 4 }}
+{{- end }}

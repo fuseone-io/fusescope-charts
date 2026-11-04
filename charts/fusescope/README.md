@@ -1,7 +1,7 @@
 
 # FuseScope
 
-![Version: 0.158.2](https://img.shields.io/badge/Version-0.158.2-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.158.0](https://img.shields.io/badge/AppVersion-0.158.0-informational?style=flat-square)
+![Version: 0.159.0](https://img.shields.io/badge/Version-0.159.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.158.0](https://img.shields.io/badge/AppVersion-0.158.0-informational?style=flat-square)
 
 FuseScope is an open-source observability platform native to OpenTelemetry, with logs, traces and metrics in a single application. It is a hard fork of [SigNoz](https://github.com/SigNoz/signoz) maintained by FuseOne.
 
@@ -63,11 +63,34 @@ kubectl delete namespace platform
 
 ### Real User Monitoring
 
-FuseScope serves the RUM ingestion gateway on its HTTP port (8080): browsers send OTLP/HTTP to `POST /rum/v1/traces` and `POST /rum/v1/logs` directly, authenticated by the application's public key. The gateway forwards to the in-chart collector (`signoz.rum.collectorEndpoint`) and is configured under `signoz.rum` (see SigNoz RUM in [Values](#values)).
+The FuseScope collector (`fusescopeCollector`) receives RUM: browsers and apps send OTLP/HTTP to `POST /rum/v1/traces` and `POST /rum/v1/logs`, authenticated by the application's public key, and the collector writes ClickHouse directly. The chart no longer configures the FuseScope backend's own RUM gateway, which is being removed. The collector takes the RUM applications and keys from FuseScope as the ingest policy, over OpAMP with TLS 1.3 on a second FuseScope listener (`signoz.ingestPolicy`, port 4321), and reports what it accepted for the RUM setup screen. It needs a FuseScope release with that listener (fuseone-io/fusescope#314).
 
-- **Public endpoint.** Browsers must reach `/rum/` on the FuseScope URL. The default ingress path `/` already routes it to the backend; if you narrow `signoz.ingress.hosts[].paths`, add `/rum` (`Prefix`, port 8080).
-- **CORS belongs to the gateway.** It answers `OPTIONS` preflights from each application's allowed origins. The ingress or proxy must pass `OPTIONS` and the `Origin` header through and must not add CORS headers of its own. With ingress-nginx, don't set `nginx.ingress.kubernetes.io/enable-cors` on this ingress, and raise `nginx.ingress.kubernetes.io/proxy-body-size` (1m by default) to `signoz.rum.maxBodySize` (4m).
-- **Client IP.** The per-client rate limit (20 req/s, burst 60) keys on the client IP. Behind an ingress or load balancer every browser would share the proxy's IP, so `signoz.rum.trustForwardedFor` defaults to `signoz.ingress.enabled` and the gateway then reads the first `X-Forwarded-For` address. Set it to `true` when another proxy fronts FuseScope, and only when that proxy overwrites the header: a client-supplied address would let a browser pick its own bucket, though it stays within the per-key limit. With ingress-nginx this holds by default (`use-forwarded-headers: false`); keep the real client IP reaching the controller (e.g. `externalTrafficPolicy: Local` or PROXY protocol).
+```yaml
+signoz:
+  ingestPolicy:
+    tokens:
+      existingSecret: fusescope-ingest-tokens   # key "tokens": one token per line, 32-256 characters
+    tls:
+      certManager:
+        enabled: true
+        issuerRef: {name: internal-ca}          # a CA issuer, so ca.crt is set for the collector
+fusescopeCollector:
+  enabled: true
+  rum:
+    tls:
+      certManager:
+        enabled: true
+        issuerRef: {name: internal-ca}
+  ingress:
+    enabled: true                               # /rum/v1 on the signoz.ingress hosts and TLS
+```
+
+- **Token.** Create the Secret before installing, e.g. `kubectl create secret generic fusescope-ingest-tokens --from-literal=tokens=$(openssl rand -hex 32)`. FuseScope accepts any token in it and the collector presents the same one; to rotate, give the collector its own Secret (`fusescopeCollector.ingestToken`), add the new token to FuseScope's, switch the collector, then remove the old one. FuseScope reads the tokens at start.
+- **Certificates.** Both listeners are TLS 1.3 only, with a certificate from a Secret (`existingSecret`, a `kubernetes.io/tls` Secret) or a cert-manager Certificate. The collector verifies FuseScope's against the Secret's `ca.crt`; set `signoz.ingestPolicy.tls.caKey: ""` for a certificate from a public CA. Renewals are picked up without a restart.
+- **Readiness.** The collector is ready only while it holds a valid ingest policy, so `/rum/v1` reaches it only once FuseScope has published one. Until then, and if FuseScope never does (no token, wrong certificate), the pod runs but stays out of the Service; its log says why.
+- **Ingress.** The collector's Ingress re-encrypts to its TLS listener. The default annotations are ingress-nginx's (`backend-protocol: HTTPS`, `proxy-body-size: 4m`); set the equivalents for another controller. The path `/rum/v1` is more specific than the FuseScope ingress's `/`, so both can share a host.
+- **CORS belongs to the collector.** It answers `OPTIONS` preflights from each application's allowed origins. The ingress must pass `OPTIONS` and the `Origin` header through and must not add CORS headers of its own: with ingress-nginx, don't set `nginx.ingress.kubernetes.io/enable-cors`.
+- **Client IP.** The per-client rate limit (20 req/s, burst 60) keys on the client IP, taken from `X-Forwarded-For` only when the peer is in `fusescopeCollector.rum.trustedProxies`, walking the header from the right past trusted addresses. With the ingress on, the private ranges are trusted by default; keep the real client IP reaching the controller (e.g. `externalTrafficPolicy: Local` or PROXY protocol).
 
 ### MCP server
 
@@ -564,7 +587,7 @@ signoz_telemetrystore_provider: clickhouse</pre>
             <td>Custom readiness probe to override the default.</td>
         </tr>
         <tr>
-            <td id="signoz--resources"><a href="./values.yaml#L1050">signoz.resources</a></td>
+            <td id="signoz--resources"><a href="./values.yaml#L1062">signoz.resources</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">null</pre>
@@ -573,7 +596,7 @@ signoz_telemetrystore_provider: clickhouse</pre>
             <td>Resource requests and limits. Ref: http://kubernetes.io/docs/user-guide/compute-resources/</td>
         </tr>
         <tr>
-            <td id="signoz--priorityClassName"><a href="./values.yaml#L1061">signoz.priorityClassName</a></td>
+            <td id="signoz--priorityClassName"><a href="./values.yaml#L1073">signoz.priorityClassName</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">""</pre>
@@ -582,7 +605,7 @@ signoz_telemetrystore_provider: clickhouse</pre>
             <td>Priority class for the SigNoz pods.</td>
         </tr>
         <tr>
-            <td id="signoz--nodeSelector"><a href="./values.yaml#L1065">signoz.nodeSelector</a></td>
+            <td id="signoz--nodeSelector"><a href="./values.yaml#L1077">signoz.nodeSelector</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -591,7 +614,7 @@ signoz_telemetrystore_provider: clickhouse</pre>
             <td>Node selector for pod assignment.</td>
         </tr>
         <tr>
-            <td id="signoz--tolerations"><a href="./values.yaml#L1069">signoz.tolerations</a></td>
+            <td id="signoz--tolerations"><a href="./values.yaml#L1081">signoz.tolerations</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -600,7 +623,7 @@ signoz_telemetrystore_provider: clickhouse</pre>
             <td>Tolerations for pod assignment.</td>
         </tr>
         <tr>
-            <td id="signoz--affinity"><a href="./values.yaml#L1073">signoz.affinity</a></td>
+            <td id="signoz--affinity"><a href="./values.yaml#L1085">signoz.affinity</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -609,7 +632,7 @@ signoz_telemetrystore_provider: clickhouse</pre>
             <td>Affinity settings for pod assignment.</td>
         </tr>
         <tr>
-            <td id="signoz--topologySpreadConstraints"><a href="./values.yaml#L1077">signoz.topologySpreadConstraints</a></td>
+            <td id="signoz--topologySpreadConstraints"><a href="./values.yaml#L1089">signoz.topologySpreadConstraints</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -618,7 +641,7 @@ signoz_telemetrystore_provider: clickhouse</pre>
             <td>Topology spread constraints for pod distribution.</td>
         </tr>
         <tr>
-            <td id="signoz--persistence"><a href="./values.yaml#L1080">signoz.persistence</a></td>
+            <td id="signoz--persistence"><a href="./values.yaml#L1092">signoz.persistence</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">accessModes:
@@ -688,7 +711,7 @@ tls: []</pre>
         </tr>
     </tbody>
 </table>
-<h3>SigNoz RUM</h3>
+<h3>SigNoz Ingest Policy</h3>
 <table>
     <thead>
         <th>Key</th>
@@ -698,76 +721,74 @@ tls: []</pre>
     </thead>
     <tbody>
         <tr>
-            <td id="signoz--rum--enabled"><a href="./values.yaml#L1002">signoz.rum.enabled</a></td>
-            <td>bool</td>
+            <td id="signoz--ingestPolicy--port"><a href="./values.yaml#L1005">signoz.ingestPolicy.port</a></td>
+            <td>int</td>
             <td>
-                <div style="max-width: 300px;"><pre lang="yaml">true</pre>
+                <div style="max-width: 300px;"><pre lang="yaml">4321</pre>
 </div>
             </td>
-            <td>Serve the RUM ingestion gateway (`/rum/v1/traces`, `/rum/v1/logs`).</td>
+            <td>Port of the OpAMP listener with TLS.</td>
         </tr>
         <tr>
-            <td id="signoz--rum--collectorEndpoint"><a href="./values.yaml#L1006">signoz.rum.collectorEndpoint</a></td>
+            <td id="signoz--ingestPolicy--tokens--existingSecret"><a href="./values.yaml#L1012">signoz.ingestPolicy.tokens.existingSecret</a></td>
             <td>string</td>
             <td>
-                <div style="max-width: 300px;"><pre lang="yaml">http://RELEASE-otel-collector:4318, from otelCollector.ports.otlp-http</pre>
+                <div style="max-width: 300px;"><pre lang="yaml">""</pre>
 </div>
             </td>
-            <td>Base URL of the collector OTLP/HTTP receiver the gateway forwards to.</td>
+            <td>Secret holding the ingress collectors' tokens, one per line, 32 to 256 characters each, so a new token can be added before the old one is removed. The FuseScope collector presents the same Secret's token unless `fusescopeCollector.ingestToken` names another; it then needs exactly one token in it.</td>
         </tr>
         <tr>
-            <td id="signoz--rum--trustForwardedFor"><a href="./values.yaml#L1012">signoz.rum.trustForwardedFor</a></td>
-            <td>bool</td>
+            <td id="signoz--ingestPolicy--tokens--secretKey"><a href="./values.yaml#L1015">signoz.ingestPolicy.tokens.secretKey</a></td>
+            <td>string</td>
             <td>
-                <div style="max-width: 300px;"><pre lang="yaml">signoz.ingress.enabled</pre>
+                <div style="max-width: 300px;"><pre lang="yaml">tokens</pre>
 </div>
             </td>
-            <td>Take the client IP for the per-client rate limit from the first `X-Forwarded-For` address. Must be true behind an ingress or load balancer, or every browser shares one limit; only enable it behind a proxy that sets the header.</td>
+            <td>Key in `existingSecret` holding the tokens.</td>
         </tr>
         <tr>
-            <td id="signoz--rum--maxBodySize"><a href="./values.yaml#L1016">signoz.rum.maxBodySize</a></td>
-            <td>int</td>
+            <td id="signoz--ingestPolicy--tls--existingSecret"><a href="./values.yaml#L1021">signoz.ingestPolicy.tls.existingSecret</a></td>
+            <td>string</td>
             <td>
-                <div style="max-width: 300px;"><pre lang="yaml">4194304 (4 MiB)</pre>
+                <div style="max-width: 300px;"><pre lang="yaml">""</pre>
 </div>
             </td>
-            <td>Largest accepted request body in bytes, before and after gzip decoding.</td>
+            <td>`kubernetes.io/tls` Secret with the listener's `tls.crt` and `tls.key` for the FuseScope Service name, and the `ca.crt` the FuseScope collector verifies it with. Read again when it changes: a renewal needs no restart.</td>
         </tr>
         <tr>
-            <td id="signoz--rum--rateLimit--key--rate"><a href="./values.yaml#L1021">signoz.rum.rateLimit.key.rate</a></td>
-            <td>float</td>
+            <td id="signoz--ingestPolicy--tls--caKey"><a href="./values.yaml#L1025">signoz.ingestPolicy.tls.caKey</a></td>
+            <td>string</td>
             <td>
-                <div style="max-width: 300px;"><pre lang="yaml">500</pre>
+                <div style="max-width: 300px;"><pre lang="yaml">ca.crt</pre>
 </div>
             </td>
-            <td>Requests per second shared by every client of one application key.</td>
+            <td>Key in the Secret holding the CA the FuseScope collector trusts; empty, the collector trusts the system roots.</td>
         </tr>
         <tr>
-            <td id="signoz--rum--rateLimit--key--burst"><a href="./values.yaml#L1024">signoz.rum.rateLimit.key.burst</a></td>
-            <td>int</td>
+            <td id="signoz--ingestPolicy--tls--certManager"><a href="./values.yaml#L1030">signoz.ingestPolicy.tls.certManager</a></td>
+            <td>object</td>
             <td>
-                <div style="max-width: 300px;"><pre lang="yaml">1000</pre>
+                <div style="max-width: 300px;"><pre lang="yaml">duration: 2160h
+enabled: false
+issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: ""
+renewBefore: 360h</pre>
 </div>
             </td>
-            <td>Burst size of the per-key limit.</td>
+            <td>A cert-manager Certificate for the FuseScope Service names, in `RELEASE-fusescope-ingest-tls`, instead of `existingSecret`. The issuer must set `ca.crt` (a CA or self-signed issuer) unless `caKey` is empty.</td>
         </tr>
         <tr>
-            <td id="signoz--rum--rateLimit--client--rate"><a href="./values.yaml#L1028">signoz.rum.rateLimit.client.rate</a></td>
-            <td>float</td>
+            <td id="signoz--ingestPolicy--tls--clientCA"><a href="./values.yaml#L1041">signoz.ingestPolicy.tls.clientCA</a></td>
+            <td>object</td>
             <td>
-                <div style="max-width: 300px;"><pre lang="yaml">20</pre>
+                <div style="max-width: 300px;"><pre lang="yaml">existingSecret: ""
+secretKey: ca.crt</pre>
 </div>
             </td>
-            <td>Requests per second per application key and client IP.</td>
-        </tr>
-        <tr>
-            <td id="signoz--rum--rateLimit--client--burst"><a href="./values.yaml#L1031">signoz.rum.rateLimit.client.burst</a></td>
-            <td>int</td>
-            <td>
-                <div style="max-width: 300px;"><pre lang="yaml">60</pre>
-</div>
-            </td>
-            <td>Burst size of the per-client limit.</td>
+            <td>Secret and key of a CA collectors must present a client certificate from (mutual TLS); unset, none is asked for.</td>
         </tr>
     </tbody>
 </table>
@@ -781,7 +802,7 @@ tls: []</pre>
     </thead>
     <tbody>
         <tr>
-            <td id="signoz--retention--default--logs"><a href="./values.yaml#L1039">signoz.retention.default.logs</a></td>
+            <td id="signoz--retention--default--logs"><a href="./values.yaml#L1051">signoz.retention.default.logs</a></td>
             <td>int</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">null</pre>
@@ -790,7 +811,7 @@ tls: []</pre>
             <td>Default logs retention in days. Empty keeps the schema default.</td>
         </tr>
         <tr>
-            <td id="signoz--retention--default--traces"><a href="./values.yaml#L1042">signoz.retention.default.traces</a></td>
+            <td id="signoz--retention--default--traces"><a href="./values.yaml#L1054">signoz.retention.default.traces</a></td>
             <td>int</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">null</pre>
@@ -799,7 +820,7 @@ tls: []</pre>
             <td>Default traces retention in days. Empty keeps the schema default.</td>
         </tr>
         <tr>
-            <td id="signoz--retention--default--metrics"><a href="./values.yaml#L1045">signoz.retention.default.metrics</a></td>
+            <td id="signoz--retention--default--metrics"><a href="./values.yaml#L1057">signoz.retention.default.metrics</a></td>
             <td>int</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">null</pre>
@@ -819,7 +840,7 @@ tls: []</pre>
     </thead>
     <tbody>
         <tr>
-            <td id="telemetryStoreMigrator"><a href="./values.yaml#L1100">telemetryStoreMigrator</a></td>
+            <td id="telemetryStoreMigrator"><a href="./values.yaml#L1112">telemetryStoreMigrator</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">Please checkout the default values in values.yml</pre>
@@ -828,7 +849,7 @@ tls: []</pre>
             <td>Default values for the Telemetry Store Migrator.</td>
         </tr>
         <tr>
-            <td id="telemetryStoreMigrator--enabled"><a href="./values.yaml#L1104">telemetryStoreMigrator.enabled</a></td>
+            <td id="telemetryStoreMigrator--enabled"><a href="./values.yaml#L1116">telemetryStoreMigrator.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">true</pre>
@@ -837,7 +858,7 @@ tls: []</pre>
             <td>Enable the Telemetry Store Migrator component.</td>
         </tr>
         <tr>
-            <td id="telemetryStoreMigrator--name"><a href="./values.yaml#L1108">telemetryStoreMigrator.name</a></td>
+            <td id="telemetryStoreMigrator--name"><a href="./values.yaml#L1120">telemetryStoreMigrator.name</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">signoz-telemetrystore-migrator</pre>
@@ -846,7 +867,7 @@ tls: []</pre>
             <td>The name of the Telemetry Store Migrator component.</td>
         </tr>
         <tr>
-            <td id="telemetryStoreMigrator--annotations"><a href="./values.yaml#L1112">telemetryStoreMigrator.annotations</a></td>
+            <td id="telemetryStoreMigrator--annotations"><a href="./values.yaml#L1124">telemetryStoreMigrator.annotations</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -855,7 +876,7 @@ tls: []</pre>
             <td>Annotations for the Telemetry Store Migrator job.</td>
         </tr>
         <tr>
-            <td id="telemetryStoreMigrator--upgradeHelmHooks"><a href="./values.yaml#L1116">telemetryStoreMigrator.upgradeHelmHooks</a></td>
+            <td id="telemetryStoreMigrator--upgradeHelmHooks"><a href="./values.yaml#L1128">telemetryStoreMigrator.upgradeHelmHooks</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">true</pre>
@@ -864,7 +885,7 @@ tls: []</pre>
             <td>Enable Helm pre-upgrade hooks and ArgoCD Sync hooks.</td>
         </tr>
         <tr>
-            <td id="telemetryStoreMigrator--enableReplication"><a href="./values.yaml#L1120">telemetryStoreMigrator.enableReplication</a></td>
+            <td id="telemetryStoreMigrator--enableReplication"><a href="./values.yaml#L1132">telemetryStoreMigrator.enableReplication</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">true</pre>
@@ -873,7 +894,7 @@ tls: []</pre>
             <td>Whether to enable replication for the Telemetry Store Migrator.</td>
         </tr>
         <tr>
-            <td id="telemetryStoreMigrator--timeout"><a href="./values.yaml#L1124">telemetryStoreMigrator.timeout</a></td>
+            <td id="telemetryStoreMigrator--timeout"><a href="./values.yaml#L1136">telemetryStoreMigrator.timeout</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">10m</pre>
@@ -882,7 +903,7 @@ tls: []</pre>
             <td>Timeout for the migration.</td>
         </tr>
         <tr>
-            <td id="telemetryStoreMigrator--nodeSelector"><a href="./values.yaml#L1128">telemetryStoreMigrator.nodeSelector</a></td>
+            <td id="telemetryStoreMigrator--nodeSelector"><a href="./values.yaml#L1140">telemetryStoreMigrator.nodeSelector</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -891,7 +912,7 @@ tls: []</pre>
             <td>Node selector for pod assignment.</td>
         </tr>
         <tr>
-            <td id="telemetryStoreMigrator--tolerations"><a href="./values.yaml#L1132">telemetryStoreMigrator.tolerations</a></td>
+            <td id="telemetryStoreMigrator--tolerations"><a href="./values.yaml#L1144">telemetryStoreMigrator.tolerations</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -900,7 +921,7 @@ tls: []</pre>
             <td>Tolerations for pod assignment.</td>
         </tr>
         <tr>
-            <td id="telemetryStoreMigrator--affinity"><a href="./values.yaml#L1136">telemetryStoreMigrator.affinity</a></td>
+            <td id="telemetryStoreMigrator--affinity"><a href="./values.yaml#L1148">telemetryStoreMigrator.affinity</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -909,7 +930,7 @@ tls: []</pre>
             <td>Affinity settings for pod assignment.</td>
         </tr>
         <tr>
-            <td id="telemetryStoreMigrator--topologySpreadConstraints"><a href="./values.yaml#L1140">telemetryStoreMigrator.topologySpreadConstraints</a></td>
+            <td id="telemetryStoreMigrator--topologySpreadConstraints"><a href="./values.yaml#L1152">telemetryStoreMigrator.topologySpreadConstraints</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -918,7 +939,7 @@ tls: []</pre>
             <td>Topology spread constraints for pod distribution.</td>
         </tr>
         <tr>
-            <td id="telemetryStoreMigrator--resources"><a href="./values.yaml#L1144">telemetryStoreMigrator.resources</a></td>
+            <td id="telemetryStoreMigrator--resources"><a href="./values.yaml#L1156">telemetryStoreMigrator.resources</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -927,7 +948,7 @@ tls: []</pre>
             <td>Resource requests and limits for all migrator containers.</td>
         </tr>
         <tr>
-            <td id="telemetryStoreMigrator--serviceAccount"><a href="./values.yaml#L1147">telemetryStoreMigrator.serviceAccount</a></td>
+            <td id="telemetryStoreMigrator--serviceAccount"><a href="./values.yaml#L1159">telemetryStoreMigrator.serviceAccount</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">annotations: {}
@@ -949,7 +970,7 @@ name: null</pre>
     </thead>
     <tbody>
         <tr>
-            <td id="otelCollector"><a href="./values.yaml#L1161">otelCollector</a></td>
+            <td id="otelCollector"><a href="./values.yaml#L1173">otelCollector</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">Please checkout the default values in values.yml</pre>
@@ -958,7 +979,7 @@ name: null</pre>
             <td>Default values for the OpenTelemetry Collector.</td>
         </tr>
         <tr>
-            <td id="otelCollector--name"><a href="./values.yaml#L1165">otelCollector.name</a></td>
+            <td id="otelCollector--name"><a href="./values.yaml#L1177">otelCollector.name</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">otel-collector</pre>
@@ -967,7 +988,7 @@ name: null</pre>
             <td>The name of the Otel Collector component.</td>
         </tr>
         <tr>
-            <td id="otelCollector--image"><a href="./values.yaml#L1169">otelCollector.image</a></td>
+            <td id="otelCollector--image"><a href="./values.yaml#L1181">otelCollector.image</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">Please checkout the default values in values.yml</pre>
@@ -976,7 +997,7 @@ name: null</pre>
             <td>Image configuration for the Otel Collector.</td>
         </tr>
         <tr>
-            <td id="otelCollector--imagePullSecrets"><a href="./values.yaml#L1186">otelCollector.imagePullSecrets</a></td>
+            <td id="otelCollector--imagePullSecrets"><a href="./values.yaml#L1198">otelCollector.imagePullSecrets</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -985,7 +1006,7 @@ name: null</pre>
             <td>Image pull secrets for the Otel Collector. This has higher precedence than the root level or global value.</td>
         </tr>
         <tr>
-            <td id="otelCollector--strategy"><a href="./values.yaml#L1190">otelCollector.strategy</a></td>
+            <td id="otelCollector--strategy"><a href="./values.yaml#L1202">otelCollector.strategy</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">RollingUpdate</pre>
@@ -994,7 +1015,7 @@ name: null</pre>
             <td>Deployment strategy to use</td>
         </tr>
         <tr>
-            <td id="otelCollector--command"><a href="./values.yaml#L1193">otelCollector.command</a></td>
+            <td id="otelCollector--command"><a href="./values.yaml#L1205">otelCollector.command</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">extraArgs: null
@@ -1004,7 +1025,7 @@ name: /fusescope-otel-collector</pre>
             <td>Configuration for the Otel Collector executable.</td>
         </tr>
         <tr>
-            <td id="otelCollector--configMap"><a href="./values.yaml#L1201">otelCollector.configMap</a></td>
+            <td id="otelCollector--configMap"><a href="./values.yaml#L1213">otelCollector.configMap</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">create: true</pre>
@@ -1013,7 +1034,7 @@ name: /fusescope-otel-collector</pre>
             <td>ConfigMap settings.</td>
         </tr>
         <tr>
-            <td id="otelCollector--serviceAccount"><a href="./values.yaml#L1207">otelCollector.serviceAccount</a></td>
+            <td id="otelCollector--serviceAccount"><a href="./values.yaml#L1219">otelCollector.serviceAccount</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">annotations: {}
@@ -1024,7 +1045,7 @@ name: null</pre>
             <td>Service Account configuration for the Otel Collector.</td>
         </tr>
         <tr>
-            <td id="otelCollector--annotations"><a href="./values.yaml#L1235">otelCollector.annotations</a></td>
+            <td id="otelCollector--annotations"><a href="./values.yaml#L1247">otelCollector.annotations</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">null</pre>
@@ -1033,7 +1054,7 @@ name: null</pre>
             <td>Annotations for the Otel Collector Deployment.</td>
         </tr>
         <tr>
-            <td id="otelCollector--podAnnotations"><a href="./values.yaml#L1239">otelCollector.podAnnotations</a></td>
+            <td id="otelCollector--podAnnotations"><a href="./values.yaml#L1251">otelCollector.podAnnotations</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">null</pre>
@@ -1042,7 +1063,7 @@ name: null</pre>
             <td>Annotations for the Otel Collector pod(s).</td>
         </tr>
         <tr>
-            <td id="otelCollector--podLabels"><a href="./values.yaml#L1245">otelCollector.podLabels</a></td>
+            <td id="otelCollector--podLabels"><a href="./values.yaml#L1257">otelCollector.podLabels</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -1051,7 +1072,7 @@ name: null</pre>
             <td>Labels for the Otel Collector pod(s).</td>
         </tr>
         <tr>
-            <td id="otelCollector--additionalEnvs"><a href="./values.yaml#L1249">otelCollector.additionalEnvs</a></td>
+            <td id="otelCollector--additionalEnvs"><a href="./values.yaml#L1261">otelCollector.additionalEnvs</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -1060,7 +1081,7 @@ name: null</pre>
             <td>Additional environment variables for the Otel Collector.</td>
         </tr>
         <tr>
-            <td id="otelCollector--lowCardinalityExceptionGrouping"><a href="./values.yaml#L1255">otelCollector.lowCardinalityExceptionGrouping</a></td>
+            <td id="otelCollector--lowCardinalityExceptionGrouping"><a href="./values.yaml#L1267">otelCollector.lowCardinalityExceptionGrouping</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">false</pre>
@@ -1069,7 +1090,7 @@ name: null</pre>
             <td>Whether to enable grouping of exceptions with the same name but different stack traces. This is a tradeoff between cardinality and accuracy.</td>
         </tr>
         <tr>
-            <td id="otelCollector--minReadySeconds"><a href="./values.yaml#L1259">otelCollector.minReadySeconds</a></td>
+            <td id="otelCollector--minReadySeconds"><a href="./values.yaml#L1271">otelCollector.minReadySeconds</a></td>
             <td>int</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">5</pre>
@@ -1078,7 +1099,7 @@ name: null</pre>
             <td>Minimum number of seconds for a new pod to be ready.</td>
         </tr>
         <tr>
-            <td id="otelCollector--progressDeadlineSeconds"><a href="./values.yaml#L1263">otelCollector.progressDeadlineSeconds</a></td>
+            <td id="otelCollector--progressDeadlineSeconds"><a href="./values.yaml#L1275">otelCollector.progressDeadlineSeconds</a></td>
             <td>int</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">600</pre>
@@ -1087,7 +1108,7 @@ name: null</pre>
             <td>Maximum time in seconds for a deployment to make progress before it is considered failed.</td>
         </tr>
         <tr>
-            <td id="otelCollector--replicaCount"><a href="./values.yaml#L1267">otelCollector.replicaCount</a></td>
+            <td id="otelCollector--replicaCount"><a href="./values.yaml#L1279">otelCollector.replicaCount</a></td>
             <td>int</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">1</pre>
@@ -1096,7 +1117,7 @@ name: null</pre>
             <td>The number of pod replicas for the Otel Collector.</td>
         </tr>
         <tr>
-            <td id="otelCollector--clusterRole"><a href="./values.yaml#L1271">otelCollector.clusterRole</a></td>
+            <td id="otelCollector--clusterRole"><a href="./values.yaml#L1283">otelCollector.clusterRole</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">Please checkout the default values in values.yml</pre>
@@ -1105,7 +1126,7 @@ name: null</pre>
             <td>RBAC ClusterRole configuration for the Otel Collector.</td>
         </tr>
         <tr>
-            <td id="otelCollector--livenessProbe"><a href="./values.yaml#L1514">otelCollector.livenessProbe</a></td>
+            <td id="otelCollector--livenessProbe"><a href="./values.yaml#L1526">otelCollector.livenessProbe</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">Please checkout the default values in values.yml</pre>
@@ -1114,7 +1135,7 @@ name: null</pre>
             <td>Liveness probe configuration. ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes</td>
         </tr>
         <tr>
-            <td id="otelCollector--readinessProbe"><a href="./values.yaml#L1526">otelCollector.readinessProbe</a></td>
+            <td id="otelCollector--readinessProbe"><a href="./values.yaml#L1538">otelCollector.readinessProbe</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">Please checkout the default values in values.yml</pre>
@@ -1123,7 +1144,7 @@ name: null</pre>
             <td>Readiness probe configuration.</td>
         </tr>
         <tr>
-            <td id="otelCollector--customLivenessProbe"><a href="./values.yaml#L1538">otelCollector.customLivenessProbe</a></td>
+            <td id="otelCollector--customLivenessProbe"><a href="./values.yaml#L1550">otelCollector.customLivenessProbe</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -1132,7 +1153,7 @@ name: null</pre>
             <td>Custom liveness probe to override the default.</td>
         </tr>
         <tr>
-            <td id="otelCollector--customReadinessProbe"><a href="./values.yaml#L1542">otelCollector.customReadinessProbe</a></td>
+            <td id="otelCollector--customReadinessProbe"><a href="./values.yaml#L1554">otelCollector.customReadinessProbe</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -1141,7 +1162,7 @@ name: null</pre>
             <td>Custom readiness probe to override the default.</td>
         </tr>
         <tr>
-            <td id="otelCollector--extraVolumeMounts"><a href="./values.yaml#L1546">otelCollector.extraVolumeMounts</a></td>
+            <td id="otelCollector--extraVolumeMounts"><a href="./values.yaml#L1558">otelCollector.extraVolumeMounts</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -1150,7 +1171,7 @@ name: null</pre>
             <td>Extra volume mounts for the Otel Collector pod.</td>
         </tr>
         <tr>
-            <td id="otelCollector--extraVolumes"><a href="./values.yaml#L1550">otelCollector.extraVolumes</a></td>
+            <td id="otelCollector--extraVolumes"><a href="./values.yaml#L1562">otelCollector.extraVolumes</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -1159,7 +1180,7 @@ name: null</pre>
             <td>Extra volumes for the Otel Collector pod.</td>
         </tr>
         <tr>
-            <td id="otelCollector--resources"><a href="./values.yaml#L1587">otelCollector.resources</a></td>
+            <td id="otelCollector--resources"><a href="./values.yaml#L1599">otelCollector.resources</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">null</pre>
@@ -1168,7 +1189,7 @@ name: null</pre>
             <td>Resource requests and limits. Ref: http://kubernetes.io/docs/user-guide/compute-resources/</td>
         </tr>
         <tr>
-            <td id="otelCollector--priorityClassName"><a href="./values.yaml#L1598">otelCollector.priorityClassName</a></td>
+            <td id="otelCollector--priorityClassName"><a href="./values.yaml#L1610">otelCollector.priorityClassName</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">""</pre>
@@ -1177,7 +1198,7 @@ name: null</pre>
             <td>Priority class for the Otel Collector pods.</td>
         </tr>
         <tr>
-            <td id="otelCollector--nodeSelector"><a href="./values.yaml#L1602">otelCollector.nodeSelector</a></td>
+            <td id="otelCollector--nodeSelector"><a href="./values.yaml#L1614">otelCollector.nodeSelector</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -1186,7 +1207,7 @@ name: null</pre>
             <td>Node selector for pod assignment.</td>
         </tr>
         <tr>
-            <td id="otelCollector--tolerations"><a href="./values.yaml#L1606">otelCollector.tolerations</a></td>
+            <td id="otelCollector--tolerations"><a href="./values.yaml#L1618">otelCollector.tolerations</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -1195,7 +1216,7 @@ name: null</pre>
             <td>Tolerations for pod assignment.</td>
         </tr>
         <tr>
-            <td id="otelCollector--affinity"><a href="./values.yaml#L1610">otelCollector.affinity</a></td>
+            <td id="otelCollector--affinity"><a href="./values.yaml#L1622">otelCollector.affinity</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -1204,7 +1225,7 @@ name: null</pre>
             <td>Affinity settings for pod assignment.</td>
         </tr>
         <tr>
-            <td id="otelCollector--topologySpreadConstraints"><a href="./values.yaml#L1614">otelCollector.topologySpreadConstraints</a></td>
+            <td id="otelCollector--topologySpreadConstraints"><a href="./values.yaml#L1626">otelCollector.topologySpreadConstraints</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">Please checkout the default values in values.yml</pre>
@@ -1213,7 +1234,7 @@ name: null</pre>
             <td>Topology spread constraints for pod distribution.</td>
         </tr>
         <tr>
-            <td id="otelCollector--podSecurityContext"><a href="./values.yaml#L1624">otelCollector.podSecurityContext</a></td>
+            <td id="otelCollector--podSecurityContext"><a href="./values.yaml#L1636">otelCollector.podSecurityContext</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -1222,7 +1243,7 @@ name: null</pre>
             <td>Pod-level security context.</td>
         </tr>
         <tr>
-            <td id="otelCollector--securityContext"><a href="./values.yaml#L1630">otelCollector.securityContext</a></td>
+            <td id="otelCollector--securityContext"><a href="./values.yaml#L1642">otelCollector.securityContext</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -1231,7 +1252,7 @@ name: null</pre>
             <td>Container-level security context.</td>
         </tr>
         <tr>
-            <td id="otelCollector--autoscaling"><a href="./values.yaml#L1641">otelCollector.autoscaling</a></td>
+            <td id="otelCollector--autoscaling"><a href="./values.yaml#L1653">otelCollector.autoscaling</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">Please checkout the default values in values.yml</pre>
@@ -1240,7 +1261,7 @@ name: null</pre>
             <td>Autoscaling configuration (HPA).</td>
         </tr>
         <tr>
-            <td id="otelCollector--autoscaling--keda"><a href="./values.yaml#L1678">otelCollector.autoscaling.keda</a></td>
+            <td id="otelCollector--autoscaling--keda"><a href="./values.yaml#L1690">otelCollector.autoscaling.keda</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">annotations: null
@@ -1266,7 +1287,7 @@ triggers: []</pre>
     </thead>
     <tbody>
         <tr>
-            <td id="otelCollector--service"><a href="./values.yaml#L1219">otelCollector.service</a></td>
+            <td id="otelCollector--service"><a href="./values.yaml#L1231">otelCollector.service</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">annotations: {}
@@ -1278,7 +1299,7 @@ type: ClusterIP</pre>
             <td>Service configuration for the Otel Collector.</td>
         </tr>
         <tr>
-            <td id="otelCollector--ingress"><a href="./values.yaml#L1553">otelCollector.ingress</a></td>
+            <td id="otelCollector--ingress"><a href="./values.yaml#L1565">otelCollector.ingress</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">annotations: {}
@@ -1296,7 +1317,7 @@ tls: []</pre>
             <td>Ingress configuration for the Otel Collector.</td>
         </tr>
         <tr>
-            <td id="otelCollector--ingress--hosts"><a href="./values.yaml#L1571">otelCollector.ingress.hosts</a></td>
+            <td id="otelCollector--ingress--hosts"><a href="./values.yaml#L1583">otelCollector.ingress.hosts</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">Please checkout the default values in values.yml</pre>
@@ -1316,7 +1337,7 @@ tls: []</pre>
     </thead>
     <tbody>
         <tr>
-            <td id="otelCollector--ports"><a href="./values.yaml#L1311">otelCollector.ports</a></td>
+            <td id="otelCollector--ports"><a href="./values.yaml#L1323">otelCollector.ports</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">Please checkout the default values in values.yml</pre>
@@ -1325,7 +1346,7 @@ tls: []</pre>
             <td>Port configurations for the Otel Collector.</td>
         </tr>
         <tr>
-            <td id="otelCollector--ports--otlp"><a href="./values.yaml#L1314">otelCollector.ports.otlp</a></td>
+            <td id="otelCollector--ports--otlp"><a href="./values.yaml#L1326">otelCollector.ports.otlp</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">containerPort: 4317
@@ -1338,7 +1359,7 @@ servicePort: 4317</pre>
             <td>OTLP gRPC port configuration.</td>
         </tr>
         <tr>
-            <td id="otelCollector--ports--otlp-http"><a href="./values.yaml#L1332">otelCollector.ports.otlp-http</a></td>
+            <td id="otelCollector--ports--otlp-http"><a href="./values.yaml#L1344">otelCollector.ports.otlp-http</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">containerPort: 4318
@@ -1351,7 +1372,7 @@ servicePort: 4318</pre>
             <td>OTLP HTTP port configuration.</td>
         </tr>
         <tr>
-            <td id="otelCollector--ports--jaeger-compact"><a href="./values.yaml#L1350">otelCollector.ports.jaeger-compact</a></td>
+            <td id="otelCollector--ports--jaeger-compact"><a href="./values.yaml#L1362">otelCollector.ports.jaeger-compact</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">containerPort: 6831
@@ -1364,7 +1385,7 @@ servicePort: 6831</pre>
             <td>Jaeger Compact port configuration.</td>
         </tr>
         <tr>
-            <td id="otelCollector--ports--jaeger-thrift"><a href="./values.yaml#L1368">otelCollector.ports.jaeger-thrift</a></td>
+            <td id="otelCollector--ports--jaeger-thrift"><a href="./values.yaml#L1380">otelCollector.ports.jaeger-thrift</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">containerPort: 14268
@@ -1377,7 +1398,7 @@ servicePort: 14268</pre>
             <td>Jaeger Thrift port configuration.</td>
         </tr>
         <tr>
-            <td id="otelCollector--ports--jaeger-grpc"><a href="./values.yaml#L1386">otelCollector.ports.jaeger-grpc</a></td>
+            <td id="otelCollector--ports--jaeger-grpc"><a href="./values.yaml#L1398">otelCollector.ports.jaeger-grpc</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">containerPort: 14250
@@ -1390,7 +1411,7 @@ servicePort: 14250</pre>
             <td>Jaeger gRPC port configuration.</td>
         </tr>
         <tr>
-            <td id="otelCollector--ports--zipkin"><a href="./values.yaml#L1404">otelCollector.ports.zipkin</a></td>
+            <td id="otelCollector--ports--zipkin"><a href="./values.yaml#L1416">otelCollector.ports.zipkin</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">containerPort: 9411
@@ -1403,7 +1424,7 @@ servicePort: 9411</pre>
             <td>Zipkin port configuration.</td>
         </tr>
         <tr>
-            <td id="otelCollector--ports--metrics"><a href="./values.yaml#L1422">otelCollector.ports.metrics</a></td>
+            <td id="otelCollector--ports--metrics"><a href="./values.yaml#L1434">otelCollector.ports.metrics</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">containerPort: 8888
@@ -1416,7 +1437,7 @@ servicePort: 8888</pre>
             <td>Internal metrics port configuration.</td>
         </tr>
         <tr>
-            <td id="otelCollector--ports--zpages"><a href="./values.yaml#L1440">otelCollector.ports.zpages</a></td>
+            <td id="otelCollector--ports--zpages"><a href="./values.yaml#L1452">otelCollector.ports.zpages</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">containerPort: 55679
@@ -1429,7 +1450,7 @@ servicePort: 55679</pre>
             <td>ZPages port configuration.</td>
         </tr>
         <tr>
-            <td id="otelCollector--ports--pprof"><a href="./values.yaml#L1458">otelCollector.ports.pprof</a></td>
+            <td id="otelCollector--ports--pprof"><a href="./values.yaml#L1470">otelCollector.ports.pprof</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">containerPort: 1777
@@ -1442,7 +1463,7 @@ servicePort: 1777</pre>
             <td>pprof port configuration.</td>
         </tr>
         <tr>
-            <td id="otelCollector--ports--logsheroku"><a href="./values.yaml#L1476">otelCollector.ports.logsheroku</a></td>
+            <td id="otelCollector--ports--logsheroku"><a href="./values.yaml#L1488">otelCollector.ports.logsheroku</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">containerPort: 8081
@@ -1455,7 +1476,7 @@ servicePort: 8081</pre>
             <td>Heroku logs port configuration.</td>
         </tr>
         <tr>
-            <td id="otelCollector--ports--logsjson"><a href="./values.yaml#L1494">otelCollector.ports.logsjson</a></td>
+            <td id="otelCollector--ports--logsjson"><a href="./values.yaml#L1506">otelCollector.ports.logsjson</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">containerPort: 8082
@@ -1479,7 +1500,7 @@ servicePort: 8082</pre>
     </thead>
     <tbody>
         <tr>
-            <td id="otelCollector--config"><a href="./values.yaml#L1703">otelCollector.config</a></td>
+            <td id="otelCollector--config"><a href="./values.yaml#L1715">otelCollector.config</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">Please checkout the default values in values.yml</pre>
@@ -1499,7 +1520,7 @@ servicePort: 8082</pre>
     </thead>
     <tbody>
         <tr>
-            <td id="mcpServer--enabled"><a href="./values.yaml#L1831">mcpServer.enabled</a></td>
+            <td id="mcpServer--enabled"><a href="./values.yaml#L1843">mcpServer.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">false</pre>
@@ -1508,7 +1529,7 @@ servicePort: 8082</pre>
             <td>Install the FuseScope MCP server in HTTP mode.</td>
         </tr>
         <tr>
-            <td id="mcpServer--replicaCount"><a href="./values.yaml#L1834">mcpServer.replicaCount</a></td>
+            <td id="mcpServer--replicaCount"><a href="./values.yaml#L1846">mcpServer.replicaCount</a></td>
             <td>int</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">1</pre>
@@ -1517,7 +1538,7 @@ servicePort: 8082</pre>
             <td>Number of replicas. The server is stateless.</td>
         </tr>
         <tr>
-            <td id="mcpServer--image"><a href="./values.yaml#L1837">mcpServer.image</a></td>
+            <td id="mcpServer--image"><a href="./values.yaml#L1849">mcpServer.image</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">digest: ""
@@ -1530,7 +1551,7 @@ tag: 0.18.1</pre>
             <td>MCP server image. Set `digest` to pin it; it takes precedence over `tag`.</td>
         </tr>
         <tr>
-            <td id="mcpServer--imagePullSecrets"><a href="./values.yaml#L1845">mcpServer.imagePullSecrets</a></td>
+            <td id="mcpServer--imagePullSecrets"><a href="./values.yaml#L1857">mcpServer.imagePullSecrets</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -1539,7 +1560,7 @@ tag: 0.18.1</pre>
             <td>Image pull secrets. Overrides the root and global values.</td>
         </tr>
         <tr>
-            <td id="mcpServer--fusescopeUrl"><a href="./values.yaml#L1850">mcpServer.fusescopeUrl</a></td>
+            <td id="mcpServer--fusescopeUrl"><a href="./values.yaml#L1862">mcpServer.fusescopeUrl</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">http://RELEASE-fusescope:8080, the backend Service</pre>
@@ -1548,7 +1569,7 @@ tag: 0.18.1</pre>
             <td>FuseScope URL the server calls, and the only one it accepts in a client's `X-SigNoz-URL` header (`FUSESCOPE_INSTANCE_URL_ALLOWLIST`).</td>
         </tr>
         <tr>
-            <td id="mcpServer--apiKey--existingSecret"><a href="./values.yaml#L1857">mcpServer.apiKey.existingSecret</a></td>
+            <td id="mcpServer--apiKey--existingSecret"><a href="./values.yaml#L1869">mcpServer.apiKey.existingSecret</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">""</pre>
@@ -1557,7 +1578,7 @@ tag: 0.18.1</pre>
             <td>Secret holding a key the server uses for clients that send none. WARNING: anyone who can reach the endpoint then acts with this key's role. Use a Viewer service account, and keep the endpoint private (NetworkPolicy, no public ingress).</td>
         </tr>
         <tr>
-            <td id="mcpServer--apiKey--secretKey"><a href="./values.yaml#L1860">mcpServer.apiKey.secretKey</a></td>
+            <td id="mcpServer--apiKey--secretKey"><a href="./values.yaml#L1872">mcpServer.apiKey.secretKey</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">api-key</pre>
@@ -1566,7 +1587,7 @@ tag: 0.18.1</pre>
             <td>Key in `existingSecret` holding the API key.</td>
         </tr>
         <tr>
-            <td id="mcpServer--docsRefreshInterval"><a href="./values.yaml#L1865">mcpServer.docsRefreshInterval</a></td>
+            <td id="mcpServer--docsRefreshInterval"><a href="./values.yaml#L1877">mcpServer.docsRefreshInterval</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">6h</pre>
@@ -1575,7 +1596,7 @@ tag: 0.18.1</pre>
             <td>Incremental refresh of the docs index from docs.fusescope.fuseone.io (`FUSESCOPE_DOCS_REFRESH_INTERVAL`); `"0"` turns it off.</td>
         </tr>
         <tr>
-            <td id="mcpServer--docsFullRefreshInterval"><a href="./values.yaml#L1871">mcpServer.docsFullRefreshInterval</a></td>
+            <td id="mcpServer--docsFullRefreshInterval"><a href="./values.yaml#L1883">mcpServer.docsFullRefreshInterval</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">24h</pre>
@@ -1584,7 +1605,7 @@ tag: 0.18.1</pre>
             <td>Full rebuild of the docs index (`FUSESCOPE_DOCS_FULL_REFRESH_INTERVAL`); `"0"` turns it off. With both off the server serves the docs bundled with its release and needs no egress to the internet.</td>
         </tr>
         <tr>
-            <td id="mcpServer--logLevel"><a href="./values.yaml#L1874">mcpServer.logLevel</a></td>
+            <td id="mcpServer--logLevel"><a href="./values.yaml#L1886">mcpServer.logLevel</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">info</pre>
@@ -1593,7 +1614,7 @@ tag: 0.18.1</pre>
             <td>`debug`, `info`, `warn` or `error`.</td>
         </tr>
         <tr>
-            <td id="mcpServer--extraEnv"><a href="./values.yaml#L1878">mcpServer.extraEnv</a></td>
+            <td id="mcpServer--extraEnv"><a href="./values.yaml#L1890">mcpServer.extraEnv</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -1602,7 +1623,7 @@ tag: 0.18.1</pre>
             <td>Extra environment variables, e.g. `OTEL_EXPORTER_OTLP_ENDPOINT`, or `FUSESCOPE_CUSTOM_HEADERS` from a Secret.</td>
         </tr>
         <tr>
-            <td id="mcpServer--serviceAccount"><a href="./values.yaml#L1881">mcpServer.serviceAccount</a></td>
+            <td id="mcpServer--serviceAccount"><a href="./values.yaml#L1893">mcpServer.serviceAccount</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">annotations: {}
@@ -1613,7 +1634,7 @@ name: ""</pre>
             <td>Service account. No API token is mounted.</td>
         </tr>
         <tr>
-            <td id="mcpServer--service"><a href="./values.yaml#L1887">mcpServer.service</a></td>
+            <td id="mcpServer--service"><a href="./values.yaml#L1899">mcpServer.service</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">annotations: {}
@@ -1624,7 +1645,7 @@ type: ClusterIP</pre>
             <td>Service for the MCP endpoint.</td>
         </tr>
         <tr>
-            <td id="mcpServer--ingress"><a href="./values.yaml#L1894">mcpServer.ingress</a></td>
+            <td id="mcpServer--ingress"><a href="./values.yaml#L1906">mcpServer.ingress</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">annotations: {}
@@ -1639,7 +1660,7 @@ tls: []</pre>
             <td>Ingress for `/mcp`. Without `hosts`, it uses the hosts, TLS and class of `signoz.ingress`. Its annotations are not inherited: don't repeat a cert-manager issuer there.</td>
         </tr>
         <tr>
-            <td id="mcpServer--networkPolicy"><a href="./values.yaml#L1906">mcpServer.networkPolicy</a></td>
+            <td id="mcpServer--networkPolicy"><a href="./values.yaml#L1918">mcpServer.networkPolicy</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">docsEgress:
@@ -1660,7 +1681,7 @@ ingressFrom:
             <td>NetworkPolicy. Ingress on the MCP port from `ingressFrom`; egress to the backend, DNS, HTTPS to `docsEgress` while a docs refresh is on, and `extraEgress`. The default `ingressFrom` admits this namespace and the `ingress-nginx` namespace.</td>
         </tr>
         <tr>
-            <td id="mcpServer--resources"><a href="./values.yaml#L1922">mcpServer.resources</a></td>
+            <td id="mcpServer--resources"><a href="./values.yaml#L1934">mcpServer.resources</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">limits:
@@ -1673,7 +1694,7 @@ requests:
             <td>Resources. Building the docs index takes about 130 MiB above the baseline.</td>
         </tr>
         <tr>
-            <td id="mcpServer--podSecurityContext"><a href="./values.yaml#L1930">mcpServer.podSecurityContext</a></td>
+            <td id="mcpServer--podSecurityContext"><a href="./values.yaml#L1942">mcpServer.podSecurityContext</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">fsGroup: 1001
@@ -1687,7 +1708,7 @@ seccompProfile:
             <td>Pod security context. The image runs as uid 1001.</td>
         </tr>
         <tr>
-            <td id="mcpServer--securityContext"><a href="./values.yaml#L1939">mcpServer.securityContext</a></td>
+            <td id="mcpServer--securityContext"><a href="./values.yaml#L1951">mcpServer.securityContext</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">allowPrivilegeEscalation: false
@@ -1700,7 +1721,7 @@ readOnlyRootFilesystem: true</pre>
             <td>Container security context.</td>
         </tr>
         <tr>
-            <td id="mcpServer--livenessProbe"><a href="./values.yaml#L1947">mcpServer.livenessProbe</a></td>
+            <td id="mcpServer--livenessProbe"><a href="./values.yaml#L1959">mcpServer.livenessProbe</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">failureThreshold: 6
@@ -1712,7 +1733,7 @@ timeoutSeconds: 5</pre>
             <td>Liveness probe timing on `/livez`.</td>
         </tr>
         <tr>
-            <td id="mcpServer--readinessProbe"><a href="./values.yaml#L1954">mcpServer.readinessProbe</a></td>
+            <td id="mcpServer--readinessProbe"><a href="./values.yaml#L1966">mcpServer.readinessProbe</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">failureThreshold: 6
@@ -1724,7 +1745,7 @@ timeoutSeconds: 5</pre>
             <td>Readiness probe timing on `/readyz`, ready once the docs index is built.</td>
         </tr>
         <tr>
-            <td id="mcpServer--podAnnotations"><a href="./values.yaml#L1961">mcpServer.podAnnotations</a></td>
+            <td id="mcpServer--podAnnotations"><a href="./values.yaml#L1973">mcpServer.podAnnotations</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -1733,7 +1754,7 @@ timeoutSeconds: 5</pre>
             <td>Pod annotations.</td>
         </tr>
         <tr>
-            <td id="mcpServer--priorityClassName"><a href="./values.yaml#L1964">mcpServer.priorityClassName</a></td>
+            <td id="mcpServer--priorityClassName"><a href="./values.yaml#L1976">mcpServer.priorityClassName</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">""</pre>
@@ -1742,7 +1763,7 @@ timeoutSeconds: 5</pre>
             <td>Priority class.</td>
         </tr>
         <tr>
-            <td id="mcpServer--nodeSelector"><a href="./values.yaml#L1967">mcpServer.nodeSelector</a></td>
+            <td id="mcpServer--nodeSelector"><a href="./values.yaml#L1979">mcpServer.nodeSelector</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -1751,7 +1772,7 @@ timeoutSeconds: 5</pre>
             <td>Node selector.</td>
         </tr>
         <tr>
-            <td id="mcpServer--tolerations"><a href="./values.yaml#L1970">mcpServer.tolerations</a></td>
+            <td id="mcpServer--tolerations"><a href="./values.yaml#L1982">mcpServer.tolerations</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -1760,7 +1781,7 @@ timeoutSeconds: 5</pre>
             <td>Tolerations.</td>
         </tr>
         <tr>
-            <td id="mcpServer--affinity"><a href="./values.yaml#L1973">mcpServer.affinity</a></td>
+            <td id="mcpServer--affinity"><a href="./values.yaml#L1985">mcpServer.affinity</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -1769,7 +1790,355 @@ timeoutSeconds: 5</pre>
             <td>Affinity.</td>
         </tr>
         <tr>
-            <td id="mcpServer--topologySpreadConstraints"><a href="./values.yaml#L1976">mcpServer.topologySpreadConstraints</a></td>
+            <td id="mcpServer--topologySpreadConstraints"><a href="./values.yaml#L1988">mcpServer.topologySpreadConstraints</a></td>
+            <td>list</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
+</div>
+            </td>
+            <td>Topology spread constraints.</td>
+        </tr>
+    </tbody>
+</table>
+<h3>FuseScope Collector</h3>
+<table>
+    <thead>
+        <th>Key</th>
+        <th>Type</th>
+        <th>Default</th>
+        <th>Description</th>
+    </thead>
+    <tbody>
+        <tr>
+            <td id="fusescopeCollector--enabled"><a href="./values.yaml#L1998">fusescopeCollector.enabled</a></td>
+            <td>bool</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">false</pre>
+</div>
+            </td>
+            <td>Install the FuseScope collector as the ingress for Real User Monitoring: it serves `/rum/v1/traces` and `/rum/v1/logs`, takes the ingest policy from FuseScope over OpAMP with TLS (`signoz.ingestPolicy`) and writes ClickHouse directly. Needs a FuseScope release with the ingest policy listener (fuseone-io/fusescope#314), `signoz.ingestPolicy.tokens` and both TLS certificates.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--replicaCount"><a href="./values.yaml#L2002">fusescopeCollector.replicaCount</a></td>
+            <td>int</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">1</pre>
+</div>
+            </td>
+            <td>Number of replicas. Each holds its own copy of the policy and reports its own counts; rate limits apply per replica.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--image"><a href="./values.yaml#L2005">fusescopeCollector.image</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">digest: ""
+pullPolicy: IfNotPresent
+registry: ghcr.io
+repository: fuseone-io/fusescope-collector
+tag: sha-92c555fae01f</pre>
+</div>
+            </td>
+            <td>Collector image. Set `digest` to pin it; it takes precedence over `tag`.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--imagePullSecrets"><a href="./values.yaml#L2013">fusescopeCollector.imagePullSecrets</a></td>
+            <td>list</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
+</div>
+            </td>
+            <td>Image pull secrets. Overrides the root and global values.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--ingestToken--existingSecret"><a href="./values.yaml#L2019">fusescopeCollector.ingestToken.existingSecret</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">signoz.ingestPolicy.tokens.existingSecret</pre>
+</div>
+            </td>
+            <td>Secret holding the one token, 32 to 256 characters, the collector presents to FuseScope.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--ingestToken--secretKey"><a href="./values.yaml#L2023">fusescopeCollector.ingestToken.secretKey</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">signoz.ingestPolicy.tokens.secretKey</pre>
+</div>
+            </td>
+            <td>Key in `existingSecret` holding the token.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--opamp--endpoint"><a href="./values.yaml#L2028">fusescopeCollector.opamp.endpoint</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">wss://RELEASE-fusescope:4321/v1/opamp, from signoz.ingestPolicy.port</pre>
+</div>
+            </td>
+            <td>OpAMP endpoint of FuseScope with TLS.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--opamp--clientCertSecret"><a href="./values.yaml#L2032">fusescopeCollector.opamp.clientCertSecret</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">""</pre>
+</div>
+            </td>
+            <td>`kubernetes.io/tls` Secret with the client certificate the collector presents when `signoz.ingestPolicy.tls.clientCA` is set.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--rum--port"><a href="./values.yaml#L2036">fusescopeCollector.rum.port</a></td>
+            <td>int</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">4319</pre>
+</div>
+            </td>
+            <td>Port of the RUM listener, TLS 1.3 only.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--rum--tls--existingSecret"><a href="./values.yaml#L2042">fusescopeCollector.rum.tls.existingSecret</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">""</pre>
+</div>
+            </td>
+            <td>`kubernetes.io/tls` Secret with the RUM listener's `tls.crt` and `tls.key`. Behind the ingress it is the certificate between the ingress controller and the collector, so a cluster-internal one does.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--rum--tls--certManager"><a href="./values.yaml#L2046">fusescopeCollector.rum.tls.certManager</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">duration: 2160h
+enabled: false
+issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: ""
+renewBefore: 360h</pre>
+</div>
+            </td>
+            <td>A cert-manager Certificate for the collector Service names, in `RELEASE-fusescope-collector-rum-tls`, instead of `existingSecret`.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--rum--trustedProxies"><a href="./values.yaml#L2059">fusescopeCollector.rum.trustedProxies</a></td>
+            <td>list</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">10.0.0.0/8, 172.16.0.0/12 and 192.168.0.0/16 with the ingress on, else none</pre>
+</div>
+            </td>
+            <td>CIDRs whose `X-Forwarded-For` is read for the per-client rate limit, walked from the right past the trusted addresses. Behind an ingress or load balancer it must cover them, or every browser shares one limit.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--rum--maxBodySize"><a href="./values.yaml#L2063">fusescopeCollector.rum.maxBodySize</a></td>
+            <td>int</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">4.194304e+06</pre>
+</div>
+            </td>
+            <td>Largest accepted request body in bytes, before and after gzip decoding.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--rum--rateLimit--key--rate"><a href="./values.yaml#L2069">fusescopeCollector.rum.rateLimit.key.rate</a></td>
+            <td>float</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">500</pre>
+</div>
+            </td>
+            <td>Requests per second shared by every client of one key, per replica, when the policy gives the key no limit.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--rum--rateLimit--key--burst"><a href="./values.yaml#L2072">fusescopeCollector.rum.rateLimit.key.burst</a></td>
+            <td>int</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">1000</pre>
+</div>
+            </td>
+            <td>Burst size of the per-key limit.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--rum--rateLimit--client--rate"><a href="./values.yaml#L2077">fusescopeCollector.rum.rateLimit.client.rate</a></td>
+            <td>float</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">20</pre>
+</div>
+            </td>
+            <td>Requests per second per key and client IP, per replica.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--rum--rateLimit--client--burst"><a href="./values.yaml#L2080">fusescopeCollector.rum.rateLimit.client.burst</a></td>
+            <td>int</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">60</pre>
+</div>
+            </td>
+            <td>Burst size of the per-client limit.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--rum--maxStaleness"><a href="./values.yaml#L2085">fusescopeCollector.rum.maxStaleness</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">""</pre>
+</div>
+            </td>
+            <td>Refuse RUM requests, and report not ready, once the policy held was last received longer ago than this, e.g. `1h`. Empty, a policy held keeps working through a FuseScope outage.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--serviceAccount"><a href="./values.yaml#L2088">fusescopeCollector.serviceAccount</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">annotations: {}
+create: true
+name: ""</pre>
+</div>
+            </td>
+            <td>Service account. No API token is mounted.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--service"><a href="./values.yaml#L2094">fusescopeCollector.service</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">annotations: {}
+type: ClusterIP</pre>
+</div>
+            </td>
+            <td>Service for the RUM listener.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--ingress"><a href="./values.yaml#L2102">fusescopeCollector.ingress</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+    nginx.ingress.kubernetes.io/proxy-body-size: 4m
+className: ""
+enabled: false
+hosts: []
+path: /rum/v1
+pathType: Prefix
+tls: []</pre>
+</div>
+            </td>
+            <td>Ingress for `/rum/v1`, re-encrypting to the collector's TLS listener. Without `hosts`, it uses the hosts, TLS and class of `signoz.ingress`. Its annotations are not inherited; the defaults tell ingress-nginx the backend speaks HTTPS and raise its 1m body limit to `rum.maxBodySize`; another controller needs its own equivalents.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--storage"><a href="./values.yaml#L2116">fusescopeCollector.storage</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">sizeLimit: 64Mi</pre>
+</div>
+            </td>
+            <td>Volume of the OpAMP state: the instance UID, the cached ingest policy and the report sequence. An emptyDir keeps them across container restarts; on a new pod the collector registers as a new agent and waits for the policy before it is ready.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--resources"><a href="./values.yaml#L2121">fusescopeCollector.resources</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">limits:
+    memory: 512Mi
+requests:
+    cpu: 100m
+    memory: 256Mi</pre>
+</div>
+            </td>
+            <td>Resources. The memory limit is also what `memory_limiter` refuses data above (80%).</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--podSecurityContext"><a href="./values.yaml#L2130">fusescopeCollector.podSecurityContext</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">fsGroup: 65532
+runAsGroup: 65532
+runAsNonRoot: true
+runAsUser: 65532
+seccompProfile:
+    type: RuntimeDefault</pre>
+</div>
+            </td>
+            <td>Pod security context. The image is distroless and runs as uid 65532.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--securityContext"><a href="./values.yaml#L2139">fusescopeCollector.securityContext</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">allowPrivilegeEscalation: false
+capabilities:
+    drop:
+        - ALL
+readOnlyRootFilesystem: true</pre>
+</div>
+            </td>
+            <td>Container security context.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--livenessProbe"><a href="./values.yaml#L2147">fusescopeCollector.livenessProbe</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">failureThreshold: 6
+initialDelaySeconds: 10
+periodSeconds: 10
+timeoutSeconds: 5</pre>
+</div>
+            </td>
+            <td>Liveness probe timing, a TCP check of the health port.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--readinessProbe"><a href="./values.yaml#L2155">fusescopeCollector.readinessProbe</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">failureThreshold: 3
+initialDelaySeconds: 5
+periodSeconds: 5
+timeoutSeconds: 5</pre>
+</div>
+            </td>
+            <td>Readiness probe timing on the health status, ready only while the collector holds a valid ingest policy.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--podAnnotations"><a href="./values.yaml#L2162">fusescopeCollector.podAnnotations</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
+</div>
+            </td>
+            <td>Pod annotations.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--priorityClassName"><a href="./values.yaml#L2165">fusescopeCollector.priorityClassName</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">""</pre>
+</div>
+            </td>
+            <td>Priority class.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--nodeSelector"><a href="./values.yaml#L2168">fusescopeCollector.nodeSelector</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
+</div>
+            </td>
+            <td>Node selector.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--tolerations"><a href="./values.yaml#L2171">fusescopeCollector.tolerations</a></td>
+            <td>list</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
+</div>
+            </td>
+            <td>Tolerations.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--affinity"><a href="./values.yaml#L2174">fusescopeCollector.affinity</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
+</div>
+            </td>
+            <td>Affinity.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--topologySpreadConstraints"><a href="./values.yaml#L2177">fusescopeCollector.topologySpreadConstraints</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -1789,7 +2158,7 @@ timeoutSeconds: 5</pre>
     </thead>
     <tbody>
         <tr>
-            <td id="postgresql--enabled"><a href="./values.yaml#L1984">postgresql.enabled</a></td>
+            <td id="postgresql--enabled"><a href="./values.yaml#L2185">postgresql.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">false</pre>
@@ -1809,7 +2178,7 @@ timeoutSeconds: 5</pre>
     </thead>
     <tbody>
         <tr>
-            <td id="engine--enabled"><a href="./values.yaml#L1993">engine.enabled</a></td>
+            <td id="engine--enabled"><a href="./values.yaml#L2194">engine.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">false</pre>
