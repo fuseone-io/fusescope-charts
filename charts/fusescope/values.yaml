@@ -2085,6 +2085,15 @@ fusescopeCollector:
     # working through a FuseScope outage.
     # @section -- FuseScope Collector
     maxStaleness: ""
+  selfMetrics:
+    # fusescopeCollector.selfMetrics.enabled -- Write the collector's own telemetry (receivers,
+    # processors, exporters, queues, memory) to ClickHouse as `otelcol_*` metrics. It is read from
+    # its listener on 127.0.0.1:8888, which is never exposed.
+    # @section -- FuseScope Collector
+    enabled: true
+    # fusescopeCollector.selfMetrics.scrapeInterval -- How often the telemetry is read.
+    # @section -- FuseScope Collector
+    scrapeInterval: 60s
   # fusescopeCollector.serviceAccount -- Service account. No API token is mounted.
   # @section -- FuseScope Collector
   serviceAccount:

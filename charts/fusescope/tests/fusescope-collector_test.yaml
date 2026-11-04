@@ -153,6 +153,43 @@ tests:
           path: data["config.yaml"]
           pattern: "\\$\\{"
 
+  - it: should write its own telemetry, read only from loopback, to ClickHouse
+    template: templates/fusescope-collector/configmap.yaml
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "  prometheus/self:\\n    config:\\n      scrape_configs:\\n        - job_name: fusescope-collector\\n          scrape_interval: 60s\\n          static_configs:\\n            - targets: \\[127.0.0.1:8888\\]\\n"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "  telemetry:\\n    metrics:\\n      readers:\\n        - pull:\\n            exporter:\\n              prometheus:\\n                host: 127.0.0.1\\n                port: 8888\\n"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "    metrics/self:\\n      receivers: \\[prometheus/self\\]\\n      processors: \\[resourcedetection/system\\]\\n      exporters: \\[fusescope_clickhouse\\]\\n"
+
+  - it: should leave its own telemetry out of ClickHouse when disabled, still on loopback
+    template: templates/fusescope-collector/configmap.yaml
+    set:
+      fusescopeCollector.selfMetrics.enabled: false
+    asserts:
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "prometheus/self|metrics/self|resourcedetection"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "                host: 127.0.0.1\\n                port: 8888\\n"
+
+  - it: should never expose the telemetry listener
+    template: templates/fusescope-collector/service.yaml
+    asserts:
+      - notMatchRegex:
+          path: spec.ports[0].name
+          pattern: "metrics|telemetry"
+      - notContains:
+          path: spec.ports
+          content:
+            port: 8888
+          any: true
+
   - it: should serve RUM with TLS 1.3 from the ingest policy and write ClickHouse
     template: templates/fusescope-collector/configmap.yaml
     asserts:
