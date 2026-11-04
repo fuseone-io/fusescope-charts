@@ -434,6 +434,7 @@ Create Env
 }}
 
 {{- $defaultEnv = merge $defaultEnv (include "signoz.ingestPolicyEnv" . | fromYaml) -}}
+{{- $defaultEnv = merge $defaultEnv (include "signoz.proxyEnv" . | fromYaml) -}}
 {{- $_ := set $defaultEnv "signoz_global_ingestion__url" (include "signoz.ingestionUrl" .) -}}
 {{- $defaultEnv = merge $defaultEnv (include "signoz.retentionEnv" . | fromYaml) -}}
 
@@ -525,6 +526,20 @@ signoz_rum_ingest__policy_tls_key__file: {{ printf "%s/%s" (include "signoz.inge
 signoz_rum_ingest__policy_tls_client__ca__file: {{ printf "%s/%s" (include "signoz.ingestPolicyDir" .) "client-ca/ca.crt" | quote }}
 {{- end }}
 {{- end }}
+{{- end -}}
+
+{{/*
+Settings that followed the removed RUM gateway's, as a YAML map: the public dashboards trust
+X-Forwarded-For behind the ingress, and the onboarding screen checks the in-chart collector's
+OTLP/HTTP receiver. Each is set under its own key and, for releases before the gateway's
+removal, under the rum key it used to read; later releases ignore the rum keys.
+*/}}
+{{- define "signoz.proxyEnv" -}}
+{{- $collector := printf "http://%s:%v" (include "otelCollector.fullname" .) (index .Values.otelCollector.ports "otlp-http" "servicePort") }}
+signoz_dashboard_public_ratelimit_trust__forwarded__for: {{ .Values.signoz.ingress.enabled | quote }}
+signoz_rum_ratelimit_trust__forwarded__for: {{ .Values.signoz.ingress.enabled | quote }}
+signoz_onboarding_collector__endpoint: {{ $collector | quote }}
+signoz_rum_collector__endpoint: {{ $collector | quote }}
 {{- end -}}
 
 {{/*

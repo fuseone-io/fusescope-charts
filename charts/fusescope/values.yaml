@@ -2094,7 +2094,8 @@ fusescopeCollector:
   service:
     type: ClusterIP
     annotations: {}
-  # fusescopeCollector.ingress -- Ingress for `/rum/v1`, re-encrypting to the collector's TLS
+  # fusescopeCollector.ingress -- Ingress for `/rum/v1/traces` and `/rum/v1/logs`, `Exact`, so the
+  # browser SDK FuseScope serves at `/rum/v1/sdk/` stays on its ingress. It re-encrypts to the collector's TLS
   # listener. Without `hosts`, it uses the hosts, TLS and class of `signoz.ingress`. Its annotations
   # are not inherited; the defaults tell ingress-nginx the backend speaks HTTPS and raise its 1m
   # body limit to `rum.maxBodySize`; another controller needs its own equivalents.
@@ -2106,8 +2107,6 @@ fusescopeCollector:
       nginx.ingress.kubernetes.io/backend-protocol: HTTPS
       nginx.ingress.kubernetes.io/proxy-body-size: 4m
     hosts: []
-    path: /rum/v1
-    pathType: Prefix
     tls: []
   # fusescopeCollector.storage -- Volume of the OpAMP state: the instance UID, the cached ingest
   # policy and the report sequence. An emptyDir keeps them across container restarts; on a new pod

@@ -255,7 +255,7 @@ tests:
           path: data["config.yaml"]
           pattern: "max_body_size: 1048576\\n    rate_limit:\\n      key: \\{rate: 50, burst: 100\\}\\n      client: \\{rate: 5, burst: 10\\}\\n    trusted_proxies: \\[\"10.42.0.0/16\"\\]\\n    max_staleness: 1h\\n"
 
-  - it: should route /rum/v1 on the FuseScope hosts to the TLS listener, trusting private proxies
+  - it: should route only the RUM routes on the FuseScope hosts to the TLS listener, trusting private proxies
     set:
       signoz.ingress:
         enabled: true
@@ -279,13 +279,30 @@ tests:
               - host: fusescope.example.com
                 http:
                   paths:
-                    - path: /rum/v1
-                      pathType: Prefix
+                    - path: /rum/v1/traces
+                      pathType: Exact
                       backend:
                         service:
                           name: fusescope-collector
                           port:
                             number: 4319
+                    - path: /rum/v1/logs
+                      pathType: Exact
+                      backend:
+                        service:
+                          name: fusescope-collector
+                          port:
+                            number: 4319
+        template: templates/fusescope-collector/ingress.yaml
+      - notContains:
+          path: spec.rules[0].http.paths
+          content:
+            pathType: Prefix
+          any: true
+        template: templates/fusescope-collector/ingress.yaml
+      - notMatchRegex:
+          path: spec.rules[0].http.paths[*].path
+          pattern: "^/rum/v1/sdk|^/rum/v1/?$"
         template: templates/fusescope-collector/ingress.yaml
       - equal:
           path: metadata.annotations

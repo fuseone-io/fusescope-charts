@@ -47,12 +47,14 @@ spec:
     - host: {{ . | quote }}
       http:
         paths:
-          - path: {{ $ing.path }}
-            pathType: {{ $ing.pathType }}
+          {{- range list "/rum/v1/traces" "/rum/v1/logs" }}
+          - path: {{ . }}
+            pathType: Exact
             backend:
               service:
                 name: {{ $fullName }}
                 port:
                   number: {{ $port }}
+          {{- end }}
     {{- end }}
 {{- end }}
