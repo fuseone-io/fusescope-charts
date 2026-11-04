@@ -2000,13 +2000,15 @@ fusescopeCollector:
   # and reports its own counts; rate limits apply per replica.
   # @section -- FuseScope Collector
   replicaCount: 1
-  # fusescopeCollector.image -- Collector image. Set `digest` to pin it; it takes precedence over `tag`.
+  # fusescopeCollector.image -- Collector image, by `tag` and `digest`: with both, the image
+  # is `<tag>@<digest>` and the digest is what is pulled. The default is the signed 0.1.0
+  # multi-arch index.
   # @section -- FuseScope Collector
   image:
     registry: ghcr.io
     repository: fuseone-io/fusescope-collector
-    tag: sha-92c555fae01f
-    digest: ""
+    tag: 0.1.0
+    digest: sha256:894e8718ceb8c6785997f49014fe8efea9c246122f175504ed980e51afcea028
     pullPolicy: IfNotPresent
   # fusescopeCollector.imagePullSecrets -- Image pull secrets. Overrides the root and global values.
   # @section -- FuseScope Collector
