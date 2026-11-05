@@ -525,3 +525,68 @@ tests:
     asserts:
       - notExists:
           path: spec.template.spec.initContainers
+
+  # Review of #32: clickhouse.verify / externalClickhouse.verify reach the
+  # exporter's TLS, for the chart's ClickHouse and an external one.
+  - it: should verify ClickHouse's certificate when secure and verify
+    template: templates/fusescope-collector/configmap.yaml
+    set:
+      clickhouse.secure: true
+      clickhouse.verify: true
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "  fusescope_clickhouse:\\n(.*\\n)*?    tls:\\n      insecure: false\\n    traces:"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "insecure_skip_verify"
+
+  - it: should skip ClickHouse's certificate check when secure and not verify
+    template: templates/fusescope-collector/configmap.yaml
+    set:
+      clickhouse.secure: true
+      clickhouse.verify: false
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "    tls:\\n      insecure: false\\n      # clickhouse.verify / externalClickhouse.verify is false: TLS without\\n      # checking the server's certificate, as the chart's contract says.\\n      insecure_skip_verify: true\\n"
+
+  - it: should skip an external ClickHouse's certificate check when secure and not verify
+    template: templates/fusescope-collector/configmap.yaml
+    set:
+      clickhouse.enabled: false
+      externalClickhouse.host: ch.example.com
+      externalClickhouse.secure: true
+      externalClickhouse.verify: false
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "    endpoint: ch.example.com:[0-9]+\\n"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "insecure: false\\n.*\\n.*\\n      insecure_skip_verify: true\\n"
+
+  - it: should verify an external ClickHouse's certificate when secure and verify
+    template: templates/fusescope-collector/configmap.yaml
+    set:
+      clickhouse.enabled: false
+      externalClickhouse.host: ch.example.com
+      externalClickhouse.secure: true
+      externalClickhouse.verify: true
+    asserts:
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "insecure_skip_verify"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "    tls:\\n      insecure: false\\n    traces:"
+
+  - it: should not skip verification on a plaintext ClickHouse
+    template: templates/fusescope-collector/configmap.yaml
+    set:
+      clickhouse.secure: false
+      clickhouse.verify: false
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "    tls:\\n      insecure: true\\n    traces:"

@@ -829,6 +829,11 @@ password_file: /etc/fusescope-collector/clickhouse/password
 {{- end }}
 tls:
   insecure: {{ not .secure }}
+  {{- if and .secure (not .verify) }}
+  # clickhouse.verify / externalClickhouse.verify is false: TLS without
+  # checking the server's certificate, as the chart's contract says.
+  insecure_skip_verify: true
+  {{- end }}
 {{- end -}}
 
 {{- define "fusescopeCollector.clickhouse" -}}
@@ -838,6 +843,7 @@ tls:
     "endpoint" (printf "%s:%s" (required "externalClickhouse.host is required if not clickhouse.enabled" $host) (include "clickhouse.tcpPort" .))
     "user" (toString $ch.user)
     "secure" $ch.secure
+    "verify" $ch.verify
     "traces" (default "signoz_traces" $ch.traceDatabase)
     "logs" (default "signoz_logs" $ch.logDatabase)
     "metrics" (default "signoz_metrics" $ch.database)
