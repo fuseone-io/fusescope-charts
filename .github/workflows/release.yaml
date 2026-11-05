@@ -28,6 +28,25 @@ jobs:
         with:
           version: v3.10.3
 
+      # A file:// dependency is packaged as its directory stands, and the
+      # .tgz of its own dependencies are not committed (.gitignore): without
+      # this, fusescope's clickhouse shipped without zookeeper, and a default
+      # install could not migrate its schema. Two passes, so a chart's
+      # dependencies are built before the charts that include it.
+      - name: Build chart dependencies, nested ones first
+        run: |
+          for pass in 1 2; do
+            for chart in charts/*/; do
+              grep -q '^dependencies:' "$chart/Chart.yaml" || continue
+              helm dependency build "$chart"
+            done
+          done
+
+      - name: Check the fusescope chart packages zookeeper
+        run: |
+          helm package charts/fusescope -d /tmp/check >/dev/null
+          tar tzf /tmp/check/fusescope-*.tgz | grep -q 'clickhouse/charts/zookeeper' || { echo "::error::clickhouse is packaged without zookeeper"; exit 1; }
+
       - name: Run chart-releaser
         uses: helm/chart-releaser-action@v1.5.0
         env:
