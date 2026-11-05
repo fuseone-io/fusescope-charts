@@ -15,8 +15,9 @@ out=${1:-/tmp/fusescope-package}
 helm dependency build --skip-refresh charts/clickhouse
 helm dependency build --skip-refresh charts/fusescope
 
-rm -rf "$out"
+# Only this script's own files: the directory may be one the caller uses.
 mkdir -p "$out"
+rm -f -- "$out"/fusescope-*.tgz "$out/listing.txt"
 helm package charts/fusescope -d "$out" >/dev/null
 pkg=$(ls "$out"/fusescope-*.tgz)
 
