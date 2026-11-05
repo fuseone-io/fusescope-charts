@@ -59,6 +59,24 @@ spec:
       {{- end }}
       securityContext:
         {{- toYaml $c.podSecurityContext | nindent 8 }}
+      {{- if .Values.telemetryStoreMigrator.enabled }}
+      # On a fresh install the migrator is an ordinary Job running beside
+      # this Deployment: wait until the schema is migrated before writing,
+      # with the migrator's own image and settings.
+      initContainers:
+        - name: schema
+          image: {{ include "otelCollector.image" . }}
+          imagePullPolicy: {{ .Values.otelCollector.image.pullPolicy }}
+          securityContext:
+            {{- toYaml $c.securityContext | nindent 12 }}
+          env:
+            {{- include "snippet.telemetryStoreMigrator-env" . | nindent 12 }}
+          args: ["migrate", "sync", "check"]
+          {{- with .Values.telemetryStoreMigrator.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- end }}
       containers:
         - name: collector
           image: {{ include "fusescopeCollector.image" . }}
