@@ -1,0 +1,42 @@
+{{- if include "fusescopeCollector.compatService" . }}
+{{- $svc := .Values.otelCollector.service -}}
+# The earlier collector's Service name and OTLP ports, on the FuseScope
+# collector, so agents, SDKs, the ingestion URL and otelCollector.ingress keep
+# their endpoint while otelCollector.enabled is false.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "otelCollector.fullname" . }}
+  labels:
+    {{- include "fusescopeCollector.labels" . | nindent 4 }}
+    {{- with $svc.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with $svc.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ $svc.type }}
+  {{- if and (eq $svc.type "LoadBalancer") $svc.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- range $svc.loadBalancerSourceRanges }}
+    - {{ . }}
+    {{- end }}
+  {{- end }}
+  ports:
+    {{- range $name := list "otlp" "otlp-http" }}
+    {{- $port := index $.Values.otelCollector.ports $name }}
+    {{- if $port.enabled }}
+    - name: {{ $name }}
+      port: {{ $port.servicePort }}
+      targetPort: {{ $name }}
+      protocol: TCP
+      {{- if and (eq $svc.type "NodePort") $port.nodePort }}
+      nodePort: {{ $port.nodePort }}
+      {{- end }}
+    {{- end }}
+    {{- end }}
+  selector:
+    {{- include "fusescopeCollector.selectorLabels" . | nindent 4 }}
+{{- end }}

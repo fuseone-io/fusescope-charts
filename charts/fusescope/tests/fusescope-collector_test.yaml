@@ -1,4 +1,4 @@
-suite: Test the FuseScope collector
+suite: Test the FuseScope collector serving RUM
 
 templates:
   - templates/fusescope-collector/configmap.yaml
@@ -24,7 +24,7 @@ values:
   - ./values/fusescope-collector.yaml
 
 tests:
-  - it: should render nothing by default
+  - it: should render nothing when disabled
     set:
       fusescopeCollector.enabled: false
       signoz.ingestPolicy.tokens.existingSecret: ""
@@ -207,10 +207,10 @@ tests:
           pattern: "include_recoverable_errors: true\\n      recovery_duration: 0s"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "traces:\\n      receivers: \\[rum\\]\\n      processors: \\[memory_limiter, signozspanmapper, signozllmpricing\\]\\n      exporters: \\[fusescope_clickhouse, fusescope_spanmetrics, fusescope_meter\\]"
+          pattern: "traces:\\n      receivers: \\[otlp, rum\\]\\n      processors: \\[memory_limiter, signozspanmapper, signozllmpricing\\]\\n      exporters: \\[fusescope_clickhouse, fusescope_spanmetrics, fusescope_meter\\]"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "logs:\\n      receivers: \\[rum\\]"
+          pattern: "logs:\\n      receivers: \\[otlp, rum\\]"
 
   - it: should meter ingested traces and logs into signoz_meter through its own exporter
     template: templates/fusescope-collector/configmap.yaml

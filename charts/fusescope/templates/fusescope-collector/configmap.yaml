@@ -1,7 +1,19 @@
-{{- if .Values.fusescopeCollector.enabled }}
+{{- if include "fusescopeCollector.active" . }}
 {{- $c := .Values.fusescopeCollector -}}
 {{- $ch := include "fusescopeCollector.clickhouse" . | fromJson -}}
 {{- $proxies := include "fusescopeCollector.trustedProxies" . | fromJsonArray -}}
+{{- $rum := include "fusescopeCollector.rumEnabled" . -}}
+{{- $otlp := include "fusescopeCollector.otlpEnabled" . -}}
+{{- $opamp := include "fusescopeCollector.opampEndpoint" . -}}
+{{- if and $rum (not (hasPrefix "wss://" $opamp)) -}}
+{{- fail "fusescopeCollector.opamp.endpoint must be wss:// with rum.enabled: the ingest token travels only over TLS" -}}
+{{- end -}}
+{{- $receivers := list -}}
+{{- if $otlp }}{{ $receivers = append $receivers "otlp" }}{{ end -}}
+{{- if $rum }}{{ $receivers = append $receivers "rum" }}{{ end -}}
+{{- $metricsReceivers := list -}}
+{{- if $otlp }}{{ $metricsReceivers = append $metricsReceivers "otlp" }}{{ end -}}
+{{- $metricsReceivers = append $metricsReceivers "fusescope_spanmetrics" -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -14,22 +26,43 @@ data:
   # this configuration's listeners, pipelines or destinations.
   config.yaml: |
     fusescope_opamp:
-      endpoint: {{ include "fusescopeCollector.opampEndpoint" . }}
+      endpoint: {{ $opamp }}
+      {{- if hasPrefix "ws://" $opamp }}
+      # Plaintext to FuseScope's in-cluster OpAMP listener, allowed only by an
+      # explicit tls.insecure (collector ADR 0008 §3, ADR 0004 as amended),
+      # until FuseScope serves TLS to writer collectors (fuseone-io/fusescope#261).
+      tls:
+        insecure: true
+      {{- else }}
       tls:
         min_version: "1.3"
-        {{- if .Values.signoz.ingestPolicy.tls.caKey }}
+        {{- if and $rum .Values.signoz.ingestPolicy.tls.caKey }}
         ca_file: /etc/fusescope-collector/opamp-ca/ca.crt
         {{- end }}
         {{- if $c.opamp.clientCertSecret }}
         cert_file: /etc/fusescope-collector/opamp-client/tls.crt
         key_file: /etc/fusescope-collector/opamp-client/tls.key
         {{- end }}
+      {{- end }}
       storage: /var/lib/fusescope-collector/opamp
+      {{- if $rum }}
       role: ingress
       auth:
         token_file: /etc/fusescope-collector/ingest-token/token
+      {{- else }}
+      role: writer
+      {{- end }}
 
     receivers:
+      {{- if $otlp }}
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:{{ $c.otlp.grpcPort }}
+          http:
+            endpoint: 0.0.0.0:{{ $c.otlp.httpPort }}
+      {{- end }}
+      {{- if $rum }}
       rum:
         endpoint: 0.0.0.0:{{ $c.rum.port }}
         tls:
@@ -45,6 +78,7 @@ data:
         {{- with $c.rum.maxStaleness }}
         max_staleness: {{ . }}
         {{- end }}
+      {{- end }}
       {{- if $c.selfMetrics.enabled }}
       # The collector's own telemetry, from its loopback-only listener
       # (service.telemetry), written with the other metrics.
@@ -119,6 +153,7 @@ data:
       fusescope_opamp: {}
       # Readiness only: the RUM receiver is a recoverable error while it holds
       # no valid ingest policy, which takes the pod out of the Service.
+      # Without RUM, ready once the pipelines run.
       healthcheckv2:
         use_v2: true
         component_health:
@@ -145,15 +180,15 @@ data:
                     port: 8888
       pipelines:
         traces:
-          receivers: [rum]
+          receivers: [{{ join ", " $receivers }}]
           processors: [memory_limiter, signozspanmapper, signozllmpricing]
           exporters: [fusescope_clickhouse, fusescope_spanmetrics{{ if $c.meter.enabled }}, fusescope_meter{{ end }}]
         logs:
-          receivers: [rum]
+          receivers: [{{ join ", " $receivers }}]
           processors: [memory_limiter]
           exporters: [fusescope_clickhouse{{ if $c.meter.enabled }}, fusescope_meter{{ end }}]
         metrics:
-          receivers: [fusescope_spanmetrics]
+          receivers: [{{ join ", " $metricsReceivers }}]
           processors: [memory_limiter]
           exporters: [fusescope_clickhouse]
         {{- if $c.meter.enabled }}

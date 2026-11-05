@@ -543,10 +543,11 @@ signoz_rum_collector__endpoint: {{ $collector | quote }}
 {{- end -}}
 
 {{/*
-True when FuseScope serves the ingest policy: a token Secret is set or the FuseScope collector is on.
+True when FuseScope serves the ingest policy: a token Secret is set or the FuseScope collector
+serves RUM.
 */}}
 {{- define "signoz.ingestPolicyEnabled" -}}
-{{- if or .Values.signoz.ingestPolicy.tokens.existingSecret .Values.fusescopeCollector.enabled -}}
+{{- if or .Values.signoz.ingestPolicy.tokens.existingSecret (include "fusescopeCollector.rumEnabled" .) -}}
 true
 {{- end -}}
 {{- end -}}
@@ -568,7 +569,7 @@ Secret of the ingest policy listener's certificate.
 {{- end -}}
 
 {{- define "signoz.ingestPolicyTokensSecret" -}}
-{{- required "signoz.ingestPolicy.tokens.existingSecret is required with fusescopeCollector.enabled" .Values.signoz.ingestPolicy.tokens.existingSecret -}}
+{{- required "signoz.ingestPolicy.tokens.existingSecret is required with fusescopeCollector.rum.enabled" .Values.signoz.ingestPolicy.tokens.existingSecret -}}
 {{- end -}}
 
 {{/*
@@ -753,8 +754,53 @@ Secret and key of the ingest token the collector presents.
 {{- end -}}
 {{- end -}}
 
+{{/*
+OpAMP endpoint of FuseScope: its TLS listener for the ingest policy with RUM, else the in-cluster
+plaintext listener.
+*/}}
 {{- define "fusescopeCollector.opampEndpoint" -}}
+{{- if include "fusescopeCollector.rumEnabled" . -}}
 {{- default (printf "wss://%s:%v/v1/opamp" (include "signoz.fullname" .) .Values.signoz.ingestPolicy.port) .Values.fusescopeCollector.opamp.endpoint -}}
+{{- else -}}
+{{- default (printf "ws://%s:%v/v1/opamp" (include "signoz.fullname" .) (default 4320 .Values.signoz.service.opampPort)) .Values.fusescopeCollector.opamp.endpoint -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+True when the FuseScope collector runs: enabled, with OTLP or RUM to receive.
+*/}}
+{{- define "fusescopeCollector.active" -}}
+{{- $c := .Values.fusescopeCollector -}}
+{{- if and $c.enabled (or $c.otlp.enabled $c.rum.enabled) -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/*
+True when the FuseScope collector serves RUM.
+*/}}
+{{- define "fusescopeCollector.rumEnabled" -}}
+{{- if and .Values.fusescopeCollector.enabled .Values.fusescopeCollector.rum.enabled -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/*
+True when the FuseScope collector receives OTLP.
+*/}}
+{{- define "fusescopeCollector.otlpEnabled" -}}
+{{- if and .Values.fusescopeCollector.enabled .Values.fusescopeCollector.otlp.enabled -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/*
+True when the FuseScope collector takes the earlier collector's Service name and OTLP ports.
+*/}}
+{{- define "fusescopeCollector.compatService" -}}
+{{- if and (include "fusescopeCollector.otlpEnabled" .) (not .Values.otelCollector.enabled) -}}
+true
+{{- end -}}
 {{- end -}}
 
 {{- define "fusescopeCollector.trustedProxies" -}}

@@ -1,7 +1,29 @@
 1. You have just deployed a FuseScope cluster:
 
 - fusescope version: '{{ .Values.signoz.image.tag }}'
+{{- if include "fusescopeCollector.active" . }}
+- fusescope-collector version: '{{ .Values.fusescopeCollector.image.tag }}'
+{{- end }}
+{{- if .Values.otelCollector.enabled }}
 - otel-collector version: '{{ .Values.otelCollector.image.tag }}'
+{{- end }}
+{{- if include "fusescopeCollector.compatService" . }}
+
+OTLP is received by the FuseScope collector, at {{ include "otelCollector.fullname" . }}:{{ .Values.otelCollector.ports.otlp.servicePort }} (gRPC)
+and :{{ index .Values.otelCollector.ports "otlp-http" "servicePort" }} (HTTP), the earlier collector's Service name and ports.
+Since chart 0.161.0 it replaces the earlier collector (otelCollector), now off by default. To keep
+the earlier collector, set otelCollector.enabled=true and fusescopeCollector.otlp.enabled=false.
+{{- end }}
+{{- if not (or .Values.otelCollector.enabled (include "fusescopeCollector.otlpEnabled" .)) }}
+
+WARNING: no collector in this release receives OTLP: set fusescopeCollector.otlp.enabled=true
+(the default), or otelCollector.enabled=true for the earlier collector.
+{{- end }}
+{{- if and .Values.fusescopeCollector.enabled (not .Values.fusescopeCollector.rum.enabled) }}
+
+Real User Monitoring is off. Installs that enabled fusescopeCollector for RUM before chart 0.161.0
+must now also set fusescopeCollector.rum.enabled=true.
+{{- end }}
 
 2. Get the application URL by running these commands:
 

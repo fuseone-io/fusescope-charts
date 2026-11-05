@@ -1,7 +1,10 @@
-{{- if .Values.fusescopeCollector.enabled }}
+{{- if include "fusescopeCollector.active" . }}
 {{- $c := .Values.fusescopeCollector -}}
 {{- $ch := include "fusescopeCollector.clickhouse" . | fromJson -}}
 {{- $policy := .Values.signoz.ingestPolicy -}}
+{{- $rum := include "fusescopeCollector.rumEnabled" . -}}
+{{- $otlp := include "fusescopeCollector.otlpEnabled" . -}}
+{{- $opampCA := and $rum $policy.tls.caKey (hasPrefix "wss://" (include "fusescopeCollector.opampEndpoint" .)) -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -9,7 +12,9 @@ metadata:
   labels:
     {{- include "fusescopeCollector.labels" . | nindent 4 }}
 spec:
+  {{- if not $c.autoscaling.enabled }}
   replicas: {{ $c.replicaCount }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "fusescopeCollector.selectorLabels" . | nindent 6 }}
@@ -63,9 +68,19 @@ spec:
           securityContext:
             {{- toYaml $c.securityContext | nindent 12 }}
           ports:
+            {{- if $otlp }}
+            - name: otlp
+              containerPort: {{ $c.otlp.grpcPort }}
+              protocol: TCP
+            - name: otlp-http
+              containerPort: {{ $c.otlp.httpPort }}
+              protocol: TCP
+            {{- end }}
+            {{- if $rum }}
             - name: rum
               containerPort: {{ $c.rum.port }}
               protocol: TCP
+            {{- end }}
             - name: health
               containerPort: 13133
               protocol: TCP
@@ -86,13 +101,15 @@ spec:
               readOnly: true
             - name: storage
               mountPath: /var/lib/fusescope-collector
+            {{- if $rum }}
             - name: ingest-token
               mountPath: /etc/fusescope-collector/ingest-token
               readOnly: true
             - name: rum-tls
               mountPath: /etc/fusescope-collector/rum-tls
               readOnly: true
-            {{- if $policy.tls.caKey }}
+            {{- end }}
+            {{- if $opampCA }}
             - name: opamp-ca
               mountPath: /etc/fusescope-collector/opamp-ca
               readOnly: true
@@ -115,6 +132,7 @@ spec:
         - name: storage
           emptyDir:
             sizeLimit: {{ $c.storage.sizeLimit }}
+        {{- if $rum }}
         - name: ingest-token
           secret:
             secretName: {{ include "fusescopeCollector.tokenSecret" . }}
@@ -131,7 +149,8 @@ spec:
                 path: tls.crt
               - key: tls.key
                 path: tls.key
-        {{- if $policy.tls.caKey }}
+        {{- end }}
+        {{- if $opampCA }}
         - name: opamp-ca
           secret:
             secretName: {{ include "signoz.ingestPolicyTLSSecret" . }}

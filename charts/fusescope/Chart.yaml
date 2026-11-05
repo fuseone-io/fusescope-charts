@@ -1,6 +1,6 @@
 apiVersion: v2
 name: fusescope
-version: 0.160.2
+version: 0.161.0
 appVersion: "0.159.0"
 description: FuseScope observability platform (APM, traces, metrics and logs) Helm chart
 type: application
@@ -16,6 +16,7 @@ keywords:
 sources:
   - https://github.com/fuseone-io/fusescope-charts
   - https://github.com/fuseone-io/fusescope
+  - https://github.com/fuseone-io/fusescope-collector-server
   - https://github.com/fuseone-io/fusescope-otel-collector
 dependencies:
   - name: clickhouse

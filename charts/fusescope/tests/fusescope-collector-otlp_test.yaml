@@ -1,0 +1,501 @@
+suite: Test the FuseScope collector as the default OTLP collector
+
+templates:
+  - templates/fusescope-collector/configmap.yaml
+  - templates/fusescope-collector/deployment.yaml
+  - templates/fusescope-collector/service.yaml
+  - templates/fusescope-collector/service-otlp-compat.yaml
+  - templates/fusescope-collector/serviceaccount.yaml
+  - templates/fusescope-collector/ingress.yaml
+  - templates/fusescope-collector/certificates.yaml
+  - templates/fusescope-collector/hpa.yaml
+  - templates/otel-collector/configmap.yaml
+  - templates/otel-collector/deployment.yaml
+  - templates/otel-collector/service.yaml
+  - templates/otel-collector/serviceaccount.yaml
+  - templates/otel-collector/clusterrole.yaml
+  - templates/otel-collector/clusterrolebinding.yaml
+  - templates/otel-collector/hpa.yaml
+  - templates/otel-collector/keda-autoscaler.yaml
+  - templates/otel-collector/ingress.yaml
+  - templates/telemetrystore-migrator/job.yaml
+
+release:
+  name: fusescope
+  namespace: platform
+
+capabilities:
+  majorVersion: 1
+  minorVersion: 30
+  apiVersions:
+    - networking.k8s.io/v1
+    - cert-manager.io/v1
+    - autoscaling/v2
+
+tests:
+  - it: should install no earlier collector by default
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: templates/otel-collector/deployment.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/otel-collector/configmap.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/otel-collector/serviceaccount.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/otel-collector/service.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/otel-collector/clusterrole.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/otel-collector/clusterrolebinding.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/otel-collector/ingress.yaml
+
+  - it: should install no earlier collector autoscaler while it is off
+    set:
+      otelCollector.autoscaling.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: templates/otel-collector/hpa.yaml
+
+  - it: should install no earlier collector KEDA scaler while it is off
+    set:
+      otelCollector.autoscaling: {enabled: true, keda: {enabled: true}}
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: templates/otel-collector/keda-autoscaler.yaml
+
+  - it: should run the FuseScope collector by default with the OTLP ports
+    template: templates/fusescope-collector/deployment.yaml
+    asserts:
+      - isKind:
+          of: Deployment
+      - equal:
+          path: metadata.name
+          value: fusescope-collector
+      - equal:
+          path: spec.replicas
+          value: 1
+      - equal:
+          path: spec.template.spec.containers[0].ports
+          value:
+            - name: otlp
+              containerPort: 4317
+              protocol: TCP
+            - name: otlp-http
+              containerPort: 4318
+              protocol: TCP
+            - name: health
+              containerPort: 13133
+              protocol: TCP
+      - equal:
+          path: spec.template.spec.containers[0].resources
+          value:
+            requests: {cpu: 200m, memory: 512Mi}
+            limits: {memory: 1Gi}
+
+  - it: should mount no ingest token and no RUM or OpAMP certificate by default
+    template: templates/fusescope-collector/deployment.yaml
+    asserts:
+      - notContains:
+          path: spec.template.spec.volumes
+          content: {name: ingest-token}
+          any: true
+      - notContains:
+          path: spec.template.spec.volumes
+          content: {name: rum-tls}
+          any: true
+      - notContains:
+          path: spec.template.spec.volumes
+          content: {name: opamp-ca}
+          any: true
+      - notContains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content: {name: ingest-token}
+          any: true
+
+  - it: should receive OTLP and no RUM by default
+    template: templates/fusescope-collector/configmap.yaml
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "\\nreceivers:\\n  otlp:\\n    protocols:\\n      grpc:\\n        endpoint: 0.0.0.0:4317\\n      http:\\n        endpoint: 0.0.0.0:4318\\n"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "\\n  rum:\\n"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "    traces:\\n      receivers: \\[otlp\\]\\n      processors: \\[memory_limiter, signozspanmapper, signozllmpricing\\]\\n      exporters: \\[fusescope_clickhouse, fusescope_spanmetrics\\]\\n"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "    logs:\\n      receivers: \\[otlp\\]\\n      processors: \\[memory_limiter\\]\\n      exporters: \\[fusescope_clickhouse\\]\\n"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "    metrics:\\n      receivers: \\[otlp, fusescope_spanmetrics\\]\\n      processors: \\[memory_limiter\\]\\n      exporters: \\[fusescope_clickhouse\\]\\n"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "    metrics/self:\\n      receivers: \\[prometheus/self\\]\\n"
+
+  - it: should be a writer on the in-cluster OpAMP listener, plaintext by explicit choice, without a token
+    template: templates/fusescope-collector/configmap.yaml
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "fusescope_opamp:\\n  endpoint: ws://fusescope:4320/v1/opamp\\n(  #.*\\n)+  tls:\\n    insecure: true\\n  storage: /var/lib/fusescope-collector/opamp\\n  role: writer\\n\\n"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "token_file|min_version|ca_file|role: ingress"
+
+  - it: should follow the FuseScope OpAMP service port as a writer
+    template: templates/fusescope-collector/configmap.yaml
+    set:
+      signoz.service.opampPort: 14320
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "endpoint: ws://fusescope:14320/v1/opamp\\n"
+
+  - it: should reach a wss:// endpoint with TLS 1.3 as a writer
+    template: templates/fusescope-collector/configmap.yaml
+    set:
+      fusescopeCollector.opamp.endpoint: wss://fusescope.example.com:4320/v1/opamp
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "endpoint: wss://fusescope.example.com:4320/v1/opamp\\n  tls:\\n    min_version: \"1.3\"\\n  storage: /var/lib/fusescope-collector/opamp\\n  role: writer\\n"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "insecure: true\\n  storage"
+
+  - it: should issue no RUM certificate and route no RUM ingress by default
+    set:
+      fusescopeCollector.ingress.enabled: true
+      fusescopeCollector.rum.tls.certManager: {enabled: true, issuerRef: {name: internal-ca}}
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: templates/fusescope-collector/certificates.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/fusescope-collector/ingress.yaml
+
+  - it: should expose OTLP and no RUM on its own Service by default
+    template: templates/fusescope-collector/service.yaml
+    asserts:
+      - equal:
+          path: spec.ports
+          value:
+            - name: otlp
+              port: 4317
+              targetPort: otlp
+              protocol: TCP
+            - name: otlp-http
+              port: 4318
+              targetPort: otlp-http
+              protocol: TCP
+
+  - it: should take the earlier collector's Service name and OTLP ports
+    template: templates/fusescope-collector/service-otlp-compat.yaml
+    asserts:
+      - isKind:
+          of: Service
+      - equal:
+          path: metadata.name
+          value: fusescope-otel-collector
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.ports
+          value:
+            - name: otlp
+              port: 4317
+              targetPort: otlp
+              protocol: TCP
+            - name: otlp-http
+              port: 4318
+              targetPort: otlp-http
+              protocol: TCP
+      - equal:
+          path: spec.selector
+          value:
+            app.kubernetes.io/name: fusescope
+            app.kubernetes.io/instance: fusescope
+            app.kubernetes.io/component: fusescope-collector
+
+  - it: should keep the earlier collector's service ports, type and annotations on the compat Service
+    template: templates/fusescope-collector/service-otlp-compat.yaml
+    set:
+      otelCollector.ports.otlp-http.servicePort: 14318
+      otelCollector.ports.otlp.nodePort: 30417
+      otelCollector.service:
+        type: NodePort
+        annotations: {example.com/team: obs}
+    asserts:
+      - equal:
+          path: spec.type
+          value: NodePort
+      - equal:
+          path: metadata.annotations
+          value: {example.com/team: obs}
+      - equal:
+          path: spec.ports
+          value:
+            - name: otlp
+              port: 4317
+              targetPort: otlp
+              protocol: TCP
+              nodePort: 30417
+            - name: otlp-http
+              port: 14318
+              targetPort: otlp-http
+              protocol: TCP
+
+  - it: should keep the earlier collector's OTLP ingress routing, to the compat Service
+    template: templates/otel-collector/ingress.yaml
+    set:
+      otelCollector.ingress.enabled: true
+    asserts:
+      - equal:
+          path: spec.rules[0].http.paths[0].backend.service
+          value:
+            name: fusescope-otel-collector
+            port:
+              number: 4318
+
+  - it: should serve RUM with the ingress role, the token and its certificate and ingress
+    set:
+      signoz.ingress:
+        enabled: true
+        hosts:
+          - host: fusescope.example.com
+            paths: [{path: /, pathType: ImplementationSpecific, port: 8080}]
+      signoz.ingestPolicy.tokens.existingSecret: ingest-tokens
+      signoz.ingestPolicy.tls.existingSecret: ingest-tls
+      fusescopeCollector.rum.enabled: true
+      fusescopeCollector.rum.tls.certManager: {enabled: true, issuerRef: {name: internal-ca}}
+      fusescopeCollector.ingress.enabled: true
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "fusescope_opamp:\\n  endpoint: wss://fusescope:4321/v1/opamp\\n  tls:\\n    min_version: \"1.3\"\\n    ca_file: /etc/fusescope-collector/opamp-ca/ca.crt\\n  storage: /var/lib/fusescope-collector/opamp\\n  role: ingress\\n  auth:\\n    token_file: /etc/fusescope-collector/ingest-token/token\\n"
+        template: templates/fusescope-collector/configmap.yaml
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "insecure: true\\n  storage|role: writer"
+        template: templates/fusescope-collector/configmap.yaml
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "\\n  rum:\\n    endpoint: 0.0.0.0:4319\\n"
+        template: templates/fusescope-collector/configmap.yaml
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "    traces:\\n      receivers: \\[otlp, rum\\]\\n"
+        template: templates/fusescope-collector/configmap.yaml
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "    logs:\\n      receivers: \\[otlp, rum\\]\\n"
+        template: templates/fusescope-collector/configmap.yaml
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "    metrics:\\n      receivers: \\[otlp, fusescope_spanmetrics\\]\\n"
+        template: templates/fusescope-collector/configmap.yaml
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: ingest-token
+            mountPath: /etc/fusescope-collector/ingest-token
+            readOnly: true
+        template: templates/fusescope-collector/deployment.yaml
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: rum-tls
+            secret:
+              secretName: fusescope-collector-rum-tls
+              defaultMode: 0440
+              items:
+                - key: tls.crt
+                  path: tls.crt
+                - key: tls.key
+                  path: tls.key
+        template: templates/fusescope-collector/deployment.yaml
+      - contains:
+          path: spec.template.spec.containers[0].ports
+          content: {name: rum, containerPort: 4319, protocol: TCP}
+        template: templates/fusescope-collector/deployment.yaml
+      - equal:
+          path: spec.secretName
+          value: fusescope-collector-rum-tls
+        template: templates/fusescope-collector/certificates.yaml
+      - equal:
+          path: spec.rules[0].http.paths[0].path
+          value: /rum/v1/traces
+        template: templates/fusescope-collector/ingress.yaml
+      - contains:
+          path: spec.ports
+          content: {name: rum, port: 4319, targetPort: rum, protocol: TCP}
+        template: templates/fusescope-collector/service.yaml
+
+  - it: should refuse a plaintext OpAMP endpoint with RUM, which sends the token
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      signoz.ingestPolicy.tokens.existingSecret: ingest-tokens
+      signoz.ingestPolicy.tls.existingSecret: ingest-tls
+      fusescopeCollector.rum.enabled: true
+      fusescopeCollector.rum.tls.existingSecret: rum-tls
+      fusescopeCollector.opamp.endpoint: ws://fusescope:4320/v1/opamp
+    asserts:
+      - failedTemplate:
+          errorPattern: "must be wss:// with rum.enabled"
+
+  - it: should serve RUM alone when OTLP is off
+    template: templates/fusescope-collector/configmap.yaml
+    set:
+      signoz.ingestPolicy.tokens.existingSecret: ingest-tokens
+      signoz.ingestPolicy.tls.existingSecret: ingest-tls
+      fusescopeCollector.rum.enabled: true
+      fusescopeCollector.rum.tls.existingSecret: rum-tls
+      fusescopeCollector.otlp.enabled: false
+    asserts:
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "\\n  otlp:\\n"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "    traces:\\n      receivers: \\[rum\\]\\n"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "    metrics:\\n      receivers: \\[fusescope_spanmetrics\\]\\n"
+
+  - it: should keep the earlier collector when asked, without the compat Service
+    set:
+      otelCollector.enabled: true
+      fusescopeCollector.otlp.enabled: false
+    asserts:
+      - isKind:
+          of: Deployment
+        template: templates/otel-collector/deployment.yaml
+      - hasDocuments:
+          count: 1
+        template: templates/otel-collector/configmap.yaml
+      - equal:
+          path: metadata.name
+          value: fusescope-otel-collector
+        template: templates/otel-collector/service.yaml
+      - equal:
+          path: spec.selector["app.kubernetes.io/component"]
+          value: otel-collector
+        template: templates/otel-collector/service.yaml
+      - hasDocuments:
+          count: 1
+        template: templates/otel-collector/serviceaccount.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/fusescope-collector/service-otlp-compat.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/fusescope-collector/deployment.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/fusescope-collector/configmap.yaml
+
+  - it: should keep the earlier collector for OTLP next to the FuseScope collector for RUM
+    set:
+      otelCollector.enabled: true
+      fusescopeCollector.otlp.enabled: false
+      signoz.ingestPolicy.tokens.existingSecret: ingest-tokens
+      signoz.ingestPolicy.tls.existingSecret: ingest-tls
+      fusescopeCollector.rum.enabled: true
+      fusescopeCollector.rum.tls.existingSecret: rum-tls
+    asserts:
+      - isKind:
+          of: Deployment
+        template: templates/otel-collector/deployment.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/fusescope-collector/service-otlp-compat.yaml
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "\\n  otlp:\\n|receivers: \\[otlp"
+        template: templates/fusescope-collector/configmap.yaml
+      - notContains:
+          path: spec.ports
+          content: {name: otlp}
+          any: true
+        template: templates/fusescope-collector/service.yaml
+
+  - it: should run both collectors without the compat Service
+    set:
+      otelCollector.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: templates/fusescope-collector/service-otlp-compat.yaml
+      - equal:
+          path: metadata.name
+          value: fusescope-otel-collector
+        template: templates/otel-collector/service.yaml
+      - equal:
+          path: metadata.name
+          value: fusescope-collector
+        template: templates/fusescope-collector/service.yaml
+
+  - it: should still migrate the schema with the earlier collector's image while it is off
+    template: templates/telemetrystore-migrator/job.yaml
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].image
+          pattern: "^ghcr.io/fuseone-io/fusescope-otel-collector:"
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: "^ghcr.io/fuseone-io/fusescope-otel-collector:"
+
+  - it: should scale with an HPA when enabled, leaving replicas to it
+    set:
+      fusescopeCollector.autoscaling.enabled: true
+    asserts:
+      - isKind:
+          of: HorizontalPodAutoscaler
+        template: templates/fusescope-collector/hpa.yaml
+      - equal:
+          path: apiVersion
+          value: autoscaling/v2
+        template: templates/fusescope-collector/hpa.yaml
+      - equal:
+          path: spec.scaleTargetRef
+          value: {apiVersion: apps/v1, kind: Deployment, name: fusescope-collector}
+        template: templates/fusescope-collector/hpa.yaml
+      - equal:
+          path: spec.minReplicas
+          value: 1
+        template: templates/fusescope-collector/hpa.yaml
+      - equal:
+          path: spec.maxReplicas
+          value: 5
+        template: templates/fusescope-collector/hpa.yaml
+      - equal:
+          path: spec.metrics
+          value:
+            - type: Resource
+              resource: {name: memory, target: {type: Utilization, averageUtilization: 80}}
+            - type: Resource
+              resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}
+        template: templates/fusescope-collector/hpa.yaml
+      - notExists:
+          path: spec.replicas
+        template: templates/fusescope-collector/deployment.yaml
+
+  - it: should render no HPA by default
+    template: templates/fusescope-collector/hpa.yaml
+    asserts:
+      - hasDocuments:
+          count: 0

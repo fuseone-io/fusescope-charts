@@ -61,9 +61,18 @@ Sometimes everything doesn't get properly removed. If that happens try deleting 
 kubectl delete namespace platform
 ```
 
+### OTLP collector
+
+The FuseScope collector (`fusescopeCollector`, [fusescope-collector-server](https://github.com/fuseone-io/fusescope-collector-server)) is the chart's OTLP collector: it receives OTLP over gRPC (4317) and HTTP (4318) and writes traces, logs and metrics, plus the span metrics it derives from traces, to ClickHouse directly. FuseScope manages its log pipelines, span attribute mapping and LLM pricing over OpAMP; it cannot change what the collector receives or where it writes.
+
+- **Compat Service.** While `otelCollector.enabled` is false, the chart renders a Service with the earlier collector's name, `RELEASE-fusescope-otel-collector`, selecting the FuseScope collector's pods. Its `otlp` and `otlp-http` ports take their service ports, node ports and the Service type and annotations from `otelCollector.ports` and `otelCollector.service`. Agents, SDKs, the ingestion URL shown in FuseScope (`signoz.ingestionUrl`), the onboarding check and `otelCollector.ingress` keep that endpoint; `otelCollector.ingress` stays gated by its own `enabled` and now routes to this Service, so its paths must target the OTLP service ports. The collector's own Service, `RELEASE-fusescope-collector`, exposes the same ports.
+- **Only OTLP.** The earlier collector's other ports in `otelCollector.ports` (Jaeger, Zipkin, Heroku and JSON logs) are not served: send that telemetry as OTLP, or keep the earlier collector.
+- **OpAMP.** Without RUM the collector connects as a `writer` to FuseScope's in-cluster OpAMP listener (`ws://RELEASE-fusescope:4320/v1/opamp`), in plaintext by an explicit `tls.insecure`, the only transport FuseScope serves there until it adds TLS (fuseone-io/fusescope#261). It presents no token and needs no certificate. With `rum.enabled` it connects as `ingress` over TLS 1.3 to port 4321 (below).
+- **Sizing.** `memory_limiter` refuses data above 80% of the memory limit (1Gi by default), so senders retry rather than the pod being OOM-killed. Set `fusescopeCollector.autoscaling.enabled` for an HPA on CPU and memory; the Deployment then leaves `replicas` to it.
+
 ### Real User Monitoring
 
-The FuseScope collector (`fusescopeCollector`) receives RUM: browsers and apps send OTLP/HTTP to `POST /rum/v1/traces` and `POST /rum/v1/logs`, authenticated by the application's public key, and the collector writes ClickHouse directly. The chart no longer configures the FuseScope backend's own RUM gateway, which is being removed. The collector takes the RUM applications and keys from FuseScope as the ingest policy, over OpAMP with TLS 1.3 on a second FuseScope listener (`signoz.ingestPolicy`, port 4321), and reports what it accepted for the RUM setup screen. It needs a FuseScope release with that listener (fuseone-io/fusescope#314).
+With `fusescopeCollector.rum.enabled`, the FuseScope collector also receives RUM: browsers and apps send OTLP/HTTP to `POST /rum/v1/traces` and `POST /rum/v1/logs`, authenticated by the application's public key, and the collector writes ClickHouse directly. The chart no longer configures the FuseScope backend's own RUM gateway, which is being removed. The collector takes the RUM applications and keys from FuseScope as the ingest policy, over OpAMP with TLS 1.3 on a second FuseScope listener (`signoz.ingestPolicy`, port 4321), and reports what it accepted for the RUM setup screen. It needs a FuseScope release with that listener (fuseone-io/fusescope#314).
 
 ```yaml
 signoz:
@@ -77,6 +86,7 @@ signoz:
 fusescopeCollector:
   enabled: true
   rum:
+    enabled: true
     tls:
       certManager:
         enabled: true
@@ -144,6 +154,20 @@ The chart renders a disk for the bucket, a filesystem cache disk in front of it 
 
 > [!WARNING]
 > ### Breaking Changes
+> #### Version 0.161.0
+> The FuseScope collector (`fusescopeCollector`) is now the default OTLP collector, and the earlier collector (`otelCollector`, fusescope-otel-collector) is off by default (`otelCollector.enabled: false`). A Service named like the earlier collector, with its OTLP ports, now selects the FuseScope collector, so OTLP endpoints keep working; the earlier collector's other ports (Jaeger, Zipkin, Heroku and JSON logs) are not served. Its image still runs the schema migrations.
+>
+> To keep the earlier collector:
+> ```yaml
+> otelCollector:
+>   enabled: true
+> fusescopeCollector:
+>   otlp:
+>     enabled: false
+> ```
+>
+> RUM no longer comes with `fusescopeCollector.enabled`: installs that enabled the collector for RUM must set `fusescopeCollector.rum.enabled: true`. Without it the RUM listener, its certificate and Ingress, the ingest token and FuseScope's ingest policy listener are not rendered.
+>
 > #### Version 0.131.0
 > ClickHouse has been upgraded from `25.5.6` to `25.12.5`. This is a significant ClickHouse version jump, so review the upgrade guide before upgrading to avoid issues with your existing data.
 >
