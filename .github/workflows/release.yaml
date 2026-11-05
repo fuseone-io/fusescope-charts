@@ -28,6 +28,12 @@ jobs:
         with:
           version: v3.10.3
 
+      # Builds the dependencies chart-releaser packages, and fails before
+      # publishing if the fusescope package lacks zookeeper or holds a path
+      # twice (scripts/package-fusescope.sh).
+      - name: Build and check the fusescope package
+        run: scripts/package-fusescope.sh
+
       - name: Run chart-releaser
         uses: helm/chart-releaser-action@v1.5.0
         env:
