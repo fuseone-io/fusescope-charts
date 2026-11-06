@@ -769,6 +769,22 @@ Secret and key of the ingest token the collector presents.
 ClickHouse as the collector's exporter sees it: endpoint, user, TLS, databases, and where its
 password comes from (a Secret and key, or none).
 */}}
+{{/*
+The connection settings of a fusescope_clickhouse exporter, from the dict of
+fusescopeCollector.clickhouse.
+*/}}
+{{- define "fusescopeCollector.clickhouseConnection" -}}
+endpoint: {{ .endpoint }}
+{{- with .user }}
+username: {{ . | quote }}
+{{- end }}
+{{- if .secret }}
+password_file: /etc/fusescope-collector/clickhouse/password
+{{- end }}
+tls:
+  insecure: {{ not .secure }}
+{{- end -}}
+
 {{- define "fusescopeCollector.clickhouse" -}}
 {{- $ch := ternary .Values.clickhouse .Values.externalClickhouse .Values.clickhouse.enabled -}}
 {{- $host := ternary (include "clickhouse.servicename" .) $ch.host .Values.clickhouse.enabled -}}
