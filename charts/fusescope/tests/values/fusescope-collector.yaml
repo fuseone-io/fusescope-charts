@@ -7,5 +7,6 @@ signoz:
 fusescopeCollector:
   enabled: true
   rum:
+    enabled: true
     tls:
       existingSecret: rum-tls

@@ -181,10 +181,50 @@ tests:
       - failedTemplate:
           errorPattern: "ingest tokens travel only over TLS"
 
-  - it: should require the tokens with the FuseScope collector
+  - it: should serve no ingest policy for the FuseScope collector without RUM
+    set:
+      fusescopeCollector.enabled: true
+      fusescopeCollector.rum.enabled: false
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_INGEST__POLICY_LISTEN
+          any: true
+        template: templates/signoz/statefulset.yaml
+      - notContains:
+          path: spec.ports
+          content:
+            name: opamp-ingest
+          any: true
+        template: templates/signoz/service.yaml
+
+  - it: should serve the ingest policy for the FuseScope collector serving RUM
+    set:
+      fusescopeCollector.rum.enabled: true
+      signoz.ingestPolicy.tokens.existingSecret: ingest-tokens
+      signoz.ingestPolicy.tls.existingSecret: ingest-tls
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_INGEST__POLICY_LISTEN
+            value: 0.0.0.0:4321
+        template: templates/signoz/statefulset.yaml
+      - contains:
+          path: spec.ports
+          content:
+            name: opamp-ingest
+            port: 4321
+          any: true
+        template: templates/signoz/service.yaml
+
+  - it: should require the tokens with the FuseScope collector serving RUM
     set:
       fusescopeCollector:
         enabled: true
+        rum:
+          enabled: true
       signoz:
         ingestPolicy:
           tls:

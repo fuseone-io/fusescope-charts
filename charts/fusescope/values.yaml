@@ -792,8 +792,8 @@ signoz:
     # @default -- "fuseone-io/fusescope"
     repository: fuseone-io/fusescope
     # signoz.image.tag - The container image tag.
-    # @default -- "0.159.0"
-    tag: 0.159.0
+    # @default -- "0.161.0"
+    tag: 0.161.0
     # signoz.image.pullPolicy - The image pull policy.
     # @default -- "IfNotPresent"
     pullPolicy: IfNotPresent
@@ -1171,6 +1171,14 @@ telemetryStoreMigrator:
 # @section -- Otel Collector
 # @default -- "Please checkout the default values in values.yml"
 otelCollector:
+  # otelCollector.enabled -- Install the earlier OpenTelemetry Collector (fusescope-otel-collector).
+  # Off by default: the FuseScope collector (`fusescopeCollector`) receives OTLP and writes
+  # ClickHouse instead, behind a Service with this collector's name and OTLP ports. To keep this
+  # collector, set it to `true` and `fusescopeCollector.otlp.enabled` to `false`. Its image still
+  # runs the schema migrations (`telemetryStoreMigrator`) whatever this is set to.
+  # @default -- false
+  # @section -- Otel Collector
+  enabled: false
   # otelCollector.name -- The name of the Otel Collector component.
   # @default -- "otel-collector"
   # @section -- Otel Collector
@@ -1989,15 +1997,14 @@ mcpServer:
 
 # @section -- FuseScope Collector
 fusescopeCollector:
-  # fusescopeCollector.enabled -- Install the FuseScope collector as the ingress for Real User
-  # Monitoring: it serves `/rum/v1/traces` and `/rum/v1/logs`, takes the ingest policy from
-  # FuseScope over OpAMP with TLS (`signoz.ingestPolicy`) and writes ClickHouse directly. Needs
-  # a FuseScope release with the ingest policy listener (fuseone-io/fusescope#314),
-  # `signoz.ingestPolicy.tokens` and both TLS certificates.
+  # fusescopeCollector.enabled -- Install the FuseScope collector, the chart's OTLP collector: it
+  # receives OTLP (`otlp`), and Real User Monitoring when `rum.enabled`, and writes ClickHouse
+  # directly. FuseScope manages its log pipelines, span mapping and LLM pricing over OpAMP.
   # @section -- FuseScope Collector
-  enabled: false
-  # fusescopeCollector.replicaCount -- Number of replicas. Each holds its own copy of the policy
-  # and reports its own counts; rate limits apply per replica.
+  enabled: true
+  # fusescopeCollector.replicaCount -- Number of replicas, unless `autoscaling.enabled`. Each
+  # registers with FuseScope as its own agent; with RUM, each holds its own copy of the policy
+  # and reports its own counts, and rate limits apply per replica.
   # @section -- FuseScope Collector
   replicaCount: 1
   # fusescopeCollector.image -- Collector image, by `tag` and `digest`: with both, the image
@@ -2013,9 +2020,22 @@ fusescopeCollector:
   # fusescopeCollector.imagePullSecrets -- Image pull secrets. Overrides the root and global values.
   # @section -- FuseScope Collector
   imagePullSecrets: []
+  otlp:
+    # fusescopeCollector.otlp.enabled -- Receive OTLP over gRPC and HTTP, on this collector's
+    # Service and, while `otelCollector.enabled` is false, on a Service named and numbered like
+    # the earlier collector's (`RELEASE-fusescope-otel-collector`, ports `otlp` and `otlp-http` of
+    # `otelCollector.ports`), so agents, SDKs and `otelCollector.ingress` keep their endpoint.
+    # @section -- FuseScope Collector
+    enabled: true
+    # fusescopeCollector.otlp.grpcPort -- Port of the OTLP/gRPC receiver.
+    # @section -- FuseScope Collector
+    grpcPort: 4317
+    # fusescopeCollector.otlp.httpPort -- Port of the OTLP/HTTP receiver.
+    # @section -- FuseScope Collector
+    httpPort: 4318
   ingestToken:
     # fusescopeCollector.ingestToken.existingSecret -- (string) Secret holding the one token, 32 to
-    # 256 characters, the collector presents to FuseScope.
+    # 256 characters, the collector presents to FuseScope with `rum.enabled`.
     # @default -- "signoz.ingestPolicy.tokens.existingSecret"
     # @section -- FuseScope Collector
     existingSecret: ""
@@ -2024,8 +2044,11 @@ fusescopeCollector:
     # @section -- FuseScope Collector
     secretKey: ""
   opamp:
-    # fusescopeCollector.opamp.endpoint -- (string) OpAMP endpoint of FuseScope with TLS.
-    # @default -- "wss://RELEASE-fusescope:4321/v1/opamp, from signoz.ingestPolicy.port"
+    # fusescopeCollector.opamp.endpoint -- (string) OpAMP endpoint of FuseScope. With
+    # `rum.enabled`, its TLS listener, where the ingest policy is served; without, the in-cluster
+    # listener, plaintext (`tls.insecure`) since FuseScope serves no TLS there yet. A `wss://`
+    # endpoint is always reached with TLS 1.3.
+    # @default -- "wss://RELEASE-fusescope:4321/v1/opamp with rum.enabled (signoz.ingestPolicy.port), else ws://RELEASE-fusescope:4320/v1/opamp (signoz.service.opampPort)"
     # @section -- FuseScope Collector
     endpoint: ""
     # fusescopeCollector.opamp.clientCertSecret -- (string) `kubernetes.io/tls` Secret with the
@@ -2033,6 +2056,13 @@ fusescopeCollector:
     # @section -- FuseScope Collector
     clientCertSecret: ""
   rum:
+    # fusescopeCollector.rum.enabled -- Serve Real User Monitoring: `/rum/v1/traces` and
+    # `/rum/v1/logs` on a TLS 1.3 listener, with the ingest policy FuseScope sends over OpAMP with
+    # TLS (`signoz.ingestPolicy`). Needs a FuseScope release with the ingest policy listener
+    # (fuseone-io/fusescope#314), `signoz.ingestPolicy.tokens` and both TLS certificates. Before
+    # chart 0.161.0 RUM came with `fusescopeCollector.enabled`; such installs must now set this.
+    # @section -- FuseScope Collector
+    enabled: false
     # fusescopeCollector.rum.port -- Port of the RUM listener, TLS 1.3 only.
     # @section -- FuseScope Collector
     port: 4319
@@ -2086,8 +2116,8 @@ fusescopeCollector:
     # @section -- FuseScope Collector
     maxStaleness: ""
   meter:
-    # fusescopeCollector.meter.enabled -- Count the ingested spans, log records and their sizes
-    # each hour, per service and ingestion key, into `signoz_meter` for Meter Explorer and
+    # fusescopeCollector.meter.enabled -- Count the ingested spans, log records and data points,
+    # and the sizes of spans and log records, each hour, per service and ingestion key, into `signoz_meter` for Meter Explorer and
     # Ingestion Settings (`fusescope_meter`, through its own `fusescope_clickhouse/meter`
     # exporter). Derived data (span metrics, the collector's own telemetry) is not metered.
     # @section -- FuseScope Collector
@@ -2113,12 +2143,12 @@ fusescopeCollector:
     create: true
     annotations: {}
     name: ""
-  # fusescopeCollector.service -- Service for the RUM listener.
+  # fusescopeCollector.service -- Service for the OTLP and RUM listeners.
   # @section -- FuseScope Collector
   service:
     type: ClusterIP
     annotations: {}
-  # fusescopeCollector.ingress -- Ingress for `/rum/v1/traces` and `/rum/v1/logs`, `Exact`, so the
+  # fusescopeCollector.ingress -- Ingress for RUM, with `rum.enabled`: `/rum/v1/traces` and `/rum/v1/logs`, `Exact`, so the
   # browser SDK FuseScope serves at `/rum/v1/sdk/` stays on its ingress. It re-encrypts to the collector's TLS
   # listener. Without `hosts`, it uses the hosts, TLS and class of `signoz.ingress`. Its annotations
   # are not inherited; the defaults tell ingress-nginx the backend speaks HTTPS and raise its 1m
@@ -2132,21 +2162,34 @@ fusescopeCollector:
       nginx.ingress.kubernetes.io/proxy-body-size: 4m
     hosts: []
     tls: []
-  # fusescopeCollector.storage -- Volume of the OpAMP state: the instance UID, the cached ingest
-  # policy and the report sequence. An emptyDir keeps them across container restarts; on a new pod
-  # the collector registers as a new agent and waits for the policy before it is ready.
+  # fusescopeCollector.storage -- Volume of the OpAMP state: the instance UID, the last applied
+  # configuration push and, with RUM, the cached ingest policy and the report sequence. An emptyDir
+  # keeps them across container restarts; on a new pod the collector registers as a new agent and,
+  # with RUM, waits for the policy before it is ready.
   # @section -- FuseScope Collector
   storage:
     sizeLimit: 64Mi
-  # fusescopeCollector.resources -- Resources. The memory limit is also what `memory_limiter`
-  # refuses data above (80%).
+  # fusescopeCollector.resources -- Resources. `memory_limiter` refuses data above 80% of the
+  # memory limit, so senders retry instead of the pod being OOM-killed; size the limit for the
+  # batches in flight, about 10 s of ingest per replica, or scale out (`autoscaling`).
   # @section -- FuseScope Collector
   resources:
     requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
+      cpu: 200m
       memory: 512Mi
+    limits:
+      memory: 1Gi
+  # fusescopeCollector.autoscaling -- Horizontal Pod Autoscaler. When enabled, the Deployment
+  # leaves `replicas` to it. Memory utilization is of the request: keep its target below the
+  # `memory_limiter` threshold (80% of the limit).
+  # @section -- FuseScope Collector
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+    behavior: {}
   # fusescopeCollector.podSecurityContext -- Pod security context. The image is distroless and runs
   # as uid 65532.
   # @section -- FuseScope Collector
@@ -2172,8 +2215,8 @@ fusescopeCollector:
     periodSeconds: 10
     timeoutSeconds: 5
     failureThreshold: 6
-  # fusescopeCollector.readinessProbe -- Readiness probe timing on the health status, ready only
-  # while the collector holds a valid ingest policy.
+  # fusescopeCollector.readinessProbe -- Readiness probe timing on the health status; with RUM,
+  # ready only while the collector holds a valid ingest policy.
   # @section -- FuseScope Collector
   readinessProbe:
     initialDelaySeconds: 5

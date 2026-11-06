@@ -1,4 +1,4 @@
-{{- if and .Values.otelCollector.autoscaling.enabled .Values.otelCollector.autoscaling.keda.enabled -}}
+{{- if and .Values.otelCollector.enabled .Values.otelCollector.autoscaling.enabled .Values.otelCollector.autoscaling.keda.enabled -}}
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:

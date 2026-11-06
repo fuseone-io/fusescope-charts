@@ -1,4 +1,4 @@
-{{- if and .Values.fusescopeCollector.enabled .Values.fusescopeCollector.ingress.enabled }}
+{{- if and (include "fusescopeCollector.rumEnabled" .) .Values.fusescopeCollector.ingress.enabled }}
 {{- $ing := .Values.fusescopeCollector.ingress -}}
 {{- $fullName := include "fusescopeCollector.fullname" . -}}
 {{- $port := .Values.fusescopeCollector.rum.port -}}
