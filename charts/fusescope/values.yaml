@@ -2008,14 +2008,14 @@ fusescopeCollector:
   # @section -- FuseScope Collector
   replicaCount: 1
   # fusescopeCollector.image -- Collector image, by `tag` and `digest`: with both, the image
-  # is `<tag>@<digest>` and the digest is what is pulled. The default is the signed 0.3.0
+  # is `<tag>@<digest>` and the digest is what is pulled. The default is the signed 0.3.1
   # multi-arch index.
   # @section -- FuseScope Collector
   image:
     registry: ghcr.io
     repository: fuseone-io/fusescope-collector
-    tag: 0.3.0
-    digest: sha256:7a0aa69b3eea8fed32115fcbf335070ed2ff17eca4b99b2fa8fa0265c913e554
+    tag: 0.3.1
+    digest: sha256:3856f022c2ac27369c3bb1224b8945940bd7d6f6a30fce0f59734584cfc4374b
     pullPolicy: IfNotPresent
   # fusescopeCollector.imagePullSecrets -- Image pull secrets. Overrides the root and global values.
   # @section -- FuseScope Collector
@@ -2063,7 +2063,12 @@ fusescopeCollector:
     # chart 0.161.0 RUM came with `fusescopeCollector.enabled`; such installs must now set this.
     # @section -- FuseScope Collector
     enabled: false
-    # fusescopeCollector.rum.port -- Port of the RUM listener, TLS 1.3 only.
+    # fusescopeCollector.rum.tlsMinVersion -- RUM TLS minimum, `"1.3"` or `"1.2"`. `"1.2"` opts
+    # in for stock Android 6-9 (API 23-28), with ECDHE AEAD suites only (collector ADR 0009); the
+    # public proxy in front must accept TLS 1.2 on the RUM endpoint too.
+    # @section -- FuseScope Collector
+    tlsMinVersion: "1.3"
+    # fusescopeCollector.rum.port -- Port of the RUM listener.
     # @section -- FuseScope Collector
     port: 4319
     tls:
