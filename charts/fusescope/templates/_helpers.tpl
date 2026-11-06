@@ -795,6 +795,7 @@ tls:
     "traces" (default "signoz_traces" $ch.traceDatabase)
     "logs" (default "signoz_logs" $ch.logDatabase)
     "metrics" (default "signoz_metrics" $ch.database)
+    "meter" (default "signoz_meter" $ch.meterDatabase)
 -}}
 {{- if .Values.clickhouse.enabled -}}
 {{- if .Values.clickhouse.password -}}

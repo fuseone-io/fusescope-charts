@@ -112,6 +112,7 @@ data:
       fusescope_clickhouse/meter:
         mode: meter
         {{- include "fusescopeCollector.clickhouseConnection" $ch | nindent 8 }}
+        meter: {database: {{ $ch.meter }}}
       {{- end }}
 
     extensions:

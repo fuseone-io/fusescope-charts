@@ -277,6 +277,39 @@ tests:
           path: data["config.yaml"]
           pattern: "  fusescope_clickhouse/meter:\n    mode: meter\n    endpoint: ch.example.com:9000\n    username: \"writer\"\n    password_file: /etc/fusescope-collector/clickhouse/password\n    tls:\n      insecure: false\n"
 
+  - it: should meter into the default meter database
+    template: templates/fusescope-collector/configmap.yaml
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "  fusescope_clickhouse/meter:\n    mode: meter\n(    .*\n)*    meter: {database: signoz_meter}\n"
+
+  - it: should meter into a custom in-chart meter database
+    template: templates/fusescope-collector/configmap.yaml
+    set:
+      clickhouse.meterDatabase: custom_meter
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "  fusescope_clickhouse/meter:\n    mode: meter\n(    .*\n)*    meter: {database: custom_meter}\n"
+
+  - it: should meter into a custom external meter database
+    template: templates/fusescope-collector/configmap.yaml
+    set:
+      clickhouse.enabled: false
+      externalClickhouse:
+        host: ch.example.com
+        cluster: main
+        user: writer
+        secure: true
+        existingSecret: ch-credentials
+        existingSecretPasswordKey: pw
+        meterDatabase: ext_meter
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "  fusescope_clickhouse/meter:\n    mode: meter\n(    .*\n)*    meter: {database: ext_meter}\n"
+
   - it: should write the in-chart ClickHouse password into its own Secret
     template: templates/fusescope-collector/secret-clickhouse.yaml
     asserts:
