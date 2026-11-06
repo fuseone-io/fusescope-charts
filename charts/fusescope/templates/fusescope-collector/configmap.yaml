@@ -1,5 +1,9 @@
 {{- if include "fusescopeCollector.active" . }}
 {{- $c := .Values.fusescopeCollector -}}
+{{- $rumTLS := default "1.3" $c.rum.tlsMinVersion | toString -}}
+{{- if not (has $rumTLS (list "1.2" "1.3")) -}}
+{{- fail "fusescopeCollector.rum.tlsMinVersion must be \"1.2\" or \"1.3\"" -}}
+{{- end -}}
 {{- $ch := include "fusescopeCollector.clickhouse" . | fromJson -}}
 {{- $proxies := include "fusescopeCollector.trustedProxies" . | fromJsonArray -}}
 {{- $rum := include "fusescopeCollector.rumEnabled" . -}}
@@ -63,7 +67,7 @@ data:
       rum:
         endpoint: 0.0.0.0:{{ $c.rum.port }}
         tls:
-          min_version: "1.3"
+          min_version: {{ $rumTLS | quote }}
           cert_file: /etc/fusescope-collector/rum-tls/tls.crt
           key_file: /etc/fusescope-collector/rum-tls/tls.key
         ingest_policy: fusescope_opamp

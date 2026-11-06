@@ -531,3 +531,30 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: "the RUM listener is TLS only"
+
+  - it: should retain strict RUM TLS by default for the pinned collector
+    template: templates/fusescope-collector/configmap.yaml
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'rum:\n    endpoint: 0.0.0.0:4319\n    tls:\n      min_version: "1.3"'
+
+  - it: should allow TLS 1.2 on RUM without changing OpAMP TLS
+    template: templates/fusescope-collector/configmap.yaml
+    set:
+      fusescopeCollector.rum.tlsMinVersion: "1.2"
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'rum:\n    endpoint: 0.0.0.0:4319\n    tls:\n      min_version: "1.2"'
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'fusescope_opamp:\n  endpoint: [^\n]+\n  tls:\n    min_version: "1.3"'
+
+  - it: should refuse TLS 1.1 on RUM
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.rum.tlsMinVersion: "1.1"
+    asserts:
+      - failedTemplate:
+          errorMessage: 'fusescopeCollector.rum.tlsMinVersion must be "1.2" or "1.3"'
