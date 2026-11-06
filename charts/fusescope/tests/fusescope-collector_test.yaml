@@ -43,7 +43,7 @@ tests:
           value: fusescope-collector
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/fuseone-io/fusescope-collector:0.1.0@sha256:894e8718ceb8c6785997f49014fe8efea9c246122f175504ed980e51afcea028
+          value: ghcr.io/fuseone-io/fusescope-collector:0.3.0@sha256:7a0aa69b3eea8fed32115fcbf335070ed2ff17eca4b99b2fa8fa0265c913e554
       - equal:
           path: spec.template.spec.containers[0].args
           value:
@@ -75,7 +75,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/fuseone-io/fusescope-collector:0.1.0
+          value: ghcr.io/fuseone-io/fusescope-collector:0.3.0
 
   - it: should take the image by digest alone
     template: templates/fusescope-collector/deployment.yaml
@@ -84,7 +84,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/fuseone-io/fusescope-collector@sha256:894e8718ceb8c6785997f49014fe8efea9c246122f175504ed980e51afcea028
+          value: ghcr.io/fuseone-io/fusescope-collector@sha256:7a0aa69b3eea8fed32115fcbf335070ed2ff17eca4b99b2fa8fa0265c913e554
 
   - it: should mount the token, both certificates and the ClickHouse password as files
     template: templates/fusescope-collector/deployment.yaml
@@ -207,10 +207,108 @@ tests:
           pattern: "include_recoverable_errors: true\\n      recovery_duration: 0s"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "traces:\\n      receivers: \\[rum\\]\\n      processors: \\[memory_limiter, signozspanmapper, signozllmpricing\\]\\n      exporters: \\[fusescope_clickhouse, fusescope_spanmetrics\\]"
+          pattern: "traces:\\n      receivers: \\[rum\\]\\n      processors: \\[memory_limiter, signozspanmapper, signozllmpricing\\]\\n      exporters: \\[fusescope_clickhouse, fusescope_spanmetrics, fusescope_meter\\]"
       - matchRegex:
           path: data["config.yaml"]
           pattern: "logs:\\n      receivers: \\[rum\\]"
+
+  - it: should meter ingested traces and logs into signoz_meter through its own exporter
+    template: templates/fusescope-collector/configmap.yaml
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "connectors:\n  fusescope_spanmetrics:\n  fusescope_meter: {}\n"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "  fusescope_clickhouse/meter:\n    mode: meter\n    endpoint: fusescope-clickhouse:9000\n    username: \"admin\"\n    password_file: /etc/fusescope-collector/clickhouse/password\n    tls:\n      insecure: true\n"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "traces:\n      receivers: \\[rum\\]\n      processors: \\[memory_limiter, signozspanmapper, signozllmpricing\\]\n      exporters: \\[fusescope_clickhouse, fusescope_spanmetrics, fusescope_meter\\]"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "logs:\n      receivers: \\[rum\\]\n      processors: \\[memory_limiter\\]\n      exporters: \\[fusescope_clickhouse, fusescope_meter\\]"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "    metrics/meter:\n      receivers: \\[fusescope_meter\\]\n      exporters: \\[fusescope_clickhouse/meter\\]\n"
+      # Derived data is not metered: span metrics and the collector's own telemetry.
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "    metrics:\n      receivers: \\[fusescope_spanmetrics\\]\n      processors: \\[memory_limiter\\]\n      exporters: \\[fusescope_clickhouse\\]\n"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "    metrics/self:\n      receivers: \\[prometheus/self\\]\n      processors: \\[resourcedetection/system\\]\n      exporters: \\[fusescope_clickhouse\\]\n"
+
+  - it: should record attribute metadata on the signals exporter only
+    template: templates/fusescope-collector/configmap.yaml
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "    metrics: {database: signoz_metrics}\n    attributes_metadata: {enabled: true}\n"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "mode: meter(\n.*)*attributes_metadata"
+
+  - it: should leave the meter and attribute metadata out when disabled
+    template: templates/fusescope-collector/configmap.yaml
+    set:
+      fusescopeCollector.meter.enabled: false
+      fusescopeCollector.attributesMetadata.enabled: false
+    asserts:
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "fusescope_meter|mode: meter|metrics/meter|attributes_metadata"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "exporters: \\[fusescope_clickhouse, fusescope_spanmetrics\\]\n"
+
+  - it: should meter to an external ClickHouse over TLS with its password file
+    template: templates/fusescope-collector/configmap.yaml
+    set:
+      clickhouse.enabled: false
+      externalClickhouse:
+        host: ch.example.com
+        cluster: main
+        user: writer
+        secure: true
+        existingSecret: ch-credentials
+        existingSecretPasswordKey: pw
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "  fusescope_clickhouse/meter:\n    mode: meter\n    endpoint: ch.example.com:9000\n    username: \"writer\"\n    password_file: /etc/fusescope-collector/clickhouse/password\n    tls:\n      insecure: false\n"
+
+  - it: should meter into the default meter database
+    template: templates/fusescope-collector/configmap.yaml
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "  fusescope_clickhouse/meter:\n    mode: meter\n(    .*\n)*    meter: {database: signoz_meter}\n"
+
+  - it: should meter into a custom in-chart meter database
+    template: templates/fusescope-collector/configmap.yaml
+    set:
+      clickhouse.meterDatabase: custom_meter
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "  fusescope_clickhouse/meter:\n    mode: meter\n(    .*\n)*    meter: {database: custom_meter}\n"
+
+  - it: should meter into a custom external meter database
+    template: templates/fusescope-collector/configmap.yaml
+    set:
+      clickhouse.enabled: false
+      externalClickhouse:
+        host: ch.example.com
+        cluster: main
+        user: writer
+        secure: true
+        existingSecret: ch-credentials
+        existingSecretPasswordKey: pw
+        meterDatabase: ext_meter
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "  fusescope_clickhouse/meter:\n    mode: meter\n(    .*\n)*    meter: {database: ext_meter}\n"
 
   - it: should write the in-chart ClickHouse password into its own Secret
     template: templates/fusescope-collector/secret-clickhouse.yaml

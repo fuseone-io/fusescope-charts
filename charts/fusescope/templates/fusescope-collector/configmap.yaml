@@ -90,25 +90,30 @@ data:
 
     connectors:
       fusescope_spanmetrics:
+      {{- if $c.meter.enabled }}
+      fusescope_meter: {}
+      {{- end }}
 
     exporters:
       fusescope_clickhouse:
-        endpoint: {{ $ch.endpoint }}
-        {{- with $ch.user }}
-        username: {{ . | quote }}
-        {{- end }}
-        {{- if $ch.secret }}
-        password_file: /etc/fusescope-collector/clickhouse/password
-        {{- end }}
-        tls:
-          insecure: {{ not $ch.secure }}
+        {{- include "fusescopeCollector.clickhouseConnection" $ch | nindent 8 }}
         traces: {database: {{ $ch.traces }}}
         logs: {database: {{ $ch.logs }}}
         metrics: {database: {{ $ch.metrics }}}
+        {{- if $c.attributesMetadata.enabled }}
+        attributes_metadata: {enabled: true}
+        {{- end }}
         # The service map joins parent and child spans only within one insert.
         sending_queue:
           batch:
             flush_timeout: 10s
+      {{- if $c.meter.enabled }}
+      # Only the meter's hourly usage, to signoz_meter, with its own queue.
+      fusescope_clickhouse/meter:
+        mode: meter
+        {{- include "fusescopeCollector.clickhouseConnection" $ch | nindent 8 }}
+        meter: {database: {{ $ch.meter }}}
+      {{- end }}
 
     extensions:
       fusescope_opamp: {}
@@ -142,15 +147,20 @@ data:
         traces:
           receivers: [rum]
           processors: [memory_limiter, signozspanmapper, signozllmpricing]
-          exporters: [fusescope_clickhouse, fusescope_spanmetrics]
+          exporters: [fusescope_clickhouse, fusescope_spanmetrics{{ if $c.meter.enabled }}, fusescope_meter{{ end }}]
         logs:
           receivers: [rum]
           processors: [memory_limiter]
-          exporters: [fusescope_clickhouse]
+          exporters: [fusescope_clickhouse{{ if $c.meter.enabled }}, fusescope_meter{{ end }}]
         metrics:
           receivers: [fusescope_spanmetrics]
           processors: [memory_limiter]
           exporters: [fusescope_clickhouse]
+        {{- if $c.meter.enabled }}
+        metrics/meter:
+          receivers: [fusescope_meter]
+          exporters: [fusescope_clickhouse/meter]
+        {{- end }}
         {{- if $c.selfMetrics.enabled }}
         metrics/self:
           receivers: [prometheus/self]

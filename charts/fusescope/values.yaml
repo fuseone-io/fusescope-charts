@@ -2001,14 +2001,14 @@ fusescopeCollector:
   # @section -- FuseScope Collector
   replicaCount: 1
   # fusescopeCollector.image -- Collector image, by `tag` and `digest`: with both, the image
-  # is `<tag>@<digest>` and the digest is what is pulled. The default is the signed 0.1.0
+  # is `<tag>@<digest>` and the digest is what is pulled. The default is the signed 0.3.0
   # multi-arch index.
   # @section -- FuseScope Collector
   image:
     registry: ghcr.io
     repository: fuseone-io/fusescope-collector
-    tag: 0.1.0
-    digest: sha256:894e8718ceb8c6785997f49014fe8efea9c246122f175504ed980e51afcea028
+    tag: 0.3.0
+    digest: sha256:7a0aa69b3eea8fed32115fcbf335070ed2ff17eca4b99b2fa8fa0265c913e554
     pullPolicy: IfNotPresent
   # fusescopeCollector.imagePullSecrets -- Image pull secrets. Overrides the root and global values.
   # @section -- FuseScope Collector
@@ -2085,6 +2085,19 @@ fusescopeCollector:
     # working through a FuseScope outage.
     # @section -- FuseScope Collector
     maxStaleness: ""
+  meter:
+    # fusescopeCollector.meter.enabled -- Count the ingested spans, log records and their sizes
+    # each hour, per service and ingestion key, into `signoz_meter` for Meter Explorer and
+    # Ingestion Settings (`fusescope_meter`, through its own `fusescope_clickhouse/meter`
+    # exporter). Derived data (span metrics, the collector's own telemetry) is not metered.
+    # @section -- FuseScope Collector
+    enabled: true
+  attributesMetadata:
+    # fusescopeCollector.attributesMetadata.enabled -- Record the distinct attribute sets of what
+    # is written into `signoz_metadata`, for the related values of filter suggestions. Bounded,
+    # and never delays or fails the data path.
+    # @section -- FuseScope Collector
+    enabled: true
   selfMetrics:
     # fusescopeCollector.selfMetrics.enabled -- Write the collector's own telemetry (receivers,
     # processors, exporters, queues, memory) to ClickHouse as `otelcol_*` metrics. It is read from
