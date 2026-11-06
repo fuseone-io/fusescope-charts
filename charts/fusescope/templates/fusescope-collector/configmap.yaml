@@ -11,9 +11,6 @@
 {{- $receivers := list -}}
 {{- if $otlp }}{{ $receivers = append $receivers "otlp" }}{{ end -}}
 {{- if $rum }}{{ $receivers = append $receivers "rum" }}{{ end -}}
-{{- $metricsReceivers := list -}}
-{{- if $otlp }}{{ $metricsReceivers = append $metricsReceivers "otlp" }}{{ end -}}
-{{- $metricsReceivers = append $metricsReceivers "fusescope_spanmetrics" -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -187,8 +184,15 @@ data:
           receivers: [{{ join ", " $receivers }}]
           processors: [memory_limiter]
           exporters: [fusescope_clickhouse{{ if $c.meter.enabled }}, fusescope_meter{{ end }}]
+        {{- if $otlp }}
         metrics:
-          receivers: [{{ join ", " $metricsReceivers }}]
+          receivers: [otlp]
+          processors: [memory_limiter]
+          exporters: [fusescope_clickhouse{{ if $c.meter.enabled }}, fusescope_meter{{ end }}]
+        {{- end }}
+        # Span metrics are derived from the traces: not metered.
+        metrics/spanmetrics:
+          receivers: [fusescope_spanmetrics]
           processors: [memory_limiter]
           exporters: [fusescope_clickhouse]
         {{- if $c.meter.enabled }}

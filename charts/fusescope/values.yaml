@@ -2116,8 +2116,8 @@ fusescopeCollector:
     # @section -- FuseScope Collector
     maxStaleness: ""
   meter:
-    # fusescopeCollector.meter.enabled -- Count the ingested spans, log records and their sizes
-    # each hour, per service and ingestion key, into `signoz_meter` for Meter Explorer and
+    # fusescopeCollector.meter.enabled -- Count the ingested spans, log records and data points,
+    # and the sizes of spans and log records, each hour, per service and ingestion key, into `signoz_meter` for Meter Explorer and
     # Ingestion Settings (`fusescope_meter`, through its own `fusescope_clickhouse/meter`
     # exporter). Derived data (span metrics, the collector's own telemetry) is not metered.
     # @section -- FuseScope Collector

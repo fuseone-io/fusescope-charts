@@ -133,13 +133,17 @@ tests:
           pattern: "\\n  rum:\\n"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "    traces:\\n      receivers: \\[otlp\\]\\n      processors: \\[memory_limiter, signozspanmapper, signozllmpricing\\]\\n      exporters: \\[fusescope_clickhouse, fusescope_spanmetrics\\]\\n"
+          pattern: "    traces:\\n      receivers: \\[otlp\\]\\n      processors: \\[memory_limiter, signozspanmapper, signozllmpricing\\]\\n      exporters: \\[fusescope_clickhouse, fusescope_spanmetrics, fusescope_meter\\]\\n"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "    logs:\\n      receivers: \\[otlp\\]\\n      processors: \\[memory_limiter\\]\\n      exporters: \\[fusescope_clickhouse\\]\\n"
+          pattern: "    logs:\\n      receivers: \\[otlp\\]\\n      processors: \\[memory_limiter\\]\\n      exporters: \\[fusescope_clickhouse, fusescope_meter\\]\\n"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "    metrics:\\n      receivers: \\[otlp, fusescope_spanmetrics\\]\\n      processors: \\[memory_limiter\\]\\n      exporters: \\[fusescope_clickhouse\\]\\n"
+          pattern: "    metrics:\\n      receivers: \\[otlp\\]\\n      processors: \\[memory_limiter\\]\\n      exporters: \\[fusescope_clickhouse, fusescope_meter\\]\\n"
+      # Span metrics are derived: their own pipeline, not metered.
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "    metrics/spanmetrics:\\n      receivers: \\[fusescope_spanmetrics\\]\\n      processors: \\[memory_limiter\\]\\n      exporters: \\[fusescope_clickhouse\\]\\n"
       - matchRegex:
           path: data["config.yaml"]
           pattern: "    metrics/self:\\n      receivers: \\[prometheus/self\\]\\n"
@@ -306,7 +310,12 @@ tests:
         template: templates/fusescope-collector/configmap.yaml
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "    metrics:\\n      receivers: \\[otlp, fusescope_spanmetrics\\]\\n"
+          pattern: "    metrics:\\n      receivers: \\[otlp\\]\\n"
+        template: templates/fusescope-collector/configmap.yaml
+      # Span metrics are derived: their own pipeline, not metered.
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "    metrics/spanmetrics:\\n      receivers: \\[fusescope_spanmetrics\\]\\n"
         template: templates/fusescope-collector/configmap.yaml
       - contains:
           path: spec.template.spec.containers[0].volumeMounts
@@ -374,7 +383,7 @@ tests:
           pattern: "    traces:\\n      receivers: \\[rum\\]\\n"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "    metrics:\\n      receivers: \\[fusescope_spanmetrics\\]\\n"
+          pattern: "    metrics/spanmetrics:\\n      receivers: \\[fusescope_spanmetrics\\]\\n"
 
   - it: should keep the earlier collector when asked, without the compat Service
     set:
@@ -550,6 +559,10 @@ tests:
       - matchRegex:
           path: data["config.yaml"]
           pattern: "    tls:\\n      insecure: false\\n      # clickhouse.verify / externalClickhouse.verify is false: TLS without\\n      # checking the server's certificate, as the chart's contract says.\\n      insecure_skip_verify: true\\n"
+      # The meter exporter shares the connection, verify included.
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "  fusescope_clickhouse/meter:\\n    mode: meter\\n(    .*\\n)*    tls:\\n      insecure: false\\n      # clickhouse.verify / externalClickhouse.verify is false: TLS without\\n      # checking the server's certificate, as the chart's contract says.\\n      insecure_skip_verify: true\\n"
 
   - it: should skip an external ClickHouse's certificate check when secure and not verify
     template: templates/fusescope-collector/configmap.yaml
