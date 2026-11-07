@@ -100,41 +100,16 @@ metadata:
   name: {{ include "fusescopeSchema.jobName" . }}
   labels:
     {{- include "telemetryStoreMigrator.labels" . | nindent 4 }}
+  {{- with .Values.telemetryStoreMigrator.annotations }}
   annotations:
-    # A later upgrade must not delete a Job still migrating: that would stop
-    # it with 0001 started. Helm keeps it, Argo CD does not prune it, and
-    # ttlSecondsAfterFinished removes it once done; the next Job waits for the
-    # lease. Argo CD renders every revision as 1: Force and Replace recreate
-    # the Job instead of editing its immutable template.
-    helm.sh/resource-policy: keep
-    argocd.argoproj.io/sync-options: Force=true,Replace=true,Prune=false
-    {{- with .Values.telemetryStoreMigrator.annotations }}
     {{- toYaml . | nindent 4 }}
-    {{- end }}
-# An ordinary resource of the release, not a hook. Its name carries the
-# release revision and a hash of its pod template, so every upgrade runs a new
-# Job, after its ConfigMap and Secret are in place: an up-to-date schema is a
-# no-op, a Job that failed runs again once the cause is fixed, and its
-# immutable template is never edited. The collectors wait for it with
-# check --wait.
-spec:
-  ttlSecondsAfterFinished: {{ .Values.telemetryStoreMigrator.ttlSecondsAfterFinished }}
-  # fusescope-schema's exit codes (collector spec §1): 2 is a connection or
-  # lease error before anything started, safe to retry, as while ClickHouse
-  # starts beside it on a fresh install; 1 is a refusal and 4 an interrupted
-  # migration, which a retry would only refuse again.
-  backoffLimit: {{ .Values.telemetryStoreMigrator.backoffLimit }}
-  {{- if semverCompare ">=1.26-0" .Capabilities.KubeVersion.Version }}
-  # On by default from Kubernetes 1.26; before, exits 1 and 4 are retried
-  # like any other until backoffLimit, each retry refusing again.
-  podFailurePolicy:
-    rules:
-      - action: FailJob
-        onExitCodes:
-          containerName: migrate
-          operator: In
-          values: [1, 4]
   {{- end }}
-  template:
-    {{- include "fusescopeSchema.podTemplate" . | nindent 4 }}
+# An ordinary resource of the release, not a hook, named by a hash of its
+# whole spec and telemetryStoreMigrator.runId. An upgrade that changes neither
+# leaves it alone, finished or still running; one that changes the spec
+# creates a new Job after its ConfigMap and Secret, so its immutable spec is
+# never edited. A new runId runs it again, as after a failure once the cause
+# is fixed. The collectors wait for it with check --wait.
+spec:
+  {{- include "fusescopeSchema.jobSpec" . | nindent 2 }}
 {{- end }}

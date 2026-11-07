@@ -151,13 +151,37 @@ spec:
 {{- end -}}
 
 {{/*
-The Job's name: the release revision, so every upgrade runs a new Job, and a
-hash of the whole pod template, so a renderer that keeps the revision, as
-Argo CD does, still never edits an immutable one.
+The Job's whole spec, every field of which is immutable or may as well be.
+*/}}
+{{- define "fusescopeSchema.jobSpec" -}}
+# fusescope-schema's exit codes (collector spec §1): 2 is a connection or
+# lease error before anything started, safe to retry, as while ClickHouse
+# starts beside it on a fresh install; 1 is a refusal and 4 an interrupted
+# migration, which a retry would only refuse again.
+backoffLimit: {{ .Values.telemetryStoreMigrator.backoffLimit }}
+{{- if semverCompare ">=1.26-0" .Capabilities.KubeVersion.Version }}
+# On by default from Kubernetes 1.26; before, exits 1 and 4 are retried like
+# any other until backoffLimit, each retry refusing again.
+podFailurePolicy:
+  rules:
+    - action: FailJob
+      onExitCodes:
+        containerName: migrate
+        operator: In
+        values: [1, 4]
+{{- end }}
+template:
+  {{- include "fusescopeSchema.podTemplate" . | nindent 2 }}
+{{- end -}}
+
+{{/*
+The Job's name: a hash of its whole spec and the runId. The same spec keeps
+the Job, so an upgrade never deletes one still running; any change renames
+it, so its immutable spec is never edited.
 */}}
 {{- define "fusescopeSchema.jobName" -}}
-{{- $hash := include "fusescopeSchema.podTemplate" . | sha256sum | trunc 8 -}}
-{{- printf "%s-r%d-%s" (include "telemetryStoreMigrator.fullname" . | trunc 42 | trimSuffix "-") (int .Release.Revision) $hash -}}
+{{- $hash := printf "%s\nrunId: %s" (include "fusescopeSchema.jobSpec" .) (toString .Values.telemetryStoreMigrator.runId) | sha256sum | trunc 10 -}}
+{{- printf "%s-%s" (include "telemetryStoreMigrator.fullname" . | trunc 52 | trimSuffix "-") $hash -}}
 {{- end -}}
 
 {{- define "fusescopeSchema.configMapName" -}}
