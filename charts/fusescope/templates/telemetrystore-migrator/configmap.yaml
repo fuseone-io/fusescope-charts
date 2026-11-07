@@ -1,0 +1,13 @@
+{{- if include "fusescopeSchema.enabled" . }}
+# fusescope-schema's connection, shared by the Job and the collectors' init
+# container so both connect alike. No password: that is a mounted Secret.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "fusescopeSchema.configMapName" . }}
+  labels:
+    {{- include "telemetryStoreMigrator.labels" . | nindent 4 }}
+data:
+  config.json: |
+    {{- include "fusescopeSchema.config" . | nindent 4 }}
+{{- end }}

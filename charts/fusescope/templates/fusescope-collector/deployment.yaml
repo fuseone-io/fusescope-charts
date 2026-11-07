@@ -59,7 +59,11 @@ spec:
       {{- end }}
       securityContext:
         {{- toYaml $c.podSecurityContext | nindent 8 }}
-      {{- if .Values.telemetryStoreMigrator.enabled }}
+      {{- if include "fusescopeSchema.enabled" . }}
+      # Wait, without writing, until the schema is migrated before writing.
+      initContainers:
+        {{- include "fusescopeSchema.checkContainer" . | nindent 8 }}
+      {{- else if include "telemetryStoreMigrator.fork" . }}
       # On a fresh install the migrator is an ordinary Job running beside
       # this Deployment: wait until the schema is migrated before writing,
       # with the migrator's own image and settings.
@@ -195,5 +199,8 @@ spec:
             items:
               - key: {{ $ch.key }}
                 path: password
+        {{- end }}
+        {{- if include "fusescopeSchema.enabled" . }}
+        {{- include "fusescopeSchema.volumes" . | nindent 8 }}
         {{- end }}
 {{- end }}

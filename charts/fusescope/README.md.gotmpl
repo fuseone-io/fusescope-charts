@@ -19,7 +19,7 @@ Kubernetes cluster using [Helm](https://helm.sh) package manager.
 
 ### Prerequisites
 
-- Kubernetes 1.16+
+- Kubernetes 1.16+; 1.26+ for fusescope-schema's Job to stop at once on a refusal (`podFailurePolicy`), which earlier versions retry until `telemetryStoreMigrator.backoffLimit`
 - Helm 3.0+
 
 ### Installing the Chart
@@ -156,6 +156,13 @@ The chart renders a disk for the bucket, a filesystem cache disk in front of it 
 
 > [!WARNING]
 > ### Breaking Changes
+> #### Version 0.162.0
+> The schema is migrated by fusescope-schema, the FuseScope schema migrator, a second binary of the FuseScope collector image (`telemetryStoreMigrator.migrator: fusescope-schema`). On an upgrade it adopts the schema the earlier collector's migrator created (fusescope-otel-collector 0.145.0), with no change to the telemetry tables, and refuses any other schema, listing the differences. The Job runs `migrate`; the collectors' init container waits with `check --wait`. Both read one connection from a ConfigMap and the password only from a Secret mounted as a file. The Job is no longer a Helm hook: it is named by the release revision and a hash of its pod template, so every upgrade runs a new one, a no-op on an up-to-date schema, and a Job that failed runs again on the next upgrade once the cause is fixed. Argo CD, which renders every revision alike, recreates it on any change to its pod template.
+>
+> - `telemetryStoreMigrator.enableReplication: false` now fails the install: fusescope-schema migrates only the replicated schema.
+> - The chart's ClickHouse gets `keeper_map_path_prefix` (`clickhouse.defaultSettings`), which restarts its pods once on the upgrade. An external ClickHouse needs it set, on every replica, with Keeper or ZooKeeper, the `shard` and `replica` macros and the cluster in `remote_servers`.
+> - To keep the earlier collector's migrator, set `telemetryStoreMigrator.migrator: fork`. Going back to it is possible only while fusescope-schema has recorded `0001` alone.
+>
 > #### Version 0.161.0
 > The FuseScope collector (`fusescopeCollector`) is now the default OTLP collector, and the earlier collector (`otelCollector`, fusescope-otel-collector) is off by default (`otelCollector.enabled: false`). A Service named like the earlier collector, with its OTLP ports, now selects the FuseScope collector, so OTLP endpoints keep working; the earlier collector's other receivers (Jaeger gRPC and Thrift/HTTP, Heroku and JSON logs) are not served, and new telemetry can take about 10 s to appear, where it took about 1 s. Its image still runs the schema migrations.
 >
