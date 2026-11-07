@@ -31,7 +31,7 @@ tests:
           of: Job
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/fuseone-io/fusescope-collector:sha-e915bb73edd6@sha256:41b0cee59e5d4358e0267c377276e4eb95b145e0bb40838f28d82f2a4dc0344e
+          value: ghcr.io/fuseone-io/fusescope-collector:0.4.0@sha256:a1e2fcd7248035b231e8d4c9c3234d617b983296464d31834fdabc1184fa24a1
       - equal:
           path: spec.template.spec.containers[0].command
           value: ["/fusescope-schema"]
@@ -142,7 +142,7 @@ tests:
           count: 1
       - equal:
           path: spec.template.spec.initContainers[0].image
-          value: ghcr.io/fuseone-io/fusescope-collector:sha-e915bb73edd6@sha256:41b0cee59e5d4358e0267c377276e4eb95b145e0bb40838f28d82f2a4dc0344e
+          value: ghcr.io/fuseone-io/fusescope-collector:0.4.0@sha256:a1e2fcd7248035b231e8d4c9c3234d617b983296464d31834fdabc1184fa24a1
       - equal:
           path: spec.template.spec.initContainers[0].command
           value: ["/fusescope-schema"]
@@ -398,7 +398,7 @@ tests:
     asserts:
       - equal:
           path: metadata.name
-          value: signoz-telemetrystore-migrator-21fc6f8921
+          value: signoz-telemetrystore-migrator-90fd103335
       - matchRegex:
           path: metadata.name
           pattern: ^signoz-telemetrystore-migrator-[0-9a-f]{10}$
@@ -432,7 +432,7 @@ tests:
           path: spec.podFailurePolicy
       - notEqual:
           path: metadata.name
-          value: signoz-telemetrystore-migrator-21fc6f8921
+          value: signoz-telemetrystore-migrator-90fd103335
 
   - it: should rename the Job when its resources changes
     template: templates/telemetrystore-migrator/job.yaml
@@ -441,7 +441,7 @@ tests:
     asserts:
       - notEqual:
           path: metadata.name
-          value: signoz-telemetrystore-migrator-21fc6f8921
+          value: signoz-telemetrystore-migrator-90fd103335
 
   - it: should rename the Job when its pull policy changes
     template: templates/telemetrystore-migrator/job.yaml
@@ -450,7 +450,7 @@ tests:
     asserts:
       - notEqual:
           path: metadata.name
-          value: signoz-telemetrystore-migrator-21fc6f8921
+          value: signoz-telemetrystore-migrator-90fd103335
 
   - it: should rename the Job when its ServiceAccount changes
     template: templates/telemetrystore-migrator/job.yaml
@@ -459,7 +459,7 @@ tests:
     asserts:
       - notEqual:
           path: metadata.name
-          value: signoz-telemetrystore-migrator-21fc6f8921
+          value: signoz-telemetrystore-migrator-90fd103335
 
   - it: should rename the Job when its security context changes
     template: templates/telemetrystore-migrator/job.yaml
@@ -468,7 +468,7 @@ tests:
     asserts:
       - notEqual:
           path: metadata.name
-          value: signoz-telemetrystore-migrator-21fc6f8921
+          value: signoz-telemetrystore-migrator-90fd103335
 
   - it: should rename the Job when its pod security context changes
     template: templates/telemetrystore-migrator/job.yaml
@@ -477,7 +477,7 @@ tests:
     asserts:
       - notEqual:
           path: metadata.name
-          value: signoz-telemetrystore-migrator-21fc6f8921
+          value: signoz-telemetrystore-migrator-90fd103335
 
   - it: should rename the Job when its affinity changes
     template: templates/telemetrystore-migrator/job.yaml
@@ -486,7 +486,7 @@ tests:
     asserts:
       - notEqual:
           path: metadata.name
-          value: signoz-telemetrystore-migrator-21fc6f8921
+          value: signoz-telemetrystore-migrator-90fd103335
 
   - it: should rename the Job when its tolerations changes
     template: templates/telemetrystore-migrator/job.yaml
@@ -495,7 +495,7 @@ tests:
     asserts:
       - notEqual:
           path: metadata.name
-          value: signoz-telemetrystore-migrator-21fc6f8921
+          value: signoz-telemetrystore-migrator-90fd103335
 
   - it: should rename the Job when its node selector changes
     template: templates/telemetrystore-migrator/job.yaml
@@ -504,7 +504,7 @@ tests:
     asserts:
       - notEqual:
           path: metadata.name
-          value: signoz-telemetrystore-migrator-21fc6f8921
+          value: signoz-telemetrystore-migrator-90fd103335
 
   - it: should rename the Job when its topology spread changes
     template: templates/telemetrystore-migrator/job.yaml
@@ -513,7 +513,7 @@ tests:
     asserts:
       - notEqual:
           path: metadata.name
-          value: signoz-telemetrystore-migrator-21fc6f8921
+          value: signoz-telemetrystore-migrator-90fd103335
 
   - it: should rename the Job when its image pull secrets changes
     template: templates/telemetrystore-migrator/job.yaml
@@ -522,7 +522,7 @@ tests:
     asserts:
       - notEqual:
           path: metadata.name
-          value: signoz-telemetrystore-migrator-21fc6f8921
+          value: signoz-telemetrystore-migrator-90fd103335
 
   - it: should rename the Job when its image changes
     template: templates/telemetrystore-migrator/job.yaml
@@ -531,7 +531,7 @@ tests:
     asserts:
       - notEqual:
           path: metadata.name
-          value: signoz-telemetrystore-migrator-21fc6f8921
+          value: signoz-telemetrystore-migrator-90fd103335
 
   - it: should rename the Job when its connection changes
     template: templates/telemetrystore-migrator/job.yaml
@@ -540,7 +540,7 @@ tests:
     asserts:
       - notEqual:
           path: metadata.name
-          value: signoz-telemetrystore-migrator-21fc6f8921
+          value: signoz-telemetrystore-migrator-90fd103335
 
   - it: should rename the Job when its backoff limit changes
     template: templates/telemetrystore-migrator/job.yaml
@@ -549,7 +549,7 @@ tests:
     asserts:
       - notEqual:
           path: metadata.name
-          value: signoz-telemetrystore-migrator-21fc6f8921
+          value: signoz-telemetrystore-migrator-90fd103335
 
   - it: should rename the Job when its runId changes
     template: templates/telemetrystore-migrator/job.yaml
@@ -558,7 +558,7 @@ tests:
     asserts:
       - notEqual:
           path: metadata.name
-          value: signoz-telemetrystore-migrator-21fc6f8921
+          value: signoz-telemetrystore-migrator-90fd103335
 
   - it: should keep the Job's name for another password, which only its Secret holds
     template: templates/telemetrystore-migrator/job.yaml
@@ -567,7 +567,7 @@ tests:
     asserts:
       - equal:
           path: metadata.name
-          value: signoz-telemetrystore-migrator-21fc6f8921
+          value: signoz-telemetrystore-migrator-90fd103335
 
   - it: should keep the Job's name for a change outside its spec
     template: templates/telemetrystore-migrator/job.yaml
@@ -577,7 +577,7 @@ tests:
     asserts:
       - equal:
           path: metadata.name
-          value: signoz-telemetrystore-migrator-21fc6f8921
+          value: signoz-telemetrystore-migrator-90fd103335
 
   # Refused at render.
   - it: should refuse enableReplication false

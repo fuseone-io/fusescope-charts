@@ -904,14 +904,14 @@ secretKey: ca.crt</pre>
             <td id="telemetryStoreMigrator--image"><a href="./values.yaml#L1130">telemetryStoreMigrator.image</a></td>
             <td>object</td>
             <td>
-                <div style="max-width: 300px;"><pre lang="yaml">digest: sha256:41b0cee59e5d4358e0267c377276e4eb95b145e0bb40838f28d82f2a4dc0344e
+                <div style="max-width: 300px;"><pre lang="yaml">digest: sha256:a1e2fcd7248035b231e8d4c9c3234d617b983296464d31834fdabc1184fa24a1
 pullPolicy: IfNotPresent
 registry: ghcr.io
 repository: fuseone-io/fusescope-collector
-tag: sha-e915bb73edd6</pre>
+tag: 0.4.0</pre>
 </div>
             </td>
-            <td>fusescope-schema's image, pinned by digest, for the Job and the collectors' init containers. A test build until a versioned, signed release.</td>
+            <td>fusescope-schema's image, the signed FuseScope collector release 0.4.0 pinned by digest, for the Job and the collectors' init containers.</td>
         </tr>
         <tr>
             <td id="telemetryStoreMigrator--backoffLimit"><a href="./values.yaml#L1141">telemetryStoreMigrator.backoffLimit</a></td>
