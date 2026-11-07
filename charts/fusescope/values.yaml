@@ -407,6 +407,9 @@ clickhouse:
   # @section -- ClickHouse Settings
   # @default -- "Please checkout the default values in values.yml"
   defaultSettings:
+    # Where KeeperMap tables keep their data in Keeper, on every replica: fusescope-schema's
+    # coordination tables need it (collector spec §2.1). Never change it on a running cluster.
+    keeper_map_path_prefix: /fusescope/keeper_map
     format_schema_path: /etc/clickhouse-server/config.d/
     user_scripts_path: /var/lib/clickhouse/user_scripts/
     user_defined_executable_functions_config: '/etc/clickhouse-server/functions/custom-functions.xml'
@@ -1114,6 +1117,52 @@ telemetryStoreMigrator:
   # @default -- true
   # @section -- Telemetry Store Migrator
   enabled: true
+  # telemetryStoreMigrator.migrator -- Which migrator runs: `fusescope-schema`, the FuseScope
+  # schema migrator, a second binary of the FuseScope collector image (collector ADR 0010), or
+  # `fork`, the earlier collector's (`otelCollector.image`). Only the one chosen is rendered.
+  # fusescope-schema migrates only the replicated schema: `enableReplication: false` fails.
+  # @default -- "fusescope-schema"
+  # @section -- Telemetry Store Migrator
+  migrator: fusescope-schema
+  # telemetryStoreMigrator.image -- fusescope-schema's image, the signed FuseScope collector release
+  # 0.4.0 pinned by digest, for the Job and the collectors' init containers.
+  # @section -- Telemetry Store Migrator
+  image:
+    registry: ghcr.io
+    repository: fuseone-io/fusescope-collector
+    tag: "0.4.0"
+    digest: sha256:a1e2fcd7248035b231e8d4c9c3234d617b983296464d31834fdabc1184fa24a1
+    pullPolicy: IfNotPresent
+  # telemetryStoreMigrator.backoffLimit -- How many times fusescope-schema's Job retries a
+  # connection or lease error (exit 2), as while ClickHouse starts on a fresh install. With
+  # Kubernetes' backoff, capped at 6 minutes, 10 retries span about 35 minutes. A refusal (1) or
+  # an interrupted migration (4) fails the Job at once.
+  # @section -- Telemetry Store Migrator
+  backoffLimit: 10
+  # telemetryStoreMigrator.runId -- Any new value runs fusescope-schema's Job again with nothing
+  # else changed, as after it failed once its cause is fixed: the Job is named by a hash of its
+  # spec and this. An upgrade that changes neither leaves the Job alone, finished or running.
+  # @default -- ""
+  # @section -- Telemetry Store Migrator
+  runId: ""
+  # telemetryStoreMigrator.podSecurityContext -- fusescope-schema's pod security context.
+  # @section -- Telemetry Store Migrator
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    fsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+  # telemetryStoreMigrator.securityContext -- fusescope-schema's container security context, also
+  # the collectors' init container's.
+  # @section -- Telemetry Store Migrator
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
   # telemetryStoreMigrator.name -- The name of the Telemetry Store Migrator component.
   # @default -- "signoz-telemetrystore-migrator"
   # @section -- Telemetry Store Migrator
@@ -1123,6 +1172,7 @@ telemetryStoreMigrator:
   # @section -- Telemetry Store Migrator
   annotations: {}
   # telemetryStoreMigrator.upgradeHelmHooks -- Enable Helm pre-upgrade hooks and ArgoCD Sync hooks.
+  # For `migrator: fork` only: fusescope-schema's Job is renamed whenever its spec changes instead.
   # @default -- true
   # @section -- Telemetry Store Migrator
   upgradeHelmHooks: true
@@ -1130,7 +1180,8 @@ telemetryStoreMigrator:
   # @default -- true
   # @section -- Telemetry Store Migrator
   enableReplication: true
-  # telemetryStoreMigrator.timeout -- Timeout for the migration.
+  # telemetryStoreMigrator.timeout -- Timeout for the migration; with fusescope-schema, how long
+  # the collectors' init container waits for it (`check --wait`).
   # @default -- "10m"
   # @section -- Telemetry Store Migrator
   timeout: "10m"

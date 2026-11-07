@@ -458,8 +458,10 @@ tests:
           value: fusescope-collector
         template: templates/fusescope-collector/service.yaml
 
-  - it: should still migrate the schema with the earlier collector's image while it is off
+  - it: should still migrate the schema with the earlier collector's image while it is off, with migrator fork
     template: templates/telemetrystore-migrator/job.yaml
+    set:
+      telemetryStoreMigrator.migrator: fork
     asserts:
       - matchRegex:
           path: spec.template.spec.initContainers[0].image
@@ -509,8 +511,10 @@ tests:
       - hasDocuments:
           count: 0
 
-  - it: should wait for the migrated schema before writing, with the migrator's image
+  - it: should wait for the migrated schema before writing, with the fork migrator's image
     template: templates/fusescope-collector/deployment.yaml
+    set:
+      telemetryStoreMigrator.migrator: fork
     asserts:
       - equal:
           path: spec.template.spec.initContainers[0].name

@@ -59,7 +59,9 @@ spec:
       securityContext:
         {{- toYaml .Values.otelCollector.podSecurityContext | nindent 8 }}
       initContainers:
-        {{- if .Values.telemetryStoreMigrator.enabled }}
+        {{- if include "fusescopeSchema.enabled" . }}
+        {{- include "fusescopeSchema.checkContainer" . | nindent 8 }}
+        {{- else if include "telemetryStoreMigrator.fork" . }}
         - name: check
           image: {{ include "otelCollector.image" . }}
           imagePullPolicy: {{ .Values.otelCollector.image.pullPolicy }}
@@ -156,6 +158,9 @@ spec:
             name: {{ include "otelCollector.fullname" . }}
         {{- if .Values.otelCollector.extraVolumes }}
           {{ toYaml .Values.otelCollector.extraVolumes | nindent 8 }}
+        {{- end }}
+        {{- if include "fusescopeSchema.enabled" . }}
+        {{- include "fusescopeSchema.volumes" . | nindent 8 }}
         {{- end }}
 #        - secret:
 #            name: otel-collector-secrets
