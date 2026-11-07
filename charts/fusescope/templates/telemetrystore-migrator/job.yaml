@@ -1,4 +1,5 @@
-{{- if .Values.telemetryStoreMigrator.enabled }}
+{{- if include "telemetryStoreMigrator.fork" . }}
+# The earlier collector's migrator (telemetryStoreMigrator.migrator: fork).
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -92,4 +93,83 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
       restartPolicy: OnFailure
+{{- else if include "fusescopeSchema.enabled" . }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "fusescopeSchema.jobName" . }}
+  labels:
+    {{- include "telemetryStoreMigrator.labels" . | nindent 4 }}
+  {{- with .Values.telemetryStoreMigrator.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+# An ordinary resource of the release, not a hook: its name changes with the
+# image and the configuration, so an upgrade that changes either creates a new
+# Job after its ConfigMap and Secret are in place, and the collectors wait for
+# it with check --wait.
+spec:
+  # fusescope-schema's exit codes (collector spec §1): 2 is a connection or
+  # lease error before anything started, safe to retry, as while ClickHouse
+  # starts beside it on a fresh install; 1 is a refusal and 4 an interrupted
+  # migration, which a retry would only refuse again.
+  backoffLimit: {{ .Values.telemetryStoreMigrator.backoffLimit }}
+  {{- if semverCompare ">=1.26-0" .Capabilities.KubeVersion.Version }}
+  # On by default from Kubernetes 1.26; before, exits 1 and 4 are retried
+  # like any other until backoffLimit, each retry refusing again.
+  podFailurePolicy:
+    rules:
+      - action: FailJob
+        onExitCodes:
+          containerName: migrate
+          operator: In
+          values: [1, 4]
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "telemetryStoreMigrator.selectorLabels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include "fusescopeSchema.config" . | sha256sum }}
+    spec:
+      {{- with .Values.telemetryStoreMigrator.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.telemetryStoreMigrator.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.telemetryStoreMigrator.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.telemetryStoreMigrator.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- include "signoz.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ include "fusescopeSchema.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml .Values.telemetryStoreMigrator.podSecurityContext | nindent 8 }}
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: {{ include "fusescopeSchema.image" . }}
+          imagePullPolicy: {{ .Values.telemetryStoreMigrator.image.pullPolicy }}
+          command: ["/fusescope-schema"]
+          args:
+            - migrate
+            - --config=/etc/fusescope-schema/config/config.json
+          securityContext:
+            {{- toYaml .Values.telemetryStoreMigrator.securityContext | nindent 12 }}
+          volumeMounts:
+            {{- include "fusescopeSchema.volumeMounts" . | nindent 12 }}
+          {{- with .Values.telemetryStoreMigrator.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        {{- include "fusescopeSchema.volumes" . | nindent 8 }}
 {{- end }}
