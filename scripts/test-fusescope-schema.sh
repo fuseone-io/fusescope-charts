@@ -10,7 +10,9 @@
 #      until backoffLimit, each attempt naming the setting;
 #   6. an external ClickHouse holding a table of its own: exit 1, the Job failed
 #      at once by its podFailurePolicy;
-#   7. an external ClickHouse lost while 0001 is started: exit 4, the same.
+#   7. an external ClickHouse lost while 0001 is started: exit 4, the same;
+#   8. a second upgrade while 0001 is started: the first Job is kept and
+#      finishes, the second waits for the lease and finds it up to date.
 # Every kubectl and helm call names the kind context; nothing else is touched.
 #   scripts/test-fusescope-schema.sh        KEEP=1 keeps the cluster
 set -euo pipefail
@@ -24,7 +26,10 @@ h() { helm --kube-context "$CTX" "$@"; }
 step() { printf '\n== %s\n' "$*"; }
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
-if ! kind get clusters | grep -qx "$NAME"; then kind create cluster --name "$NAME" --wait 120s; fi
+# Always a new cluster: a release left by an earlier run would start at
+# another revision, with a schema already there.
+kind delete cluster --name "$NAME" >/dev/null 2>&1 || true
+kind create cluster --name "$NAME" --wait 120s
 [ "${KEEP:-}" = 1 ] || trap 'kind delete cluster --name "$NAME" >/dev/null 2>&1' EXIT
 helm dependency build charts/fusescope >/dev/null
 helm repo add --force-update fusescope https://fuseone-io.github.io/fusescope-charts >/dev/null
@@ -136,8 +141,15 @@ wait_failed_at_once() {
   [ "$exits" = "$code" ] || fail "$ns: $job's pods exited [$exits], want one exit $code"
 }
 
-# fusescope-schema's Job: the one named <migrator>-<hash>.
-schema_job() { k -n "$1" get jobs -l "$migrator" -o name | grep -E 'signoz-telemetrystore-migrator-[0-9a-f]{10}$' || true; }
+# fusescope-schema's Job of the latest revision: <migrator>-r<revision>-<hash>.
+schema_job() { k -n "$1" get jobs -l "$migrator" -o name | grep -E 'signoz-telemetrystore-migrator-r[0-9]+-[0-9a-f]{8}$' | sort -V | tail -1 || true; }
+
+# next_job NAMESPACE PREVIOUS: the Job after PREVIOUS, once it exists.
+next_job() {
+  local job
+  for _ in $(seq 60); do job=$(schema_job "$1"); [ -n "$job" ] && [ "$job" != "$2" ] && { echo "$job"; return; }; sleep 5; done
+  fail "$1: no new fusescope-schema Job after $2"
+}
 
 wait_job() { # NAMESPACE JOB: complete, or fail with its logs
   local ns=$1 job=$2
@@ -163,8 +175,10 @@ expect_logs() { # NAMESPACE JOB PATTERN...: the logs of the attempt that succeed
 }
 
 step "1. fresh install"
+# Finished Jobs go after a minute here, a day by default.
+TTL="--set telemetryStoreMigrator.ttlSecondsAfterFinished=60"
 # A fresh install: the Job starts beside ClickHouse, retries exit 2 until it is up.
-h upgrade -i fresh charts/fusescope -n fresh --create-namespace --wait=false >/dev/null
+h upgrade -i fresh charts/fusescope -n fresh --create-namespace --wait=false $TTL >/dev/null
 for _ in $(seq 60); do job=$(schema_job fresh); [ -n "$job" ] && break; sleep 5; done
 [ -n "$job" ] || fail "fresh: no fusescope-schema Job"
 wait_job fresh "$job"
@@ -173,6 +187,19 @@ retried=$(k -n fresh get pods -l "job-name=${job#job.batch/}" -o jsonpath='{rang
 grep -qx 'Failed:2' <<<"$retried" || fail "fresh: no attempt exited 2 before ClickHouse was up: [$retried]"
 echo "attempts: $(tr '\n' ' ' <<<"$retried")"
 wait_collector fresh
+# A change to the Job's pod template only: a new Job, a no-op migration.
+first=$job
+h upgrade fresh charts/fusescope -n fresh --reuse-values --set telemetryStoreMigrator.resources.limits.memory=256Mi --wait=false >/dev/null
+job=$(next_job fresh "$first")
+k -n fresh get "$first" >/dev/null 2>&1 || fail "fresh: helm deleted the previous Job, $first"
+wait_job fresh "$job"
+logs=$(expect_logs fresh "$job" "starting point: managed" "up to date")
+grep -q "applied" <<<"$logs" && fail "fresh: the no-op Job applied a migration"
+echo "after a resources change: $job, up to date; $first kept by helm"
+gone=
+for _ in $(seq 60); do k -n fresh get "$first" >/dev/null 2>&1 || { gone=1; break; }; sleep 5; done
+[ -n "$gone" ] || fail "fresh: $first was not removed after its ttlSecondsAfterFinished"
+echo "$first removed by its ttlSecondsAfterFinished"
 
 step "2. the published chart $PUBLISHED, then this one: adoption"
 h upgrade -i adopt fusescope/fusescope --version "$PUBLISHED" -n adopt --create-namespace --wait=false >/dev/null
@@ -197,9 +224,13 @@ for _ in $(seq 60); do after=$(chpods); [ -z "$(comm -12 <(echo "$before") <(ech
 [ -z "$(comm -12 <(echo "$before") <(echo "$after"))" ] || fail "adopt: ClickHouse pods not replaced after keeper_map_path_prefix: $(comm -12 <(echo "$before") <(echo "$after"))"
 echo "ClickHouse pods replaced: $(wc -l <<<"$before") before, $(wc -l <<<"$after") after"
 wait_collector adopt
+# The same upgrade again: a new Job of the next revision, a no-op.
 h upgrade adopt charts/fusescope -n adopt --wait=false >/dev/null
-again=$(schema_job adopt)
-[ "$again" = "$job" ] || fail "adopt: the same upgrade made another Job: $again"
+again=$(next_job adopt "$job")
+wait_job adopt "$again"
+logs=$(expect_logs adopt "$again" "starting point: managed" "up to date")
+grep -q "applied" <<<"$logs" && fail "adopt: the repeated upgrade applied a migration"
+echo "the same upgrade again: $again, up to date"
 
 step "3. an external ClickHouse, the password in a custom Secret"
 password=fs-$(head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n')
@@ -237,6 +268,19 @@ for pod in $(k -n noprefix get pods -l "job-name=${job#job.batch/}" -o name); do
     || { k -n noprefix logs "$pod" >&2; fail "noprefix: $pod does not name keeper_map_path_prefix"; }
 done
 echo "attempts exited $(tr '\n' ' ' <<<"$exits")- $reason; each names keeper_map_path_prefix"
+# Fixed, then the same upgrade: the failed Job is not reused, a new one runs.
+k -n ext-noprefix get configmap ch-config -o json \
+  | jq '.data["cluster.xml"] |= sub("<zookeeper>"; "<keeper_map_path_prefix>/keeper_map</keeper_map_path_prefix><zookeeper>")' \
+  | k -n ext-noprefix apply -f - >/dev/null
+k -n ext-noprefix delete pod ch-0 >/dev/null
+k -n ext-noprefix rollout status statefulset/ch --timeout=5m >/dev/null
+failed=$job
+# No kubectl delete job: the same upgrade runs a new Job of the next revision.
+install_external noprefix ext-noprefix "$password" --set telemetryStoreMigrator.backoffLimit=1
+job=$(next_job noprefix "$failed")
+wait_job noprefix "$job"
+expect_logs noprefix "$job" "starting point: empty" "applied 0001 base" >/dev/null
+echo "after the fix and the same upgrade: $job migrated; the failed $failed was left as it was"
 
 step "6. an external ClickHouse holding a table of its own: exit 1, failed at once"
 deploy_ch ext-drift "$password" /keeper_map
@@ -271,5 +315,30 @@ echo "$started  0001 seen started (fusescope_schema.migrations on ext-lost/ch-0)
 echo "$deleted  deleted ClickHouse pod ext-lost/ch-0, uid $victim (the migrator's pod, lost/${migrator_pod#pod/}, untouched)"
 echo "          $migrator_pod exited 4; the Job failed by its podFailurePolicy. Its last lines:"
 k -n lost logs "$migrator_pod" | tail -3 | sed 's/^/          /'
+
+step "8. a second upgrade while 0001 is started: serialized by the lease"
+h upgrade -i overlap charts/fusescope -n overlap --create-namespace --wait=false >/dev/null
+chi=chi-overlap-clickhouse-cluster-0-0-0
+started=
+for _ in $(seq 3000); do
+  n=$(k -n overlap exec "$chi" -c clickhouse -- clickhouse-client -u admin --password 27ff0399-0d3a-4bd8-919d-17c2181e6fb9 -q \
+    "SELECT count() FROM fusescope_schema.migrations WHERE state = 'started'" 2>/dev/null || true)
+  [ "$n" = 1 ] && { started=1; break; }
+  sleep 0.2
+done
+[ -n "$started" ] || fail "overlap: 0001 was never seen started"
+first=$(schema_job overlap)
+h upgrade overlap charts/fusescope -n overlap --reuse-values --set telemetryStoreMigrator.resources.limits.memory=256Mi --wait=false >/dev/null
+second=$(next_job overlap "$first")
+echo "0001 started under $first; upgraded: $second created while it runs"
+wait_job overlap "$first"
+expect_logs overlap "$first" "starting point: empty" "applied 0001 base" >/dev/null
+wait_job overlap "$second"
+logs=$(expect_logs overlap "$second" "starting point: managed" "up to date")
+grep -q "applied" <<<"$logs" && fail "overlap: the second Job applied a migration too"
+done_rows=$(k -n overlap exec "$chi" -c clickhouse -- clickhouse-client -u admin --password 27ff0399-0d3a-4bd8-919d-17c2181e6fb9 -q \
+  "SELECT count() FROM fusescope_schema.migrations WHERE state = 'done'")
+[ "$done_rows" = 1 ] || fail "overlap: $done_rows done rows, want 1"
+echo "$first finished 0001 uninterrupted; $second waited for the lease, then up to date"
 
 printf '\nall fusescope-schema chart tests passed\n'

@@ -1139,6 +1139,11 @@ telemetryStoreMigrator:
   # an interrupted migration (4) fails the Job at once.
   # @section -- Telemetry Store Migrator
   backoffLimit: 10
+  # telemetryStoreMigrator.ttlSecondsAfterFinished -- How long a finished fusescope-schema Job
+  # stays, for its logs. Every upgrade runs a new Job, and Helm keeps the previous one, which may
+  # still be migrating, instead of deleting it: Kubernetes removes it this long after it finishes.
+  # @section -- Telemetry Store Migrator
+  ttlSecondsAfterFinished: 86400
   # telemetryStoreMigrator.podSecurityContext -- fusescope-schema's pod security context.
   # @section -- Telemetry Store Migrator
   podSecurityContext:
@@ -1166,7 +1171,7 @@ telemetryStoreMigrator:
   # @section -- Telemetry Store Migrator
   annotations: {}
   # telemetryStoreMigrator.upgradeHelmHooks -- Enable Helm pre-upgrade hooks and ArgoCD Sync hooks.
-  # For `migrator: fork` only: fusescope-schema's Job is renamed on every change instead.
+  # For `migrator: fork` only: fusescope-schema's Job is a new one on every upgrade instead.
   # @default -- true
   # @section -- Telemetry Store Migrator
   upgradeHelmHooks: true

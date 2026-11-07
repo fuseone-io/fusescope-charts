@@ -99,12 +99,65 @@ fusescope-schema's configuration file (its --config), without the password.
 {{- end -}}
 
 {{/*
-The Job's name carries a hash of the image and the configuration: a change
-creates a new Job instead of editing an immutable one.
+The Job's pod template, its whole immutable part.
+*/}}
+{{- define "fusescopeSchema.podTemplate" -}}
+metadata:
+  labels:
+    {{- include "telemetryStoreMigrator.selectorLabels" . | nindent 4 }}
+  annotations:
+    checksum/config: {{ include "fusescopeSchema.config" . | sha256sum }}
+spec:
+  {{- with .Values.telemetryStoreMigrator.affinity }}
+  affinity:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.telemetryStoreMigrator.tolerations }}
+  tolerations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.telemetryStoreMigrator.nodeSelector }}
+  nodeSelector:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.telemetryStoreMigrator.topologySpreadConstraints }}
+  topologySpreadConstraints:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- include "signoz.imagePullSecrets" . | nindent 2 }}
+  serviceAccountName: {{ include "fusescopeSchema.serviceAccountName" . }}
+  automountServiceAccountToken: false
+  securityContext:
+    {{- toYaml .Values.telemetryStoreMigrator.podSecurityContext | nindent 4 }}
+  restartPolicy: Never
+  containers:
+    - name: migrate
+      image: {{ include "fusescopeSchema.image" . }}
+      imagePullPolicy: {{ .Values.telemetryStoreMigrator.image.pullPolicy }}
+      command: ["/fusescope-schema"]
+      args:
+        - migrate
+        - --config=/etc/fusescope-schema/config/config.json
+      securityContext:
+        {{- toYaml .Values.telemetryStoreMigrator.securityContext | nindent 8 }}
+      volumeMounts:
+        {{- include "fusescopeSchema.volumeMounts" . | nindent 8 }}
+      {{- with .Values.telemetryStoreMigrator.resources }}
+      resources:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  volumes:
+    {{- include "fusescopeSchema.volumes" . | nindent 4 }}
+{{- end -}}
+
+{{/*
+The Job's name: the release revision, so every upgrade runs a new Job, and a
+hash of the whole pod template, so a renderer that keeps the revision, as
+Argo CD does, still never edits an immutable one.
 */}}
 {{- define "fusescopeSchema.jobName" -}}
-{{- $hash := printf "%s\n%s" (include "fusescopeSchema.image" .) (include "fusescopeSchema.config" .) | sha256sum | trunc 10 -}}
-{{- printf "%s-%s" (include "telemetryStoreMigrator.fullname" . | trunc 52 | trimSuffix "-") $hash -}}
+{{- $hash := include "fusescopeSchema.podTemplate" . | sha256sum | trunc 8 -}}
+{{- printf "%s-r%d-%s" (include "telemetryStoreMigrator.fullname" . | trunc 42 | trimSuffix "-") (int .Release.Revision) $hash -}}
 {{- end -}}
 
 {{- define "fusescopeSchema.configMapName" -}}

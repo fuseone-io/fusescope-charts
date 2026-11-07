@@ -389,44 +389,265 @@ tests:
           count: 0
         template: templates/telemetrystore-migrator/configmap.yaml
 
-  # A change of image or connection is a new Job; anything else keeps it.
-  - it: should name the Job by the image and the configuration
+  # Every upgrade runs a new Job, and any change to its pod template renames
+  # it, so a failed Job runs again and an immutable template is never edited.
+  - it: should name the Job by the release revision and its pod template
+    template: templates/telemetrystore-migrator/job.yaml
+    release:
+      revision: 1
+    asserts:
+      - matchRegex:
+          path: metadata.name
+          pattern: ^signoz-telemetrystore-migrator-r1-[0-9a-f]{8}$
+
+  - it: should keep the previous Job for its run and remove it once finished
     template: templates/telemetrystore-migrator/job.yaml
     asserts:
       - equal:
-          path: metadata.name
-          value: signoz-telemetrystore-migrator-cc46c27acb
+          path: metadata.annotations["helm.sh/resource-policy"]
+          value: keep
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-options"]
+          value: Force=true,Replace=true,Prune=false
+      - equal:
+          path: spec.ttlSecondsAfterFinished
+          value: 86400
 
-  - it: should rename the Job for another image
+  - it: should keep Argo CD's Force and Replace to the Job
+    asserts:
+      - notExists:
+          path: metadata.annotations["argocd.argoproj.io/sync-options"]
+        template: templates/telemetrystore-migrator/configmap.yaml
+      - notExists:
+          path: metadata.annotations["argocd.argoproj.io/sync-options"]
+        template: templates/telemetrystore-migrator/secret-clickhouse.yaml
+      - notExists:
+          path: metadata.annotations["argocd.argoproj.io/sync-options"]
+        template: templates/telemetrystore-migrator/serviceaccount.yaml
+
+  - it: should fit a Job name in 63 characters, with a long name and a long revision
     template: templates/telemetrystore-migrator/job.yaml
+    release:
+      revision: 1234567890
+    set:
+      telemetryStoreMigrator.name: a-very-long-telemetry-store-migrator-name-that-goes-on-and-on-and-on
+    asserts:
+      - matchRegex:
+          path: metadata.name
+          pattern: ^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$
+      - matchRegex:
+          path: metadata.name
+          pattern: -r1234567890-[0-9a-f]{8}$
+
+  - it: should name the next revision's Job anew, with the same values
+    template: templates/telemetrystore-migrator/job.yaml
+    release:
+      revision: 7
+    asserts:
+      - matchRegex:
+          path: metadata.name
+          pattern: ^signoz-telemetrystore-migrator-r7-[0-9a-f]{8}$
+
+  # The same revision, as Argo CD renders it: the base name, then each field of
+  # the pod template changing it.
+  - it: should hash the same pod template alike
+    template: templates/telemetrystore-migrator/job.yaml
+    release:
+      revision: 1
+    asserts:
+      - equal:
+          path: metadata.name
+          value: signoz-telemetrystore-migrator-r1-e1d40f5d
+
+  - it: should rename the Job when its resources changes
+    template: templates/telemetrystore-migrator/job.yaml
+    release:
+      revision: 1
+    set:
+      telemetryStoreMigrator.resources: {limits: {memory: 256Mi}}
+    asserts:
+      - notEqual:
+          path: metadata.name
+          value: signoz-telemetrystore-migrator-r1-e1d40f5d
+      - matchRegex:
+          path: metadata.name
+          pattern: ^signoz-telemetrystore-migrator-r1-[0-9a-f]{8}$
+
+  - it: should rename the Job when its pull policy changes
+    template: templates/telemetrystore-migrator/job.yaml
+    release:
+      revision: 1
+    set:
+      telemetryStoreMigrator.image.pullPolicy: Always
+    asserts:
+      - notEqual:
+          path: metadata.name
+          value: signoz-telemetrystore-migrator-r1-e1d40f5d
+      - matchRegex:
+          path: metadata.name
+          pattern: ^signoz-telemetrystore-migrator-r1-[0-9a-f]{8}$
+
+  - it: should rename the Job when its ServiceAccount changes
+    template: templates/telemetrystore-migrator/job.yaml
+    release:
+      revision: 1
+    set:
+      telemetryStoreMigrator.serviceAccount.name: other
+    asserts:
+      - notEqual:
+          path: metadata.name
+          value: signoz-telemetrystore-migrator-r1-e1d40f5d
+      - matchRegex:
+          path: metadata.name
+          pattern: ^signoz-telemetrystore-migrator-r1-[0-9a-f]{8}$
+
+  - it: should rename the Job when its security context changes
+    template: templates/telemetrystore-migrator/job.yaml
+    release:
+      revision: 1
+    set:
+      telemetryStoreMigrator.securityContext.runAsUser: 1000
+    asserts:
+      - notEqual:
+          path: metadata.name
+          value: signoz-telemetrystore-migrator-r1-e1d40f5d
+      - matchRegex:
+          path: metadata.name
+          pattern: ^signoz-telemetrystore-migrator-r1-[0-9a-f]{8}$
+
+  - it: should rename the Job when its pod security context changes
+    template: templates/telemetrystore-migrator/job.yaml
+    release:
+      revision: 1
+    set:
+      telemetryStoreMigrator.podSecurityContext.runAsUser: 1000
+    asserts:
+      - notEqual:
+          path: metadata.name
+          value: signoz-telemetrystore-migrator-r1-e1d40f5d
+      - matchRegex:
+          path: metadata.name
+          pattern: ^signoz-telemetrystore-migrator-r1-[0-9a-f]{8}$
+
+  - it: should rename the Job when its affinity changes
+    template: templates/telemetrystore-migrator/job.yaml
+    release:
+      revision: 1
+    set:
+      telemetryStoreMigrator.affinity: {nodeAffinity: {}}
+    asserts:
+      - notEqual:
+          path: metadata.name
+          value: signoz-telemetrystore-migrator-r1-e1d40f5d
+      - matchRegex:
+          path: metadata.name
+          pattern: ^signoz-telemetrystore-migrator-r1-[0-9a-f]{8}$
+
+  - it: should rename the Job when its tolerations changes
+    template: templates/telemetrystore-migrator/job.yaml
+    release:
+      revision: 1
+    set:
+      telemetryStoreMigrator.tolerations: [{key: k, operator: Exists}]
+    asserts:
+      - notEqual:
+          path: metadata.name
+          value: signoz-telemetrystore-migrator-r1-e1d40f5d
+      - matchRegex:
+          path: metadata.name
+          pattern: ^signoz-telemetrystore-migrator-r1-[0-9a-f]{8}$
+
+  - it: should rename the Job when its node selector changes
+    template: templates/telemetrystore-migrator/job.yaml
+    release:
+      revision: 1
+    set:
+      telemetryStoreMigrator.nodeSelector: {disk: ssd}
+    asserts:
+      - notEqual:
+          path: metadata.name
+          value: signoz-telemetrystore-migrator-r1-e1d40f5d
+      - matchRegex:
+          path: metadata.name
+          pattern: ^signoz-telemetrystore-migrator-r1-[0-9a-f]{8}$
+
+  - it: should rename the Job when its topology spread changes
+    template: templates/telemetrystore-migrator/job.yaml
+    release:
+      revision: 1
+    set:
+      telemetryStoreMigrator.topologySpreadConstraints: [{maxSkew: 1, topologyKey: zone, whenUnsatisfiable: DoNotSchedule}]
+    asserts:
+      - notEqual:
+          path: metadata.name
+          value: signoz-telemetrystore-migrator-r1-e1d40f5d
+      - matchRegex:
+          path: metadata.name
+          pattern: ^signoz-telemetrystore-migrator-r1-[0-9a-f]{8}$
+
+  - it: should rename the Job when its image pull secrets changes
+    template: templates/telemetrystore-migrator/job.yaml
+    release:
+      revision: 1
+    set:
+      global.imagePullSecrets: [regcred]
+    asserts:
+      - notEqual:
+          path: metadata.name
+          value: signoz-telemetrystore-migrator-r1-e1d40f5d
+      - matchRegex:
+          path: metadata.name
+          pattern: ^signoz-telemetrystore-migrator-r1-[0-9a-f]{8}$
+
+  - it: should rename the Job when its image changes
+    template: templates/telemetrystore-migrator/job.yaml
+    release:
+      revision: 1
     set:
       telemetryStoreMigrator.image.digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
     asserts:
       - notEqual:
           path: metadata.name
-          value: signoz-telemetrystore-migrator-cc46c27acb
+          value: signoz-telemetrystore-migrator-r1-e1d40f5d
       - matchRegex:
           path: metadata.name
-          pattern: ^signoz-telemetrystore-migrator-[0-9a-f]{10}$
+          pattern: ^signoz-telemetrystore-migrator-r1-[0-9a-f]{8}$
 
-  - it: should rename the Job for another connection
+  - it: should rename the Job when its connection changes
     template: templates/telemetrystore-migrator/job.yaml
+    release:
+      revision: 1
     set:
       clickhouse.cluster: other
     asserts:
       - notEqual:
           path: metadata.name
-          value: signoz-telemetrystore-migrator-cc46c27acb
+          value: signoz-telemetrystore-migrator-r1-e1d40f5d
+      - matchRegex:
+          path: metadata.name
+          pattern: ^signoz-telemetrystore-migrator-r1-[0-9a-f]{8}$
 
-  - it: should keep the Job's name for a change outside the image and the connection
+  - it: should keep the Job's name for another password, which only its Secret holds
     template: templates/telemetrystore-migrator/job.yaml
+    release:
+      revision: 1
     set:
-      telemetryStoreMigrator.resources: {limits: {memory: 256Mi}}
+      clickhouse.password: another-password
+    asserts:
+      - equal:
+          path: metadata.name
+          value: signoz-telemetrystore-migrator-r1-e1d40f5d
+
+  - it: should keep the Job's name for a change outside its pod template
+    template: templates/telemetrystore-migrator/job.yaml
+    release:
+      revision: 1
+    set:
       fusescopeCollector.replicaCount: 3
     asserts:
       - equal:
           path: metadata.name
-          value: signoz-telemetrystore-migrator-cc46c27acb
+          value: signoz-telemetrystore-migrator-r1-e1d40f5d
 
   # Refused at render.
   - it: should refuse enableReplication false

@@ -100,15 +100,25 @@ metadata:
   name: {{ include "fusescopeSchema.jobName" . }}
   labels:
     {{- include "telemetryStoreMigrator.labels" . | nindent 4 }}
-  {{- with .Values.telemetryStoreMigrator.annotations }}
   annotations:
+    # A later upgrade must not delete a Job still migrating: that would stop
+    # it with 0001 started. Helm keeps it, Argo CD does not prune it, and
+    # ttlSecondsAfterFinished removes it once done; the next Job waits for the
+    # lease. Argo CD renders every revision as 1: Force and Replace recreate
+    # the Job instead of editing its immutable template.
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Force=true,Replace=true,Prune=false
+    {{- with .Values.telemetryStoreMigrator.annotations }}
     {{- toYaml . | nindent 4 }}
-  {{- end }}
-# An ordinary resource of the release, not a hook: its name changes with the
-# image and the configuration, so an upgrade that changes either creates a new
-# Job after its ConfigMap and Secret are in place, and the collectors wait for
-# it with check --wait.
+    {{- end }}
+# An ordinary resource of the release, not a hook. Its name carries the
+# release revision and a hash of its pod template, so every upgrade runs a new
+# Job, after its ConfigMap and Secret are in place: an up-to-date schema is a
+# no-op, a Job that failed runs again once the cause is fixed, and its
+# immutable template is never edited. The collectors wait for it with
+# check --wait.
 spec:
+  ttlSecondsAfterFinished: {{ .Values.telemetryStoreMigrator.ttlSecondsAfterFinished }}
   # fusescope-schema's exit codes (collector spec §1): 2 is a connection or
   # lease error before anything started, safe to retry, as while ClickHouse
   # starts beside it on a fresh install; 1 is a refusal and 4 an interrupted
@@ -126,50 +136,5 @@ spec:
           values: [1, 4]
   {{- end }}
   template:
-    metadata:
-      labels:
-        {{- include "telemetryStoreMigrator.selectorLabels" . | nindent 8 }}
-      annotations:
-        checksum/config: {{ include "fusescopeSchema.config" . | sha256sum }}
-    spec:
-      {{- with .Values.telemetryStoreMigrator.affinity }}
-      affinity:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.telemetryStoreMigrator.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.telemetryStoreMigrator.nodeSelector }}
-      nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.telemetryStoreMigrator.topologySpreadConstraints }}
-      topologySpreadConstraints:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- include "signoz.imagePullSecrets" . | nindent 6 }}
-      serviceAccountName: {{ include "fusescopeSchema.serviceAccountName" . }}
-      automountServiceAccountToken: false
-      securityContext:
-        {{- toYaml .Values.telemetryStoreMigrator.podSecurityContext | nindent 8 }}
-      restartPolicy: Never
-      containers:
-        - name: migrate
-          image: {{ include "fusescopeSchema.image" . }}
-          imagePullPolicy: {{ .Values.telemetryStoreMigrator.image.pullPolicy }}
-          command: ["/fusescope-schema"]
-          args:
-            - migrate
-            - --config=/etc/fusescope-schema/config/config.json
-          securityContext:
-            {{- toYaml .Values.telemetryStoreMigrator.securityContext | nindent 12 }}
-          volumeMounts:
-            {{- include "fusescopeSchema.volumeMounts" . | nindent 12 }}
-          {{- with .Values.telemetryStoreMigrator.resources }}
-          resources:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-      volumes:
-        {{- include "fusescopeSchema.volumes" . | nindent 8 }}
+    {{- include "fusescopeSchema.podTemplate" . | nindent 4 }}
 {{- end }}
