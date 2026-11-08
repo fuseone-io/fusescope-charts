@@ -1,7 +1,7 @@
 
 # FuseScope
 
-![Version: 0.162.0](https://img.shields.io/badge/Version-0.162.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.161.0](https://img.shields.io/badge/AppVersion-0.161.0-informational?style=flat-square)
+![Version: 0.162.1](https://img.shields.io/badge/Version-0.162.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.161.0](https://img.shields.io/badge/AppVersion-0.161.0-informational?style=flat-square)
 
 FuseScope is an open-source observability platform native to OpenTelemetry, with logs, traces and metrics in a single application. It is a hard fork of [SigNoz](https://github.com/SigNoz/signoz) maintained by FuseOne.
 
@@ -156,6 +156,16 @@ The chart renders a disk for the bucket, a filesystem cache disk in front of it 
 
 > [!WARNING]
 > ### Breaking Changes
+> #### Version 0.162.1
+> fusescope-schema 0.4.1 applies its migration `0002` on the upgrade: it inserts the base rows of `signoz_metadata.column_evolution_metadata` that the earlier collector's migrator left and that an install by 0.162.0 lacks, and keeps the rows already there.
+>
+> After `0002` there is no going back as before:
+> - `telemetryStoreMigrator.migrator: fork` is no longer supported.
+> - A plain `helm rollback` to 0.162.0 does not work either: it brings back fusescope-schema 0.4.0, which refuses the unknown `0002` in the history, so the Job fails and the collectors' init containers never let them start.
+> - To run 0.162.0's manifests, keep fusescope-schema 0.4.1: set `telemetryStoreMigrator.image.tag: "0.4.1"` and `telemetryStoreMigrator.image.digest: sha256:9951f2479ac6e5150b116cd856569aaae6ed921e9b951f0fd9c93160e7311077`. Otherwise, restore a backup taken before `0002`.
+>
+> fusescope-schema 0.4.1 also binds seven of the schema's views to the user the migrator connects as, instead of `default`, on a new install; existing views bound to `default` are kept. See [`0002`](https://github.com/fuseone-io/fusescope-collector-server/blob/main/docs/spec/fusescope-schema.md#53-0002-column_evolution_baseline) and [view definers](https://github.com/fuseone-io/fusescope-collector-server/blob/main/docs/spec/fusescope-schema.md#54-view-definers).
+>
 > #### Version 0.162.0
 > The schema is migrated by fusescope-schema, the FuseScope schema migrator, a second binary of the FuseScope collector image (`telemetryStoreMigrator.migrator: fusescope-schema`). On an upgrade it adopts the schema the earlier collector's migrator created (fusescope-otel-collector 0.145.0), with no change to the telemetry tables, and refuses any other schema, listing the differences. The Job runs `migrate`; the collectors' init container waits with `check --wait`. Both read one connection from a ConfigMap and the password only from a Secret mounted as a file. The Job is no longer a Helm hook: it is named by a hash of its whole spec and `telemetryStoreMigrator.runId`. An upgrade that changes neither leaves it alone, finished or still running; one that changes its spec runs a new Job, a no-op on an up-to-date schema. After a failure, fix the cause and set a new `runId` to run it again, with Helm or Argo CD. An upgrade that changes the Job's spec, or its `runId`, while a migration runs stops that migration, which then needs `repair`: see [A chart upgrade that replaced a running Job](https://github.com/fuseone-io/fusescope-collector-server/blob/main/docs/spec/fusescope-schema.md#102-a-chart-upgrade-that-replaced-a-running-job).
 >
@@ -904,14 +914,14 @@ secretKey: ca.crt</pre>
             <td id="telemetryStoreMigrator--image"><a href="./values.yaml#L1130">telemetryStoreMigrator.image</a></td>
             <td>object</td>
             <td>
-                <div style="max-width: 300px;"><pre lang="yaml">digest: sha256:a1e2fcd7248035b231e8d4c9c3234d617b983296464d31834fdabc1184fa24a1
+                <div style="max-width: 300px;"><pre lang="yaml">digest: sha256:9951f2479ac6e5150b116cd856569aaae6ed921e9b951f0fd9c93160e7311077
 pullPolicy: IfNotPresent
 registry: ghcr.io
 repository: fuseone-io/fusescope-collector
-tag: 0.4.0</pre>
+tag: 0.4.1</pre>
 </div>
             </td>
-            <td>fusescope-schema's image, the signed FuseScope collector release 0.4.0 pinned by digest, for the Job and the collectors' init containers.</td>
+            <td>fusescope-schema's image, the signed FuseScope collector release 0.4.1 pinned by digest, for the Job and the collectors' init containers.</td>
         </tr>
         <tr>
             <td id="telemetryStoreMigrator--backoffLimit"><a href="./values.yaml#L1141">telemetryStoreMigrator.backoffLimit</a></td>
