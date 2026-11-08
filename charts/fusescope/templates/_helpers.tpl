@@ -895,7 +895,7 @@ Fails on agent settings that cannot work. Included first by every agent template
 
 {{/*
 The agent's pod security context: uid 0 only to read pod logs or host metrics, else 65532;
-runAsUser, runAsGroup and runAsNonRoot set in values win (collector-server ADR 0004 as amended).
+runAsUser, runAsGroup and runAsNonRoot set in values win (collector-server ADR 0011).
 */}}
 {{- define "fusescopeAgent.podSecurityContext" -}}
 {{- $a := .Values.fusescopeAgent -}}
@@ -913,7 +913,7 @@ The agent's container security context, refused unless it stays locked down.
 {{- $sc := default dict .Values.fusescopeAgent.securityContext -}}
 {{- $caps := default dict $sc.capabilities -}}
 {{- if or $sc.privileged (ne (toString $sc.allowPrivilegeEscalation) "false") (ne (toString $sc.readOnlyRootFilesystem) "true") $caps.add (not (has "ALL" (default list $caps.drop))) -}}
-{{- fail "fusescopeAgent.securityContext must keep privileged and allowPrivilegeEscalation false, readOnlyRootFilesystem true, and drop ALL capabilities (collector-server ADR 0004 as amended)" -}}
+{{- fail "fusescopeAgent.securityContext must keep privileged and allowPrivilegeEscalation false, readOnlyRootFilesystem true, and drop ALL capabilities (collector-server ADR 0011)" -}}
 {{- end -}}
 {{- toYaml $sc -}}
 {{- end -}}

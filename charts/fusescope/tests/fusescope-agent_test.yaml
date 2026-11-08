@@ -597,7 +597,7 @@ tests:
           path: kind
           value: ClusterRoleBinding
 
-  # The root exception (collector-server ADR 0004 as amended): uid 0 only to
+  # The root exception (collector-server ADR 0011): uid 0 only to
   # read pod logs and host metrics, with everything else locked down.
 
   - it: should run as uid 0, locked down, only to read pod logs and host metrics
@@ -676,7 +676,7 @@ tests:
       fusescopeAgent.securityContext.privileged: true
     asserts:
       - failedTemplate:
-          errorMessage: "fusescopeAgent.securityContext must keep privileged and allowPrivilegeEscalation false, readOnlyRootFilesystem true, and drop ALL capabilities (collector-server ADR 0004 as amended)"
+          errorMessage: "fusescopeAgent.securityContext must keep privileged and allowPrivilegeEscalation false, readOnlyRootFilesystem true, and drop ALL capabilities (collector-server ADR 0011)"
 
   - it: should refuse an agent that adds a capability
     template: templates/fusescope-agent/daemonset.yaml
@@ -685,7 +685,7 @@ tests:
       fusescopeAgent.securityContext.capabilities.add: [DAC_READ_SEARCH]
     asserts:
       - failedTemplate:
-          errorMessage: "fusescopeAgent.securityContext must keep privileged and allowPrivilegeEscalation false, readOnlyRootFilesystem true, and drop ALL capabilities (collector-server ADR 0004 as amended)"
+          errorMessage: "fusescopeAgent.securityContext must keep privileged and allowPrivilegeEscalation false, readOnlyRootFilesystem true, and drop ALL capabilities (collector-server ADR 0011)"
 
   - it: should refuse an agent with a writable root filesystem
     template: templates/fusescope-agent/daemonset.yaml
@@ -694,7 +694,7 @@ tests:
       fusescopeAgent.securityContext.readOnlyRootFilesystem: false
     asserts:
       - failedTemplate:
-          errorMessage: "fusescopeAgent.securityContext must keep privileged and allowPrivilegeEscalation false, readOnlyRootFilesystem true, and drop ALL capabilities (collector-server ADR 0004 as amended)"
+          errorMessage: "fusescopeAgent.securityContext must keep privileged and allowPrivilegeEscalation false, readOnlyRootFilesystem true, and drop ALL capabilities (collector-server ADR 0011)"
 
   - it: should share no host namespace
     template: templates/fusescope-agent/daemonset.yaml

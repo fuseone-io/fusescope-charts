@@ -2452,7 +2452,7 @@ fusescopeAgent:
       memory: 512Mi
   # fusescopeAgent.podSecurityContext -- Pod security context. Unset, `runAsUser`, `runAsGroup` and
   # `runAsNonRoot` are uid 0 with `podLogs` or `hostMetrics`, which nodes keep readable by root
-  # only, and 65532, non-root, otherwise (collector-server ADR 0004 as amended). Set them where
+  # only, and 65532, non-root, otherwise (collector-server ADR 0011). Set them where
   # the nodes let a non-root user read those files, e.g. `runAsUser: 10001`, `runAsGroup: 10001`,
   # `runAsNonRoot: true`.
   # @default -- "uid 0 with podLogs or hostMetrics, else 65532; seccompProfile RuntimeDefault"
