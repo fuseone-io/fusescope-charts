@@ -12,9 +12,22 @@
 {{- if and $rum (not (hasPrefix "wss://" $opamp)) -}}
 {{- fail "fusescopeCollector.opamp.endpoint must be wss:// with rum.enabled: the ingest token travels only over TLS" -}}
 {{- end -}}
+{{- $agents := include "fusescopeCollector.agentListenerEnabled" . -}}
+{{- if $agents -}}
+{{- $taken := list 13133 8888 -}}
+{{- if $otlp }}{{ $taken = concat $taken (list (int $c.otlp.grpcPort) (int $c.otlp.httpPort)) }}{{ end -}}
+{{- if $rum }}{{ $taken = append $taken (int $c.rum.port) }}{{ end -}}
+{{- if has (int $c.agentListener.port) $taken -}}
+{{- fail (printf "fusescopeCollector.agentListener.port %v is already used by the collector (%s)" $c.agentListener.port (join ", " $taken)) -}}
+{{- end -}}
+{{- end -}}
 {{- $receivers := list -}}
 {{- if $otlp }}{{ $receivers = append $receivers "otlp" }}{{ end -}}
 {{- if $rum }}{{ $receivers = append $receivers "rum" }}{{ end -}}
+{{- if $agents }}{{ $receivers = append $receivers "otlp/agents" }}{{ end -}}
+{{- $metricReceivers := list -}}
+{{- if $otlp }}{{ $metricReceivers = append $metricReceivers "otlp" }}{{ end -}}
+{{- if $agents }}{{ $metricReceivers = append $metricReceivers "otlp/agents" }}{{ end -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -79,6 +92,25 @@ data:
         {{- with $c.rum.maxStaleness }}
         max_staleness: {{ . }}
         {{- end }}
+      {{- end }}
+      {{- if $agents }}
+      # The FuseScope agents (fusescopeAgent): TLS 1.3, a client certificate
+      # the client CA signed, and the agents' token, all required. Renewed
+      # certificates and a new client CA bundle are reloaded from their files.
+      otlp/agents:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:{{ $c.agentListener.port }}
+            max_recv_msg_size_mib: 16
+            tls:
+              min_version: "1.3"
+              cert_file: /etc/fusescope-collector/agents-tls/tls.crt
+              key_file: /etc/fusescope-collector/agents-tls/tls.key
+              client_ca_file: /etc/fusescope-collector/agents-ca/ca.crt
+              client_ca_file_reload: true
+              reload_interval: 1h
+            auth:
+              authenticator: bearertokenauth/agents
       {{- end }}
       {{- if $c.selfMetrics.enabled }}
       # The collector's own telemetry, from its loopback-only listener
@@ -152,6 +184,12 @@ data:
 
     extensions:
       fusescope_opamp: {}
+      {{- if $agents }}
+      # The token the agents present, from a Secret file; a new one is picked up.
+      bearertokenauth/agents:
+        scheme: Bearer
+        filename: /etc/fusescope-collector/agent-token/token
+      {{- end }}
       # Readiness only: the RUM receiver is a recoverable error while it holds
       # no valid ingest policy, which takes the pod out of the Service.
       # Without RUM, ready once the pipelines run.
@@ -169,7 +207,7 @@ data:
             enabled: false
 
     service:
-      extensions: [healthcheckv2, fusescope_opamp]
+      extensions: [healthcheckv2, fusescope_opamp{{ if $agents }}, bearertokenauth/agents{{ end }}]
       # Only on loopback, never exposed by the Service.
       telemetry:
         metrics:
@@ -188,9 +226,9 @@ data:
           receivers: [{{ join ", " $receivers }}]
           processors: [memory_limiter]
           exporters: [fusescope_clickhouse{{ if $c.meter.enabled }}, fusescope_meter{{ end }}]
-        {{- if $otlp }}
+        {{- if $metricReceivers }}
         metrics:
-          receivers: [otlp]
+          receivers: [{{ join ", " $metricReceivers }}]
           processors: [memory_limiter]
           exporters: [fusescope_clickhouse{{ if $c.meter.enabled }}, fusescope_meter{{ end }}]
         {{- end }}

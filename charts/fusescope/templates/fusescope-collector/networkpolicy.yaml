@@ -1,0 +1,36 @@
+{{- if and (include "fusescopeCollector.agentListenerEnabled" .) .Values.fusescopeCollector.agentListener.networkPolicy.enabled }}
+{{- $open := list -}}
+{{- if include "fusescopeCollector.otlpEnabled" . }}{{ $open = concat $open (list "otlp" "otlp-http") }}{{ end -}}
+{{- if include "fusescopeCollector.rumEnabled" . }}{{ $open = append $open "rum" }}{{ end -}}
+{{- $open = append $open "health" }}
+# The agents' port accepts only this release's agent pods. Every other port of
+# the collector keeps accepting from anywhere, as without this policy.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "fusescopeCollector.fullname" . }}
+  labels:
+    {{- include "fusescopeCollector.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "fusescopeCollector.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+          podSelector:
+            matchLabels:
+              {{- include "fusescopeAgent.selectorLabels" . | nindent 14 }}
+      ports:
+        - port: otlp-agents
+          protocol: TCP
+    - ports:
+        {{- range $open }}
+        - port: {{ . }}
+          protocol: TCP
+        {{- end }}
+{{- end }}

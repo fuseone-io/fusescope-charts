@@ -767,13 +767,150 @@ plaintext listener.
 {{- end -}}
 
 {{/*
-True when the FuseScope collector runs: enabled, with OTLP or RUM to receive.
+True when the FuseScope collector runs: enabled, with OTLP, RUM or the agents' listener to receive.
 */}}
 {{- define "fusescopeCollector.active" -}}
 {{- $c := .Values.fusescopeCollector -}}
-{{- if and $c.enabled (or $c.otlp.enabled $c.rum.enabled) -}}
+{{- if and $c.enabled (or $c.otlp.enabled $c.rum.enabled $c.agentListener.enabled) -}}
 true
 {{- end -}}
+{{- end -}}
+
+{{/*
+True when the FuseScope collector serves the agents' mTLS listener.
+*/}}
+{{- define "fusescopeCollector.agentListenerEnabled" -}}
+{{- if and .Values.fusescopeCollector.enabled .Values.fusescopeCollector.agentListener.enabled -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{- define "fusescopeCollector.agentListenerTLSSecret" -}}
+{{- $tls := .Values.fusescopeCollector.agentListener.tls -}}
+{{- if $tls.certManager.enabled -}}
+{{- printf "%s-agents-tls" (include "fusescopeCollector.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- else -}}
+{{- required "fusescopeCollector.agentListener.tls.existingSecret or fusescopeCollector.agentListener.tls.certManager.enabled is required: the agents' listener is TLS only" $tls.existingSecret -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+The CA bundle the agents' listener verifies client certificates with, as {"secret", "key"}:
+clientCA's Secret, else the agents' certificate Secret.
+*/}}
+{{- define "fusescopeCollector.agentClientCA" -}}
+{{- $ca := .Values.fusescopeCollector.agentListener.clientCA -}}
+{{- $secret := $ca.existingSecret -}}
+{{- if not $secret -}}
+{{- $agentTLS := .Values.fusescopeAgent.tls -}}
+{{- if not (or $agentTLS.existingSecret $agentTLS.certManager.enabled) -}}
+{{- fail "fusescopeCollector.agentListener.clientCA.existingSecret, or fusescopeAgent.tls, is required: the CA bundle agent certificates must chain to" -}}
+{{- end -}}
+{{- $secret = include "fusescopeAgent.tlsSecret" . -}}
+{{- end -}}
+{{- toJson (dict "secret" $secret "key" (required "fusescopeCollector.agentListener.clientCA.key is required" $ca.key)) -}}
+{{- end -}}
+
+{{/*
+Secret and key of the token the agents present and the listener requires.
+*/}}
+{{- define "fusescopeCollector.agentTokenSecret" -}}
+{{- required "fusescopeCollector.agentListener.token.existingSecret is required: the agents' listener requires a token, read from a Secret" .Values.fusescopeCollector.agentListener.token.existingSecret -}}
+{{- end -}}
+
+{{- define "fusescopeCollector.agentTokenKey" -}}
+{{- required "fusescopeCollector.agentListener.token.secretKey is required" .Values.fusescopeCollector.agentListener.token.secretKey -}}
+{{- end -}}
+
+{{/*
+FuseScope agent: the collector in agent mode, a DaemonSet.
+*/}}
+{{- define "fusescopeAgent.fullname" -}}
+{{- printf "%s-agent" (include "signoz.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{- define "fusescopeAgent.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "signoz.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: fusescope-agent
+{{- end -}}
+
+{{- define "fusescopeAgent.labels" -}}
+helm.sh/chart: {{ include "signoz.chart" . }}
+{{ include "fusescopeAgent.selectorLabels" . }}
+app.kubernetes.io/version: {{ default .Values.fusescopeCollector.image.tag .Values.fusescopeAgent.image.tag | quote }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end -}}
+
+{{- define "fusescopeAgent.serviceAccountName" -}}
+{{- if .Values.fusescopeAgent.serviceAccount.create -}}
+{{- default (include "fusescopeAgent.fullname" .) .Values.fusescopeAgent.serviceAccount.name -}}
+{{- else -}}
+{{- default "default" .Values.fusescopeAgent.serviceAccount.name -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+The agent's image. Empty fields take fusescopeCollector.image's; a tag or digest of its own
+does not inherit the collector's digest.
+*/}}
+{{- define "fusescopeAgent.image" -}}
+{{- $own := .Values.fusescopeAgent.image -}}
+{{- $base := .Values.fusescopeCollector.image -}}
+{{- $registry := default (default $base.registry $own.registry) .Values.global.imageRegistry -}}
+{{- $repository := default $base.repository $own.repository -}}
+{{- $name := ternary (printf "%s/%s" $registry $repository) $repository (not (empty $registry)) -}}
+{{- $tag := toString (default $base.tag $own.tag) -}}
+{{- $digest := ternary $base.digest $own.digest (and (empty $own.tag) (empty $own.digest)) -}}
+{{- if and $digest $tag -}}
+{{- printf "%s:%s@%s" $name $tag $digest -}}
+{{- else if $digest -}}
+{{- printf "%s@%s" $name $digest -}}
+{{- else -}}
+{{- printf "%s:%s" $name $tag -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "fusescopeAgent.tlsSecret" -}}
+{{- $tls := .Values.fusescopeAgent.tls -}}
+{{- if $tls.certManager.enabled -}}
+{{- printf "%s-tls" (include "fusescopeAgent.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- else -}}
+{{- required "fusescopeAgent.tls.existingSecret or fusescopeAgent.tls.certManager.enabled is required: the agents present a client certificate" $tls.existingSecret -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Fails on agent settings that cannot work. Included first by every agent template.
+*/}}
+{{- define "fusescopeAgent.validate" -}}
+{{- $a := .Values.fusescopeAgent -}}
+{{- if and (not $a.gateway.endpoint) (not (include "fusescopeCollector.agentListenerEnabled" .)) -}}
+{{- fail "fusescopeAgent.enabled needs fusescopeCollector.agentListener.enabled, or fusescopeAgent.gateway.endpoint for a gateway outside this release" -}}
+{{- end -}}
+{{- if not (or $a.podLogs.enabled $a.hostMetrics.enabled $a.kubeletStats.enabled) -}}
+{{- fail "fusescopeAgent.enabled with nothing to collect: enable podLogs, hostMetrics or kubeletStats" -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "fusescopeAgent.gatewayEndpoint" -}}
+{{- default (printf "%s.%s.svc:%v" (include "fusescopeCollector.fullname" .) .Release.Namespace .Values.fusescopeCollector.agentListener.port) .Values.fusescopeAgent.gateway.endpoint -}}
+{{- end -}}
+
+{{/*
+The CA bundle the agents verify the listener with, as {"secret", "key"}: gateway.ca's Secret,
+else the listener's certificate Secret.
+*/}}
+{{- define "fusescopeAgent.gatewayCA" -}}
+{{- $ca := .Values.fusescopeAgent.gateway.ca -}}
+{{- $secret := $ca.existingSecret -}}
+{{- if not $secret -}}
+{{- if not (include "fusescopeCollector.agentListenerEnabled" .) -}}
+{{- fail "fusescopeAgent.gateway.ca.existingSecret is required for a gateway outside this release: the CA bundle the agents verify it with" -}}
+{{- end -}}
+{{- $secret = include "fusescopeCollector.agentListenerTLSSecret" . -}}
+{{- end -}}
+{{- toJson (dict "secret" $secret "key" (required "fusescopeAgent.gateway.ca.key is required" $ca.key)) -}}
 {{- end -}}
 
 {{/*

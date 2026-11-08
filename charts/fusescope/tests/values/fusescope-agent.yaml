@@ -1,0 +1,10 @@
+fusescopeCollector:
+  agentListener:
+    enabled: true
+    tls:
+      existingSecret: agents-tls
+    token:
+      existingSecret: agent-token
+fusescopeAgent:
+  tls:
+    existingSecret: agent-client

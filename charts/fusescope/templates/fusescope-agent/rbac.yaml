@@ -1,0 +1,49 @@
+{{- if .Values.fusescopeAgent.enabled }}
+{{- if .Values.fusescopeAgent.serviceAccount.create }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "fusescopeAgent.serviceAccountName" . }}
+  labels:
+    {{- include "fusescopeAgent.labels" . | nindent 4 }}
+  {{- with .Values.fusescopeAgent.serviceAccount.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+---
+{{- end }}
+# Read only: pod attributes (k8s_attributes) and the kubelet's stats.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ printf "%s-%s" .Release.Namespace (include "fusescopeAgent.fullname" .) | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "fusescopeAgent.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [pods, namespaces, nodes]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [replicasets]
+    verbs: [get, list, watch]
+  {{- if .Values.fusescopeAgent.kubeletStats.enabled }}
+  - apiGroups: [""]
+    resources: [nodes/stats]
+    verbs: [get]
+  {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ printf "%s-%s" .Release.Namespace (include "fusescopeAgent.fullname" .) | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "fusescopeAgent.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ printf "%s-%s" .Release.Namespace (include "fusescopeAgent.fullname" .) | trunc 63 | trimSuffix "-" }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "fusescopeAgent.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

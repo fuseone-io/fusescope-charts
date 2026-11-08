@@ -50,3 +50,55 @@ spec:
     kind: {{ $rum.issuerRef.kind }}
     group: {{ $rum.issuerRef.group }}
 {{- end }}
+{{- $agentsTLS := .Values.fusescopeCollector.agentListener.tls.certManager -}}
+{{- if and (include "fusescopeCollector.agentListenerEnabled" .) $agentsTLS.enabled }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "fusescopeCollector.agentListenerTLSSecret" . }}
+  labels:
+    {{- include "fusescopeCollector.labels" . | nindent 4 }}
+spec:
+  secretName: {{ include "fusescopeCollector.agentListenerTLSSecret" . }}
+  dnsNames:
+    {{- include "fusescope.serviceDNSNames" (dict "name" (include "fusescopeCollector.fullname" .) "namespace" .Release.Namespace "clusterDomain" $clusterDomain) | fromJsonArray | toYaml | nindent 4 }}
+  duration: {{ $agentsTLS.duration }}
+  renewBefore: {{ $agentsTLS.renewBefore }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - server auth
+  issuerRef:
+    name: {{ required "fusescopeCollector.agentListener.tls.certManager.issuerRef.name is required" $agentsTLS.issuerRef.name }}
+    kind: {{ $agentsTLS.issuerRef.kind }}
+    group: {{ $agentsTLS.issuerRef.group }}
+{{- end }}
+{{- $agentTLS := .Values.fusescopeAgent.tls.certManager -}}
+{{- if and .Values.fusescopeAgent.enabled $agentTLS.enabled }}
+---
+# One client certificate for every agent of this release, not one per pod.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "fusescopeAgent.tlsSecret" . }}
+  labels:
+    {{- include "fusescopeAgent.labels" . | nindent 4 }}
+spec:
+  secretName: {{ include "fusescopeAgent.tlsSecret" . }}
+  commonName: {{ required "fusescopeAgent.tls.certManager.commonName is required" $agentTLS.commonName }}
+  duration: {{ $agentTLS.duration }}
+  renewBefore: {{ $agentTLS.renewBefore }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - client auth
+  issuerRef:
+    name: {{ required "fusescopeAgent.tls.certManager.issuerRef.name is required" $agentTLS.issuerRef.name }}
+    kind: {{ $agentTLS.issuerRef.kind }}
+    group: {{ $agentTLS.issuerRef.group }}
+{{- end }}

@@ -1,0 +1,125 @@
+{{- if .Values.fusescopeAgent.enabled }}
+{{- include "fusescopeAgent.validate" . -}}
+{{- $a := .Values.fusescopeAgent -}}
+{{- $metrics := list -}}
+{{- if $a.hostMetrics.enabled }}{{ $metrics = append $metrics "host_metrics" }}{{ end -}}
+{{- if $a.kubeletStats.enabled }}{{ $metrics = append $metrics "kubelet_stats" }}{{ end -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "fusescopeAgent.fullname" . }}
+  labels:
+    {{- include "fusescopeAgent.labels" . | nindent 4 }}
+data:
+  # Agent mode (collector-server config/agent-kubernetes.yaml): this node's
+  # telemetry, sent to the gateway over mTLS with TLS 1.3 and a token. It
+  # writes no storage and takes no configuration over OpAMP.
+  config.yaml: |
+    extensions:
+      # Probes only: status, no configuration.
+      healthcheckv2:
+        use_v2: true
+        http:
+          endpoint: 0.0.0.0:13133
+          status:
+            enabled: true
+            path: /health/status
+          config:
+            enabled: false
+      bearertokenauth/gateway:
+        scheme: Bearer
+        filename: /etc/fusescope-agent/token/token
+      {{- if $a.podLogs.enabled }}
+      file_storage/checkpoints:
+        directory: /var/lib/fusescope-agent/state
+        create_directory: true
+      {{- end }}
+
+    receivers:
+      {{- if $a.podLogs.enabled }}
+      file_log/pods:
+        include: [/var/log/pods/*/*/*.log]
+        # The agents' own logs.
+        exclude: [/var/log/pods/{{ .Release.Namespace }}_{{ include "fusescopeAgent.fullname" . }}-*/agent/*.log]
+        start_at: end
+        include_file_path: true
+        storage: file_storage/checkpoints
+        operators:
+          - type: container
+      {{- end }}
+      {{- if $a.hostMetrics.enabled }}
+      host_metrics:
+        collection_interval: {{ $a.hostMetrics.collectionInterval }}
+        root_path: /hostfs
+        scrapers:
+          cpu: {}
+          memory: {}
+          load: {}
+          filesystem: {}
+          network: {}
+      {{- end }}
+      {{- if $a.kubeletStats.enabled }}
+      kubelet_stats:
+        collection_interval: {{ $a.kubeletStats.collectionInterval }}
+        auth_type: serviceAccount
+        endpoint: https://${env:K8S_NODE_NAME}:10250
+        {{- if $a.kubeletStats.insecureSkipVerify }}
+        insecure_skip_verify: true
+        {{- end }}
+      {{- end }}
+
+    processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 80
+        spike_limit_percentage: 20
+      k8s_attributes:
+        filter:
+          node_from_env_var: K8S_NODE_NAME
+      resource_detection:
+        detectors: [env, system]
+
+    exporters:
+      otlp_grpc/gateway:
+        endpoint: {{ include "fusescopeAgent.gatewayEndpoint" . }}
+        compression: zstd
+        tls:
+          min_version: "1.3"
+          ca_file: /etc/fusescope-agent/gateway-ca/ca.crt
+          cert_file: /etc/fusescope-agent/tls/tls.crt
+          key_file: /etc/fusescope-agent/tls/tls.key
+          # A renewed client certificate is read again from its files.
+          reload_interval: 1h
+        auth:
+          authenticator: bearertokenauth/gateway
+        retry_on_failure:
+          enabled: true
+        sending_queue:
+          batch:
+            flush_timeout: 200ms
+
+    service:
+      extensions: [healthcheckv2, bearertokenauth/gateway{{ if $a.podLogs.enabled }}, file_storage/checkpoints{{ end }}]
+      # Only on loopback, never exposed.
+      telemetry:
+        metrics:
+          readers:
+            - pull:
+                exporter:
+                  prometheus:
+                    host: 127.0.0.1
+                    port: 8888
+      pipelines:
+        {{- if $metrics }}
+        metrics:
+          receivers: [{{ join ", " $metrics }}]
+          processors: [memory_limiter, k8s_attributes, resource_detection]
+          exporters: [otlp_grpc/gateway]
+        {{- end }}
+        {{- if $a.podLogs.enabled }}
+        logs:
+          receivers: [file_log/pods]
+          processors: [memory_limiter, k8s_attributes, resource_detection]
+          exporters: [otlp_grpc/gateway]
+        {{- end }}
+{{- end }}

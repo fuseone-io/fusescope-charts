@@ -28,6 +28,12 @@ spec:
       targetPort: rum
       protocol: TCP
     {{- end }}
+    {{- if include "fusescopeCollector.agentListenerEnabled" . }}
+    - name: otlp-agents
+      port: {{ .Values.fusescopeCollector.agentListener.port }}
+      targetPort: otlp-agents
+      protocol: TCP
+    {{- end }}
   selector:
     {{- include "fusescopeCollector.selectorLabels" . | nindent 4 }}
 {{- end }}
