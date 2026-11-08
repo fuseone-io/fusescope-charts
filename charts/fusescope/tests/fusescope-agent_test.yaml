@@ -216,10 +216,7 @@ tests:
           path: spec.ingress
           value:
             - from:
-                - namespaceSelector:
-                    matchLabels:
-                      kubernetes.io/metadata.name: platform
-                  podSelector:
+                - podSelector:
                     matchLabels:
                       app.kubernetes.io/name: fusescope
                       app.kubernetes.io/instance: fusescope
@@ -647,6 +644,7 @@ tests:
             runAsUser: 65532
             runAsGroup: 65532
             runAsNonRoot: true
+            fsGroup: 65532
             seccompProfile:
               type: RuntimeDefault
 
@@ -822,3 +820,112 @@ tests:
       - notMatchRegex:
           path: data["config.yaml"]
           pattern: 'network: \{\}'
+
+  # Review of #40 (2026-11-08): the non-root path could not read its credentials,
+  # mounted 0440 and owned by root, without an fsGroup.
+  - it: should give the non-root agent its group on mounted credentials
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.podSecurityContext.runAsUser: 10001
+      fusescopeAgent.podSecurityContext.runAsGroup: 10002
+      fusescopeAgent.podSecurityContext.runAsNonRoot: true
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.fsGroup
+          value: 10002
+  - it: should set no fsGroup for the root agent
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+    asserts:
+      - notExists:
+          path: spec.template.spec.securityContext.fsGroup
+
+  # Review of #40: the guards checked only part of the effective context.
+  - it: should refuse a pod seccomp profile other than RuntimeDefault
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.podSecurityContext.seccompProfile.type: Unconfined
+    asserts:
+      - failedTemplate:
+          errorMessage: "fusescopeAgent.podSecurityContext.seccompProfile must be RuntimeDefault (collector-server ADR 0011)"
+  - it: should refuse a container seccomp profile other than RuntimeDefault
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.securityContext.seccompProfile.type: Unconfined
+    asserts:
+      - failedTemplate:
+          errorMessage: "fusescopeAgent.securityContext.seccompProfile, when set, must be RuntimeDefault (collector-server ADR 0011)"
+  - it: should keep a container seccomp profile of RuntimeDefault
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.securityContext.seccompProfile.type: RuntimeDefault
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.seccompProfile.type
+          value: RuntimeDefault
+  - it: should refuse a user set on the container
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.podLogs.enabled: false
+      fusescopeAgent.hostMetrics.enabled: false
+      fusescopeAgent.securityContext.runAsUser: 0
+    asserts:
+      - failedTemplate:
+          errorMessage: "fusescopeAgent.securityContext must not set runAsUser, runAsGroup or runAsNonRoot: the agent's user is fusescopeAgent.podSecurityContext's (collector-server ADR 0011)"
+  - it: should refuse runAsNonRoot set on the container
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.securityContext.runAsNonRoot: false
+    asserts:
+      - failedTemplate:
+          errorMessage: "fusescopeAgent.securityContext must not set runAsUser, runAsGroup or runAsNonRoot: the agent's user is fusescopeAgent.podSecurityContext's (collector-server ADR 0011)"
+  - it: should refuse uid 0 for kubelet stats alone
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.podLogs.enabled: false
+      fusescopeAgent.hostMetrics.enabled: false
+      fusescopeAgent.podSecurityContext.runAsUser: 0
+    asserts:
+      - failedTemplate:
+          errorMessage: "fusescopeAgent runs as root only with podLogs or hostMetrics: with kubelet stats alone, podSecurityContext must keep a non-zero runAsUser and runAsNonRoot true (collector-server ADR 0011)"
+  - it: should refuse runAsNonRoot false for kubelet stats alone
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.podLogs.enabled: false
+      fusescopeAgent.hostMetrics.enabled: false
+      fusescopeAgent.podSecurityContext.runAsNonRoot: false
+    asserts:
+      - failedTemplate:
+          errorMessage: "fusescopeAgent runs as root only with podLogs or hostMetrics: with kubelet stats alone, podSecurityContext must keep a non-zero runAsUser and runAsNonRoot true (collector-server ADR 0011)"
+
+  # Review of #40: agents in a namespace of their own were refused, and the
+  # namespace label is automatic only from Kubernetes 1.22.
+  - it: should admit the agents a values list names, for agents in another namespace
+    template: templates/fusescope-collector/networkpolicy.yaml
+    set:
+      fusescopeCollector.agentListener.networkPolicy.ingressFrom:
+        - namespaceSelector:
+            matchLabels:
+              fusescope.io/agents: "true"
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: fusescope-agent
+    asserts:
+      - equal:
+          path: spec.ingress[0].from
+          value:
+            - namespaceSelector:
+                matchLabels:
+                  fusescope.io/agents: "true"
+              podSelector:
+                matchLabels:
+                  app.kubernetes.io/component: fusescope-agent

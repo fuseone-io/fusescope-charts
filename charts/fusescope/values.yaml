@@ -2226,6 +2226,13 @@ fusescopeCollector:
       # accepting from anywhere, as without it. Needs a CNI that enforces NetworkPolicy.
       # @section -- FuseScope Collector
       enabled: true
+      # fusescopeCollector.agentListener.networkPolicy.ingressFrom -- (list) NetworkPolicy peers
+      # admitted to the agents' port, in place of this release's agent pods in its namespace. For
+      # agents in a namespace of their own, a `namespaceSelector` on a label that namespace
+      # carries, with a `podSelector` on the agents' labels.
+      # @default -- "this release's agent pods, by podSelector, in the release's namespace"
+      # @section -- FuseScope Collector
+      ingressFrom: []
   meter:
     # fusescopeCollector.meter.enabled -- Count the ingested spans, log records and data points,
     # and the sizes of spans and log records, each hour, per service and ingestion key, into `signoz_meter` for Meter Explorer and
@@ -2411,8 +2418,9 @@ fusescopeAgent:
     # @section -- FuseScope Agent
     enabled: true
   hostMetrics:
-    # fusescopeAgent.hostMetrics.enabled -- Node CPU, memory, load, filesystem and network metrics,
-    # from the host root mounted read-only.
+    # fusescopeAgent.hostMetrics.enabled -- Node CPU, memory, load and filesystem metrics, from the
+    # host root mounted read-only. Not network: without hostNetwork it would be the pod's; the
+    # node's network traffic comes from `kubeletStats` (`k8s.node.network.*`).
     # @section -- FuseScope Agent
     enabled: true
     # fusescopeAgent.hostMetrics.collectionInterval -- Scrape interval.

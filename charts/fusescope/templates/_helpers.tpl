@@ -899,21 +899,46 @@ runAsUser, runAsGroup and runAsNonRoot set in values win (collector-server ADR 0
 */}}
 {{- define "fusescopeAgent.podSecurityContext" -}}
 {{- $a := .Values.fusescopeAgent -}}
+{{- $root := or $a.podLogs.enabled $a.hostMetrics.enabled -}}
 {{- $default := dict "runAsUser" 65532 "runAsGroup" 65532 "runAsNonRoot" true -}}
-{{- if or $a.podLogs.enabled $a.hostMetrics.enabled -}}
+{{- if $root -}}
 {{- $default = dict "runAsUser" 0 "runAsGroup" 0 "runAsNonRoot" false -}}
 {{- end -}}
-{{- toYaml (merge (deepCopy (default dict $a.podSecurityContext)) $default) -}}
+{{- /* Key by key, not merge: merge would take a values 0 or false for unset. */ -}}
+{{- $sc := deepCopy (default dict $a.podSecurityContext) -}}
+{{- range $k, $v := $default -}}
+{{- if not (hasKey $sc $k) -}}{{- $_ := set $sc $k $v -}}{{- end -}}
+{{- end -}}
+{{- $seccomp := default dict $sc.seccompProfile -}}
+{{- if ne (toString $seccomp.type) "RuntimeDefault" -}}
+{{- fail "fusescopeAgent.podSecurityContext.seccompProfile must be RuntimeDefault (collector-server ADR 0011)" -}}
+{{- end -}}
+{{- $nonRoot := and $sc.runAsNonRoot (ne (int $sc.runAsUser) 0) -}}
+{{- if and (not $root) (not $nonRoot) -}}
+{{- fail "fusescopeAgent runs as root only with podLogs or hostMetrics: with kubelet stats alone, podSecurityContext must keep a non-zero runAsUser and runAsNonRoot true (collector-server ADR 0011)" -}}
+{{- end -}}
+{{- /* A non-root agent reads its credentials, mounted 0440, through its group. */ -}}
+{{- if and $nonRoot (not (hasKey $sc "fsGroup")) -}}
+{{- $_ := set $sc "fsGroup" (default $sc.runAsUser $sc.runAsGroup) -}}
+{{- end -}}
+{{- toYaml $sc -}}
 {{- end -}}
 
 {{/*
-The agent's container security context, refused unless it stays locked down.
+The agent's container security context, refused unless it stays locked down. The user is the
+pod's only, so a container setting cannot undo the non-root rule.
 */}}
 {{- define "fusescopeAgent.securityContext" -}}
 {{- $sc := default dict .Values.fusescopeAgent.securityContext -}}
 {{- $caps := default dict $sc.capabilities -}}
 {{- if or $sc.privileged (ne (toString $sc.allowPrivilegeEscalation) "false") (ne (toString $sc.readOnlyRootFilesystem) "true") $caps.add (not (has "ALL" (default list $caps.drop))) -}}
 {{- fail "fusescopeAgent.securityContext must keep privileged and allowPrivilegeEscalation false, readOnlyRootFilesystem true, and drop ALL capabilities (collector-server ADR 0011)" -}}
+{{- end -}}
+{{- if or (hasKey $sc "runAsUser") (hasKey $sc "runAsGroup") (hasKey $sc "runAsNonRoot") -}}
+{{- fail "fusescopeAgent.securityContext must not set runAsUser, runAsGroup or runAsNonRoot: the agent's user is fusescopeAgent.podSecurityContext's (collector-server ADR 0011)" -}}
+{{- end -}}
+{{- if and (hasKey $sc "seccompProfile") (ne (toString (default dict $sc.seccompProfile).type) "RuntimeDefault") -}}
+{{- fail "fusescopeAgent.securityContext.seccompProfile, when set, must be RuntimeDefault (collector-server ADR 0011)" -}}
 {{- end -}}
 {{- toYaml $sc -}}
 {{- end -}}
