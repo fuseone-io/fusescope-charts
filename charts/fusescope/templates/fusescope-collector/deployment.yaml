@@ -5,6 +5,7 @@
 {{- $rum := include "fusescopeCollector.rumEnabled" . -}}
 {{- $otlp := include "fusescopeCollector.otlpEnabled" . -}}
 {{- $opampCA := and $rum $policy.tls.caKey (hasPrefix "wss://" (include "fusescopeCollector.opampEndpoint" .)) -}}
+{{- $agents := include "fusescopeCollector.agentListenerEnabled" . -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -103,6 +104,11 @@ spec:
               containerPort: {{ $c.rum.port }}
               protocol: TCP
             {{- end }}
+            {{- if $agents }}
+            - name: otlp-agents
+              containerPort: {{ $c.agentListener.port }}
+              protocol: TCP
+            {{- end }}
             - name: health
               containerPort: 13133
               protocol: TCP
@@ -134,6 +140,17 @@ spec:
             {{- if $opampCA }}
             - name: opamp-ca
               mountPath: /etc/fusescope-collector/opamp-ca
+              readOnly: true
+            {{- end }}
+            {{- if $agents }}
+            - name: agents-tls
+              mountPath: /etc/fusescope-collector/agents-tls
+              readOnly: true
+            - name: agents-ca
+              mountPath: /etc/fusescope-collector/agents-ca
+              readOnly: true
+            - name: agent-token
+              mountPath: /etc/fusescope-collector/agent-token
               readOnly: true
             {{- end }}
             {{- if $c.opamp.clientCertSecret }}
@@ -179,6 +196,32 @@ spec:
             items:
               - key: {{ $policy.tls.caKey }}
                 path: ca.crt
+        {{- end }}
+        {{- if $agents }}
+        {{- $clientCA := include "fusescopeCollector.agentClientCA" . | fromJson }}
+        - name: agents-tls
+          secret:
+            secretName: {{ include "fusescopeCollector.agentListenerTLSSecret" . }}
+            defaultMode: 0440
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+        # Only the CA bundle: never the agents' private key.
+        - name: agents-ca
+          secret:
+            secretName: {{ $clientCA.secret }}
+            items:
+              - key: {{ $clientCA.key }}
+                path: ca.crt
+        - name: agent-token
+          secret:
+            secretName: {{ include "fusescopeCollector.agentTokenSecret" . }}
+            defaultMode: 0440
+            items:
+              - key: {{ include "fusescopeCollector.agentTokenKey" . }}
+                path: token
         {{- end }}
         {{- with $c.opamp.clientCertSecret }}
         - name: opamp-client

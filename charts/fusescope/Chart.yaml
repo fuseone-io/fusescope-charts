@@ -1,6 +1,6 @@
 apiVersion: v2
 name: fusescope
-version: 0.162.1
+version: 0.163.0
 appVersion: "0.161.0"
 description: FuseScope observability platform (APM, traces, metrics and logs) Helm chart
 type: application

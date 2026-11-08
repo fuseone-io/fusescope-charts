@@ -105,6 +105,43 @@ fusescopeCollector:
 - **Client IP.** The per-client rate limit (20 req/s, burst 60) keys on the client IP, taken from `X-Forwarded-For` only when the peer is in `fusescopeCollector.rum.trustedProxies`, walking the header from the right past trusted addresses. With the ingress on, the private ranges are trusted by default; keep the real client IP reaching the controller (e.g. `externalTrafficPolicy: Local` or PROXY protocol).
 - **Usage and filter suggestions.** The collector counts ingested spans, log records and data points each hour, per service and ingestion key, into `signoz_meter` for Meter Explorer and Ingestion Settings (`fusescopeCollector.meter.enabled`); span metrics and its own telemetry are not counted, each in a pipeline of its own. It also records the distinct attribute sets it writes into `signoz_metadata`, for the related values of filter suggestions (`fusescopeCollector.attributesMetadata.enabled`). Both are on by default, bounded, and never delay or fail the data path.
 
+### Agents
+
+With `fusescopeAgent.enabled`, a DaemonSet runs the FuseScope collector in agent mode on each node: pod logs (`/var/log/pods`), host metrics and kubelet stats, with pod attributes, sent to the collector (the gateway) over OTLP/gRPC. It writes no storage and takes no configuration over OpAMP. The gateway receives them on a listener of its own, `fusescopeCollector.agentListener` (port 4322, as 4319 is RUM's), which requires all three of TLS 1.3, a client certificate its client CA signed, and the agents' token. The OTLP ports 4317 and 4318 stay as they are, without TLS, for SDKs inside the cluster.
+
+```yaml
+fusescopeCollector:
+  agentListener:
+    enabled: true
+    tls:
+      certManager:
+        enabled: true
+        issuerRef: {name: internal-ca}   # a CA issuer, so ca.crt is set
+    token:
+      existingSecret: fusescope-agent-token
+fusescopeAgent:
+  enabled: true
+  tls:
+    certManager:
+      enabled: true
+      issuerRef: {name: internal-ca}
+```
+
+- **Token.** Create it before installing, e.g. `kubectl create secret generic fusescope-agent-token --from-literal=token=$(openssl rand -hex 32)`. The agents and the gateway read the same Secret, as files; the token never goes in values.
+- **Certificates.** One client certificate for every agent of the release (`fusescopeAgent.tls`), not one per pod, and one server certificate for the listener (`fusescopeCollector.agentListener.tls`). Each is a `kubernetes.io/tls` Secret you provide (`existingSecret`) or a cert-manager Certificate the chart creates. The gateway verifies agents with the `ca.crt` of the agents' Secret, or a bundle in `agentListener.clientCA`; the agents verify the gateway with the `ca.crt` of the listener's Secret, or a bundle in `fusescopeAgent.gateway.ca`. Pods mount only the CA bundle of the other side's Secret, never its key.
+- **Rotation.** cert-manager renews both certificates before they expire (`renewBefore`) with a new key each time; the collectors read the renewed files without a restart. With `existingSecret`, update the Secret in place with a certificate from the same CA. To rotate the token, update its Secret: the gateway and the agents read it again, and agents with the old token are refused until they have the new one, so expect a short gap.
+- **Replacing the CA.** Trust both CAs before any certificate changes, then move certificates, then drop the old CA:
+  1. Put the old and the new CA in one bundle, in a Secret of its own, and point both sides at it: `fusescopeCollector.agentListener.clientCA.existingSecret` and `fusescopeAgent.gateway.ca.existingSecret`. Upgrade, and wait until every agent pod has rolled.
+  2. Issue the listener's and the agents' certificates from the new CA (switch the `issuerRef`, or replace the `existingSecret`s).
+  3. Remove the old CA from the bundle, or unset both `existingSecret`s to go back to each Secret's `ca.crt`.
+- **Network.** `fusescopeCollector.agentListener.networkPolicy` (on by default) adds a NetworkPolicy to the collector pods: the agents' port accepts only this release's agent pods in the release's namespace (a `podSelector`, with no namespace label, so it works on any Kubernetes version), and the other ports keep accepting from anywhere. It needs a CNI that enforces NetworkPolicy. For agents elsewhere, `networkPolicy.ingressFrom` replaces the default peer, for example a `namespaceSelector` on a label the agents' namespace carries with a `podSelector` on `app.kubernetes.io/component: fusescope-agent`.
+- **Not an endpoint for applications.** The agent only collects this node's pod logs, host metrics and kubelet stats. It exposes no OTLP port, on the pod or the node: SDKs and applications keep sending to the collector's Service on 4317/4318.
+- **Root, as a restricted exception** ([collector-server ADR 0011](https://github.com/fuseone-io/fusescope-collector-server/pull/82), amending ADR 0004). The agent runs as uid 0 only with `podLogs` or `hostMetrics`, because nodes keep pod logs and parts of `/proc` readable by root only; with `kubeletStats` alone it runs as 65532, and the chart refuses uid 0 or `runAsNonRoot: false` there. A non-root agent gets an `fsGroup` (its `runAsGroup`, unless set), so it can read its mounted certificate, key and token. It is never privileged, cannot escalate privileges, drops every capability, has a read-only root filesystem and the `RuntimeDefault` seccomp profile, and shares no host namespace (no `hostNetwork`, `hostPID` or `hostIPC`). The chart refuses to render it otherwise: any other seccomp profile, on the pod or the container, and any user set on the container (`runAsUser`, `runAsGroup`, `runAsNonRoot` belong to `fusescopeAgent.podSecurityContext` only). Every host path is mounted read-only (`/var/log/pods`, the host root at `/hostfs`) except its log read offsets, `fusescopeAgent.statePath`. Uid 0 can still read most of the node's files through `/hostfs`, capabilities or not: where nodes let a non-root user read pod logs, set `fusescopeAgent.podSecurityContext.runAsUser`, `runAsGroup` and `runAsNonRoot: true`. Its ClusterRole only reads pods, namespaces, nodes and replica sets, plus `nodes/stats` with `kubeletStats`.
+- **Node identity and network.** Without `hostNetwork`, the agent's own hostname is its pod's, so it sets `host.name` and `k8s.node.name` to the node's name (`OTEL_RESOURCE_ATTRIBUTES`, read by the `env` detector ahead of `system`). For the same reason it runs no host network scraper, which would read the pod's network namespace: the node's network traffic comes from kubelet stats (`k8s.node.network.*`).
+- **Pod Security.** With `podLogs` or `hostMetrics`, the agent needs root and host path volumes, which the `restricted` and `baseline` Pod Security levels do not allow: install the release in a namespace labelled `privileged`, or run the agents in a namespace of their own with that label and a gateway outside it (`fusescopeAgent.gateway`), whose release then admits them with `fusescopeCollector.agentListener.networkPolicy.ingressFrom`.
+- **Kubelet.** Kubelet stats are read from `https://NODE_NAME:10250` with the agent's service account and verify the kubelet's serving certificate. Where kubelets serve a self-signed one, `fusescopeAgent.kubeletStats.insecureSkipVerify` turns the check off, or disable `kubeletStats`.
+- **Another gateway.** To send to a gateway outside this release, set `fusescopeAgent.gateway.endpoint` and `fusescopeAgent.gateway.ca.existingSecret`, and give both the same token Secret name (`fusescopeCollector.agentListener.token`).
+
 ### MCP server
 
 The [FuseScope MCP server](https://github.com/fuseone-io/fusescope-mcp-server) lets AI assistants (Claude, Cursor, VS Code, …) query FuseScope. With `mcpServer.enabled` the chart runs it in HTTP mode, calling only this release's backend Service; `/mcp` on the FuseScope host routes to it when the ingress is on (see MCP Server in [Values](#values)).

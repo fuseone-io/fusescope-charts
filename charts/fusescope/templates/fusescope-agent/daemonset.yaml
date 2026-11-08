@@ -1,0 +1,162 @@
+{{- if .Values.fusescopeAgent.enabled }}
+{{- include "fusescopeAgent.validate" . -}}
+{{- $a := .Values.fusescopeAgent -}}
+{{- $gatewayCA := include "fusescopeAgent.gatewayCA" . | fromJson -}}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "fusescopeAgent.fullname" . }}
+  labels:
+    {{- include "fusescopeAgent.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "fusescopeAgent.selectorLabels" . | nindent 6 }}
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        {{- include "fusescopeAgent.selectorLabels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/fusescope-agent/configmap.yaml") . | sha256sum }}
+        {{- with $a.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.fusescopeCollector.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range . }}
+        - name: {{ . | quote }}
+      {{- end }}
+      {{- else }}
+      {{- include "signoz.imagePullSecrets" . | nindent 6 }}
+      {{- end }}
+      serviceAccountName: {{ include "fusescopeAgent.serviceAccountName" . }}
+      # Pod attributes and kubelet stats read the API and the kubelet as this account.
+      automountServiceAccountToken: true
+      {{- with $a.priorityClassName }}
+      priorityClassName: {{ . | quote }}
+      {{- end }}
+      {{- with $a.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $a.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $a.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # No host namespace: the agent reads the node through read-only mounts only.
+      hostNetwork: false
+      hostPID: false
+      hostIPC: false
+      securityContext:
+        {{- include "fusescopeAgent.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: agent
+          image: {{ include "fusescopeAgent.image" . }}
+          imagePullPolicy: {{ default .Values.fusescopeCollector.image.pullPolicy $a.image.pullPolicy }}
+          args:
+            - --config=/etc/fusescope-agent/config/config.yaml
+          securityContext:
+            {{- include "fusescopeAgent.securityContext" . | nindent 12 }}
+          env:
+            - name: K8S_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            # Read by the env detector, ahead of system, which without hostNetwork
+            # would report the pod's hostname as host.name.
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: host.name=$(K8S_NODE_NAME),k8s.node.name=$(K8S_NODE_NAME)
+          ports:
+            - name: health
+              containerPort: 13133
+              protocol: TCP
+          livenessProbe:
+            tcpSocket:
+              port: health
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/status
+              port: health
+            periodSeconds: 10
+          resources:
+            {{- toYaml $a.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/fusescope-agent/config
+              readOnly: true
+            - name: tls
+              mountPath: /etc/fusescope-agent/tls
+              readOnly: true
+            - name: gateway-ca
+              mountPath: /etc/fusescope-agent/gateway-ca
+              readOnly: true
+            - name: token
+              mountPath: /etc/fusescope-agent/token
+              readOnly: true
+            {{- if $a.podLogs.enabled }}
+            - name: pod-logs
+              mountPath: /var/log/pods
+              readOnly: true
+            - name: state
+              mountPath: /var/lib/fusescope-agent/state
+            {{- end }}
+            {{- if $a.hostMetrics.enabled }}
+            - name: hostfs
+              mountPath: /hostfs
+              readOnly: true
+              mountPropagation: HostToContainer
+            {{- end }}
+      # Secrets as directories, not subPath, so a renewed certificate reaches the pod.
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "fusescopeAgent.fullname" . }}
+        - name: tls
+          secret:
+            secretName: {{ include "fusescopeAgent.tlsSecret" . }}
+            defaultMode: 0440
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+        # Only the CA bundle: never the listener's private key.
+        - name: gateway-ca
+          secret:
+            secretName: {{ $gatewayCA.secret }}
+            items:
+              - key: {{ $gatewayCA.key }}
+                path: ca.crt
+        - name: token
+          secret:
+            secretName: {{ include "fusescopeCollector.agentTokenSecret" . }}
+            defaultMode: 0440
+            items:
+              - key: {{ include "fusescopeCollector.agentTokenKey" . }}
+                path: token
+        {{- if $a.podLogs.enabled }}
+        - name: pod-logs
+          hostPath:
+            path: /var/log/pods
+            type: Directory
+        - name: state
+          hostPath:
+            path: {{ required "fusescopeAgent.statePath is required with podLogs" $a.statePath }}
+            type: DirectoryOrCreate
+        {{- end }}
+        {{- if $a.hostMetrics.enabled }}
+        - name: hostfs
+          hostPath:
+            path: /
+            type: Directory
+        {{- end }}
+{{- end }}

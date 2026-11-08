@@ -2171,6 +2171,68 @@ fusescopeCollector:
     # working through a FuseScope outage.
     # @section -- FuseScope Collector
     maxStaleness: ""
+  agentListener:
+    # fusescopeCollector.agentListener.enabled -- Receive OTLP/gRPC from the FuseScope agents
+    # (`fusescopeAgent`) on a listener of its own: TLS 1.3, a client certificate the client CA
+    # signed, and the agents' token, all required. The OTLP ports above stay as they are, without
+    # TLS, for SDKs inside the cluster.
+    # @section -- FuseScope Collector
+    enabled: false
+    # fusescopeCollector.agentListener.port -- Port of the agents' listener, on the pods and the
+    # collector's Service. Not 4319, which RUM uses.
+    # @section -- FuseScope Collector
+    port: 4322
+    tls:
+      # fusescopeCollector.agentListener.tls.existingSecret -- (string) `kubernetes.io/tls` Secret
+      # with the listener's `tls.crt` and `tls.key`, for the collector Service names. Its `ca.crt`,
+      # when set, is what the agents verify it with by default (`fusescopeAgent.gateway.ca`).
+      # @section -- FuseScope Collector
+      existingSecret: ""
+      # fusescopeCollector.agentListener.tls.certManager -- A cert-manager Certificate for the
+      # collector Service names, in `RELEASE-fusescope-collector-agents-tls`, instead of
+      # `existingSecret`. Renewed certificates reach the pods without a restart.
+      # @section -- FuseScope Collector
+      certManager:
+        enabled: false
+        issuerRef:
+          name: ""
+          kind: Issuer
+          group: cert-manager.io
+        duration: 2160h
+        renewBefore: 360h
+    clientCA:
+      # fusescopeCollector.agentListener.clientCA.existingSecret -- (string) Secret holding the CA
+      # bundle that agent certificates must chain to. Empty, the `ca.crt` of the agents' own
+      # certificate Secret (`fusescopeAgent.tls`). To replace the CA, put both CAs in one bundle
+      # here first (README, Agents).
+      # @default -- "the agents' certificate Secret"
+      # @section -- FuseScope Collector
+      existingSecret: ""
+      # fusescopeCollector.agentListener.clientCA.key -- Key in that Secret holding the bundle.
+      # @section -- FuseScope Collector
+      key: ca.crt
+    token:
+      # fusescopeCollector.agentListener.token.existingSecret -- (string) Secret holding the token
+      # the agents present and this listener requires, 32 to 256 characters. The agents and the
+      # collector read the same Secret; never put the token in values.
+      # @section -- FuseScope Collector
+      existingSecret: ""
+      # fusescopeCollector.agentListener.token.secretKey -- Key in `existingSecret` holding the token.
+      # @section -- FuseScope Collector
+      secretKey: token
+    networkPolicy:
+      # fusescopeCollector.agentListener.networkPolicy.enabled -- A NetworkPolicy on the collector
+      # pods: the agents' port accepts only the agent pods of this release; the other ports keep
+      # accepting from anywhere, as without it. Needs a CNI that enforces NetworkPolicy.
+      # @section -- FuseScope Collector
+      enabled: true
+      # fusescopeCollector.agentListener.networkPolicy.ingressFrom -- (list) NetworkPolicy peers
+      # admitted to the agents' port, in place of this release's agent pods in its namespace. For
+      # agents in a namespace of their own, a `namespaceSelector` on a label that namespace
+      # carries, with a `podSelector` on the agents' labels.
+      # @default -- "this release's agent pods, by podSelector, in the release's namespace"
+      # @section -- FuseScope Collector
+      ingressFrom: []
   meter:
     # fusescopeCollector.meter.enabled -- Count the ingested spans, log records and data points,
     # and the sizes of spans and log records, each hour, per service and ingestion key, into `signoz_meter` for Meter Explorer and
@@ -2297,6 +2359,140 @@ fusescopeCollector:
   # fusescopeCollector.topologySpreadConstraints -- Topology spread constraints.
   # @section -- FuseScope Collector
   topologySpreadConstraints: []
+
+# @section -- FuseScope Agent
+fusescopeAgent:
+  # fusescopeAgent.enabled -- Run the FuseScope collector in agent mode, a DaemonSet: pod logs,
+  # host metrics and kubelet stats of each node, sent to the collector's agents' listener
+  # (`fusescopeCollector.agentListener`) over mTLS with TLS 1.3 and a token. It writes no storage
+  # and takes no OpAMP configuration. Needs `fusescopeCollector.agentListener.enabled`.
+  # @section -- FuseScope Agent
+  enabled: false
+  # fusescopeAgent.image -- (object) Image. Empty fields take `fusescopeCollector.image`'s.
+  # @default -- "fusescopeCollector.image"
+  # @section -- FuseScope Agent
+  image:
+    registry: ""
+    repository: ""
+    tag: ""
+    digest: ""
+    pullPolicy: ""
+  gateway:
+    # fusescopeAgent.gateway.endpoint -- (string) Where the agents send, `host:port`. The name must
+    # be in the listener's certificate.
+    # @default -- "RELEASE-fusescope-collector.NAMESPACE.svc:fusescopeCollector.agentListener.port"
+    # @section -- FuseScope Agent
+    endpoint: ""
+    ca:
+      # fusescopeAgent.gateway.ca.existingSecret -- (string) Secret holding the CA bundle the
+      # agents verify the listener's certificate with. Empty, the listener's certificate Secret.
+      # @default -- "the listener's certificate Secret"
+      # @section -- FuseScope Agent
+      existingSecret: ""
+      # fusescopeAgent.gateway.ca.key -- Key in that Secret holding the bundle.
+      # @section -- FuseScope Agent
+      key: ca.crt
+  tls:
+    # fusescopeAgent.tls.existingSecret -- (string) `kubernetes.io/tls` Secret with the client
+    # certificate and key every agent presents: one per cluster or agent pool, not one per pod.
+    # @section -- FuseScope Agent
+    existingSecret: ""
+    # fusescopeAgent.tls.certManager -- A cert-manager Certificate (client auth) in
+    # `RELEASE-fusescope-agent-tls`, instead of `existingSecret`. A CA issuer sets its `ca.crt`,
+    # which the listener verifies agents with by default.
+    # @section -- FuseScope Agent
+    certManager:
+      enabled: false
+      issuerRef:
+        name: ""
+        kind: Issuer
+        group: cert-manager.io
+      # fusescopeAgent.tls.certManager.commonName -- Common name of the agents' certificate.
+      # @section -- FuseScope Agent
+      commonName: fusescope-agent
+      duration: 2160h
+      renewBefore: 360h
+  podLogs:
+    # fusescopeAgent.podLogs.enabled -- Read the node's pod logs (`/var/log/pods`), from their end on
+    # first start, keeping read offsets on the node (`statePath`). The agents' own logs are left out.
+    # @section -- FuseScope Agent
+    enabled: true
+  hostMetrics:
+    # fusescopeAgent.hostMetrics.enabled -- Node CPU, memory, load and filesystem metrics, from the
+    # host root mounted read-only. Not network: without hostNetwork it would be the pod's; the
+    # node's network traffic comes from `kubeletStats` (`k8s.node.network.*`).
+    # @section -- FuseScope Agent
+    enabled: true
+    # fusescopeAgent.hostMetrics.collectionInterval -- Scrape interval.
+    # @section -- FuseScope Agent
+    collectionInterval: 30s
+  kubeletStats:
+    # fusescopeAgent.kubeletStats.enabled -- Node, pod and container metrics from the node's kubelet,
+    # authenticated with the agent's service account (`nodes/stats`).
+    # @section -- FuseScope Agent
+    enabled: true
+    # fusescopeAgent.kubeletStats.collectionInterval -- Scrape interval.
+    # @section -- FuseScope Agent
+    collectionInterval: 30s
+    # fusescopeAgent.kubeletStats.insecureSkipVerify -- Do not verify the kubelet's serving
+    # certificate. Only for clusters whose kubelets serve a self-signed one; the agent then trusts
+    # whatever answers on the node's port 10250.
+    # @section -- FuseScope Agent
+    insecureSkipVerify: false
+  # fusescopeAgent.statePath -- Host directory for the log read offsets, so a restarted agent
+  # resumes where it stopped.
+  # @section -- FuseScope Agent
+  statePath: /var/lib/fusescope-agent
+  # fusescopeAgent.serviceAccount -- Service account, with a ClusterRole to read pods, namespaces,
+  # nodes and replica sets (pod attributes) and `nodes/stats` (kubelet stats).
+  # @section -- FuseScope Agent
+  serviceAccount:
+    create: true
+    annotations: {}
+    name: ""
+  # fusescopeAgent.resources -- Resources.
+  # @section -- FuseScope Agent
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+  # fusescopeAgent.podSecurityContext -- Pod security context. Unset, `runAsUser`, `runAsGroup` and
+  # `runAsNonRoot` are uid 0 with `podLogs` or `hostMetrics`, which nodes keep readable by root
+  # only, and 65532, non-root, otherwise (collector-server ADR 0011). Set them where
+  # the nodes let a non-root user read those files, e.g. `runAsUser: 10001`, `runAsGroup: 10001`,
+  # `runAsNonRoot: true`.
+  # @default -- "uid 0 with podLogs or hostMetrics, else 65532; seccompProfile RuntimeDefault"
+  # @section -- FuseScope Agent
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+  # fusescopeAgent.securityContext -- Container security context. The chart refuses to render it
+  # privileged, with privilege escalation, a writable root filesystem, or any capability.
+  # @section -- FuseScope Agent
+  securityContext:
+    privileged: false
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+  # fusescopeAgent.podAnnotations -- Pod annotations.
+  # @section -- FuseScope Agent
+  podAnnotations: {}
+  # fusescopeAgent.priorityClassName -- Priority class.
+  # @section -- FuseScope Agent
+  priorityClassName: ""
+  # fusescopeAgent.nodeSelector -- Node selector.
+  # @section -- FuseScope Agent
+  nodeSelector: {}
+  # fusescopeAgent.tolerations -- Tolerations. Add the control plane's to collect from it too.
+  # @section -- FuseScope Agent
+  tolerations: []
+  # fusescopeAgent.affinity -- Affinity.
+  # @section -- FuseScope Agent
+  affinity: {}
 
 # @section -- Postgres
 postgresql:

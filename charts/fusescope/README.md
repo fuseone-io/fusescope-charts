@@ -1,7 +1,7 @@
 
 # FuseScope
 
-![Version: 0.162.1](https://img.shields.io/badge/Version-0.162.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.161.0](https://img.shields.io/badge/AppVersion-0.161.0-informational?style=flat-square)
+![Version: 0.163.0](https://img.shields.io/badge/Version-0.163.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.161.0](https://img.shields.io/badge/AppVersion-0.161.0-informational?style=flat-square)
 
 FuseScope is an open-source observability platform native to OpenTelemetry, with logs, traces and metrics in a single application. It is a hard fork of [SigNoz](https://github.com/SigNoz/signoz) maintained by FuseOne.
 
@@ -104,6 +104,43 @@ fusescopeCollector:
 - **CORS belongs to the collector.** It answers `OPTIONS` preflights from each application's allowed origins. The ingress must pass `OPTIONS` and the `Origin` header through and must not add CORS headers of its own: with ingress-nginx, don't set `nginx.ingress.kubernetes.io/enable-cors`.
 - **Client IP.** The per-client rate limit (20 req/s, burst 60) keys on the client IP, taken from `X-Forwarded-For` only when the peer is in `fusescopeCollector.rum.trustedProxies`, walking the header from the right past trusted addresses. With the ingress on, the private ranges are trusted by default; keep the real client IP reaching the controller (e.g. `externalTrafficPolicy: Local` or PROXY protocol).
 - **Usage and filter suggestions.** The collector counts ingested spans, log records and data points each hour, per service and ingestion key, into `signoz_meter` for Meter Explorer and Ingestion Settings (`fusescopeCollector.meter.enabled`); span metrics and its own telemetry are not counted, each in a pipeline of its own. It also records the distinct attribute sets it writes into `signoz_metadata`, for the related values of filter suggestions (`fusescopeCollector.attributesMetadata.enabled`). Both are on by default, bounded, and never delay or fail the data path.
+
+### Agents
+
+With `fusescopeAgent.enabled`, a DaemonSet runs the FuseScope collector in agent mode on each node: pod logs (`/var/log/pods`), host metrics and kubelet stats, with pod attributes, sent to the collector (the gateway) over OTLP/gRPC. It writes no storage and takes no configuration over OpAMP. The gateway receives them on a listener of its own, `fusescopeCollector.agentListener` (port 4322, as 4319 is RUM's), which requires all three of TLS 1.3, a client certificate its client CA signed, and the agents' token. The OTLP ports 4317 and 4318 stay as they are, without TLS, for SDKs inside the cluster.
+
+```yaml
+fusescopeCollector:
+  agentListener:
+    enabled: true
+    tls:
+      certManager:
+        enabled: true
+        issuerRef: {name: internal-ca}   # a CA issuer, so ca.crt is set
+    token:
+      existingSecret: fusescope-agent-token
+fusescopeAgent:
+  enabled: true
+  tls:
+    certManager:
+      enabled: true
+      issuerRef: {name: internal-ca}
+```
+
+- **Token.** Create it before installing, e.g. `kubectl create secret generic fusescope-agent-token --from-literal=token=$(openssl rand -hex 32)`. The agents and the gateway read the same Secret, as files; the token never goes in values.
+- **Certificates.** One client certificate for every agent of the release (`fusescopeAgent.tls`), not one per pod, and one server certificate for the listener (`fusescopeCollector.agentListener.tls`). Each is a `kubernetes.io/tls` Secret you provide (`existingSecret`) or a cert-manager Certificate the chart creates. The gateway verifies agents with the `ca.crt` of the agents' Secret, or a bundle in `agentListener.clientCA`; the agents verify the gateway with the `ca.crt` of the listener's Secret, or a bundle in `fusescopeAgent.gateway.ca`. Pods mount only the CA bundle of the other side's Secret, never its key.
+- **Rotation.** cert-manager renews both certificates before they expire (`renewBefore`) with a new key each time; the collectors read the renewed files without a restart. With `existingSecret`, update the Secret in place with a certificate from the same CA. To rotate the token, update its Secret: the gateway and the agents read it again, and agents with the old token are refused until they have the new one, so expect a short gap.
+- **Replacing the CA.** Trust both CAs before any certificate changes, then move certificates, then drop the old CA:
+  1. Put the old and the new CA in one bundle, in a Secret of its own, and point both sides at it: `fusescopeCollector.agentListener.clientCA.existingSecret` and `fusescopeAgent.gateway.ca.existingSecret`. Upgrade, and wait until every agent pod has rolled.
+  2. Issue the listener's and the agents' certificates from the new CA (switch the `issuerRef`, or replace the `existingSecret`s).
+  3. Remove the old CA from the bundle, or unset both `existingSecret`s to go back to each Secret's `ca.crt`.
+- **Network.** `fusescopeCollector.agentListener.networkPolicy` (on by default) adds a NetworkPolicy to the collector pods: the agents' port accepts only this release's agent pods in the release's namespace (a `podSelector`, with no namespace label, so it works on any Kubernetes version), and the other ports keep accepting from anywhere. It needs a CNI that enforces NetworkPolicy. For agents elsewhere, `networkPolicy.ingressFrom` replaces the default peer, for example a `namespaceSelector` on a label the agents' namespace carries with a `podSelector` on `app.kubernetes.io/component: fusescope-agent`.
+- **Not an endpoint for applications.** The agent only collects this node's pod logs, host metrics and kubelet stats. It exposes no OTLP port, on the pod or the node: SDKs and applications keep sending to the collector's Service on 4317/4318.
+- **Root, as a restricted exception** ([collector-server ADR 0011](https://github.com/fuseone-io/fusescope-collector-server/pull/82), amending ADR 0004). The agent runs as uid 0 only with `podLogs` or `hostMetrics`, because nodes keep pod logs and parts of `/proc` readable by root only; with `kubeletStats` alone it runs as 65532, and the chart refuses uid 0 or `runAsNonRoot: false` there. A non-root agent gets an `fsGroup` (its `runAsGroup`, unless set), so it can read its mounted certificate, key and token. It is never privileged, cannot escalate privileges, drops every capability, has a read-only root filesystem and the `RuntimeDefault` seccomp profile, and shares no host namespace (no `hostNetwork`, `hostPID` or `hostIPC`). The chart refuses to render it otherwise: any other seccomp profile, on the pod or the container, and any user set on the container (`runAsUser`, `runAsGroup`, `runAsNonRoot` belong to `fusescopeAgent.podSecurityContext` only). Every host path is mounted read-only (`/var/log/pods`, the host root at `/hostfs`) except its log read offsets, `fusescopeAgent.statePath`. Uid 0 can still read most of the node's files through `/hostfs`, capabilities or not: where nodes let a non-root user read pod logs, set `fusescopeAgent.podSecurityContext.runAsUser`, `runAsGroup` and `runAsNonRoot: true`. Its ClusterRole only reads pods, namespaces, nodes and replica sets, plus `nodes/stats` with `kubeletStats`.
+- **Node identity and network.** Without `hostNetwork`, the agent's own hostname is its pod's, so it sets `host.name` and `k8s.node.name` to the node's name (`OTEL_RESOURCE_ATTRIBUTES`, read by the `env` detector ahead of `system`). For the same reason it runs no host network scraper, which would read the pod's network namespace: the node's network traffic comes from kubelet stats (`k8s.node.network.*`).
+- **Pod Security.** With `podLogs` or `hostMetrics`, the agent needs root and host path volumes, which the `restricted` and `baseline` Pod Security levels do not allow: install the release in a namespace labelled `privileged`, or run the agents in a namespace of their own with that label and a gateway outside it (`fusescopeAgent.gateway`), whose release then admits them with `fusescopeCollector.agentListener.networkPolicy.ingressFrom`.
+- **Kubelet.** Kubelet stats are read from `https://NODE_NAME:10250` with the agent's service account and verify the kubelet's serving certificate. Where kubelets serve a self-signed one, `fusescopeAgent.kubeletStats.insecureSkipVerify` turns the check off, or disable `kubeletStats`.
+- **Another gateway.** To send to a gateway outside this release, set `fusescopeAgent.gateway.endpoint` and `fusescopeAgent.gateway.ca.existingSecret`, and give both the same token Secret name (`fusescopeCollector.agentListener.token`).
 
 ### MCP server
 
@@ -2147,7 +2184,103 @@ renewBefore: 360h</pre>
             <td>Refuse RUM requests, and report not ready, once the policy held was last received longer ago than this, e.g. `1h`. Empty, a policy held keeps working through a FuseScope outage.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--meter--enabled"><a href="./values.yaml#L2180">fusescopeCollector.meter.enabled</a></td>
+            <td id="fusescopeCollector--agentListener--enabled"><a href="./values.yaml#L2180">fusescopeCollector.agentListener.enabled</a></td>
+            <td>bool</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">false</pre>
+</div>
+            </td>
+            <td>Receive OTLP/gRPC from the FuseScope agents (`fusescopeAgent`) on a listener of its own: TLS 1.3, a client certificate the client CA signed, and the agents' token, all required. The OTLP ports above stay as they are, without TLS, for SDKs inside the cluster.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--agentListener--port"><a href="./values.yaml#L2184">fusescopeCollector.agentListener.port</a></td>
+            <td>int</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">4322</pre>
+</div>
+            </td>
+            <td>Port of the agents' listener, on the pods and the collector's Service. Not 4319, which RUM uses.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--agentListener--tls--existingSecret"><a href="./values.yaml#L2190">fusescopeCollector.agentListener.tls.existingSecret</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">""</pre>
+</div>
+            </td>
+            <td>`kubernetes.io/tls` Secret with the listener's `tls.crt` and `tls.key`, for the collector Service names. Its `ca.crt`, when set, is what the agents verify it with by default (`fusescopeAgent.gateway.ca`).</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--agentListener--tls--certManager"><a href="./values.yaml#L2195">fusescopeCollector.agentListener.tls.certManager</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">duration: 2160h
+enabled: false
+issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: ""
+renewBefore: 360h</pre>
+</div>
+            </td>
+            <td>A cert-manager Certificate for the collector Service names, in `RELEASE-fusescope-collector-agents-tls`, instead of `existingSecret`. Renewed certificates reach the pods without a restart.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--agentListener--clientCA--existingSecret"><a href="./values.yaml#L2210">fusescopeCollector.agentListener.clientCA.existingSecret</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">the agents' certificate Secret</pre>
+</div>
+            </td>
+            <td>Secret holding the CA bundle that agent certificates must chain to. Empty, the `ca.crt` of the agents' own certificate Secret (`fusescopeAgent.tls`). To replace the CA, put both CAs in one bundle here first (README, Agents).</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--agentListener--clientCA--key"><a href="./values.yaml#L2213">fusescopeCollector.agentListener.clientCA.key</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">ca.crt</pre>
+</div>
+            </td>
+            <td>Key in that Secret holding the bundle.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--agentListener--token--existingSecret"><a href="./values.yaml#L2219">fusescopeCollector.agentListener.token.existingSecret</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">""</pre>
+</div>
+            </td>
+            <td>Secret holding the token the agents present and this listener requires, 32 to 256 characters. The agents and the collector read the same Secret; never put the token in values.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--agentListener--token--secretKey"><a href="./values.yaml#L2222">fusescopeCollector.agentListener.token.secretKey</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">token</pre>
+</div>
+            </td>
+            <td>Key in `existingSecret` holding the token.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--agentListener--networkPolicy--enabled"><a href="./values.yaml#L2228">fusescopeCollector.agentListener.networkPolicy.enabled</a></td>
+            <td>bool</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">true</pre>
+</div>
+            </td>
+            <td>A NetworkPolicy on the collector pods: the agents' port accepts only the agent pods of this release; the other ports keep accepting from anywhere, as without it. Needs a CNI that enforces NetworkPolicy.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--agentListener--networkPolicy--ingressFrom"><a href="./values.yaml#L2235">fusescopeCollector.agentListener.networkPolicy.ingressFrom</a></td>
+            <td>list</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">this release's agent pods, by podSelector, in the release's namespace</pre>
+</div>
+            </td>
+            <td>NetworkPolicy peers admitted to the agents' port, in place of this release's agent pods in its namespace. For agents in a namespace of their own, a `namespaceSelector` on a label that namespace carries, with a `podSelector` on the agents' labels.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeCollector--meter--enabled"><a href="./values.yaml#L2242">fusescopeCollector.meter.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">true</pre>
@@ -2156,7 +2289,7 @@ renewBefore: 360h</pre>
             <td>Count the ingested spans, log records and data points, and the sizes of spans and log records, each hour, per service and ingestion key, into `signoz_meter` for Meter Explorer and Ingestion Settings (`fusescope_meter`, through its own `fusescope_clickhouse/meter` exporter). Derived data (span metrics, the collector's own telemetry) is not metered.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--attributesMetadata--enabled"><a href="./values.yaml#L2186">fusescopeCollector.attributesMetadata.enabled</a></td>
+            <td id="fusescopeCollector--attributesMetadata--enabled"><a href="./values.yaml#L2248">fusescopeCollector.attributesMetadata.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">true</pre>
@@ -2165,7 +2298,7 @@ renewBefore: 360h</pre>
             <td>Record the distinct attribute sets of what is written into `signoz_metadata`, for the related values of filter suggestions. Bounded, and never delays or fails the data path.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--selfMetrics--enabled"><a href="./values.yaml#L2192">fusescopeCollector.selfMetrics.enabled</a></td>
+            <td id="fusescopeCollector--selfMetrics--enabled"><a href="./values.yaml#L2254">fusescopeCollector.selfMetrics.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">true</pre>
@@ -2174,7 +2307,7 @@ renewBefore: 360h</pre>
             <td>Write the collector's own telemetry (receivers, processors, exporters, queues, memory) to ClickHouse as `otelcol_*` metrics. It is read from its listener on 127.0.0.1:8888, which is never exposed.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--selfMetrics--scrapeInterval"><a href="./values.yaml#L2195">fusescopeCollector.selfMetrics.scrapeInterval</a></td>
+            <td id="fusescopeCollector--selfMetrics--scrapeInterval"><a href="./values.yaml#L2257">fusescopeCollector.selfMetrics.scrapeInterval</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">60s</pre>
@@ -2183,7 +2316,7 @@ renewBefore: 360h</pre>
             <td>How often the telemetry is read.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--serviceAccount"><a href="./values.yaml#L2198">fusescopeCollector.serviceAccount</a></td>
+            <td id="fusescopeCollector--serviceAccount"><a href="./values.yaml#L2260">fusescopeCollector.serviceAccount</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">annotations: {}
@@ -2194,7 +2327,7 @@ name: ""</pre>
             <td>Service account. No API token is mounted.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--service"><a href="./values.yaml#L2204">fusescopeCollector.service</a></td>
+            <td id="fusescopeCollector--service"><a href="./values.yaml#L2266">fusescopeCollector.service</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">annotations: {}
@@ -2204,7 +2337,7 @@ type: ClusterIP</pre>
             <td>Service for the OTLP and RUM listeners.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--ingress"><a href="./values.yaml#L2213">fusescopeCollector.ingress</a></td>
+            <td id="fusescopeCollector--ingress"><a href="./values.yaml#L2275">fusescopeCollector.ingress</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">annotations:
@@ -2219,7 +2352,7 @@ tls: []</pre>
             <td>Ingress for RUM, with `rum.enabled`: `/rum/v1/traces` and `/rum/v1/logs`, `Exact`, so the browser SDK FuseScope serves at `/rum/v1/sdk/` stays on its ingress. It re-encrypts to the collector's TLS listener. Without `hosts`, it uses the hosts, TLS and class of `signoz.ingress`. Its annotations are not inherited; the defaults tell ingress-nginx the backend speaks HTTPS and raise its 1m body limit to `rum.maxBodySize`; another controller needs its own equivalents.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--storage"><a href="./values.yaml#L2226">fusescopeCollector.storage</a></td>
+            <td id="fusescopeCollector--storage"><a href="./values.yaml#L2288">fusescopeCollector.storage</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">sizeLimit: 64Mi</pre>
@@ -2228,7 +2361,7 @@ tls: []</pre>
             <td>Volume of the OpAMP state: the instance UID, the last applied configuration push and, with RUM, the cached ingest policy and the report sequence. An emptyDir keeps them across container restarts; on a new pod the collector registers as a new agent and, with RUM, waits for the policy before it is ready.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--resources"><a href="./values.yaml#L2232">fusescopeCollector.resources</a></td>
+            <td id="fusescopeCollector--resources"><a href="./values.yaml#L2294">fusescopeCollector.resources</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">limits:
@@ -2241,7 +2374,7 @@ requests:
             <td>Resources. `memory_limiter` refuses data above 80% of the memory limit, so senders retry instead of the pod being OOM-killed; size the limit for the batches in flight, about 10 s of ingest per replica, or scale out (`autoscaling`).</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--autoscaling"><a href="./values.yaml#L2242">fusescopeCollector.autoscaling</a></td>
+            <td id="fusescopeCollector--autoscaling"><a href="./values.yaml#L2304">fusescopeCollector.autoscaling</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">behavior: {}
@@ -2255,7 +2388,7 @@ targetMemoryUtilizationPercentage: 80</pre>
             <td>Horizontal Pod Autoscaler. When enabled, the Deployment leaves `replicas` to it. Memory utilization is of the request: keep its target below the `memory_limiter` threshold (80% of the limit).</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--podSecurityContext"><a href="./values.yaml#L2252">fusescopeCollector.podSecurityContext</a></td>
+            <td id="fusescopeCollector--podSecurityContext"><a href="./values.yaml#L2314">fusescopeCollector.podSecurityContext</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">fsGroup: 65532
@@ -2269,7 +2402,7 @@ seccompProfile:
             <td>Pod security context. The image is distroless and runs as uid 65532.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--securityContext"><a href="./values.yaml#L2261">fusescopeCollector.securityContext</a></td>
+            <td id="fusescopeCollector--securityContext"><a href="./values.yaml#L2323">fusescopeCollector.securityContext</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">allowPrivilegeEscalation: false
@@ -2282,7 +2415,7 @@ readOnlyRootFilesystem: true</pre>
             <td>Container security context.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--livenessProbe"><a href="./values.yaml#L2269">fusescopeCollector.livenessProbe</a></td>
+            <td id="fusescopeCollector--livenessProbe"><a href="./values.yaml#L2331">fusescopeCollector.livenessProbe</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">failureThreshold: 6
@@ -2294,7 +2427,7 @@ timeoutSeconds: 5</pre>
             <td>Liveness probe timing, a TCP check of the health port.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--readinessProbe"><a href="./values.yaml#L2277">fusescopeCollector.readinessProbe</a></td>
+            <td id="fusescopeCollector--readinessProbe"><a href="./values.yaml#L2339">fusescopeCollector.readinessProbe</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">failureThreshold: 3
@@ -2306,7 +2439,7 @@ timeoutSeconds: 5</pre>
             <td>Readiness probe timing on the health status; with RUM, ready only while the collector holds a valid ingest policy.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--podAnnotations"><a href="./values.yaml#L2284">fusescopeCollector.podAnnotations</a></td>
+            <td id="fusescopeCollector--podAnnotations"><a href="./values.yaml#L2346">fusescopeCollector.podAnnotations</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -2315,7 +2448,7 @@ timeoutSeconds: 5</pre>
             <td>Pod annotations.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--priorityClassName"><a href="./values.yaml#L2287">fusescopeCollector.priorityClassName</a></td>
+            <td id="fusescopeCollector--priorityClassName"><a href="./values.yaml#L2349">fusescopeCollector.priorityClassName</a></td>
             <td>string</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">""</pre>
@@ -2324,7 +2457,7 @@ timeoutSeconds: 5</pre>
             <td>Priority class.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--nodeSelector"><a href="./values.yaml#L2290">fusescopeCollector.nodeSelector</a></td>
+            <td id="fusescopeCollector--nodeSelector"><a href="./values.yaml#L2352">fusescopeCollector.nodeSelector</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -2333,7 +2466,7 @@ timeoutSeconds: 5</pre>
             <td>Node selector.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--tolerations"><a href="./values.yaml#L2293">fusescopeCollector.tolerations</a></td>
+            <td id="fusescopeCollector--tolerations"><a href="./values.yaml#L2355">fusescopeCollector.tolerations</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
@@ -2342,7 +2475,7 @@ timeoutSeconds: 5</pre>
             <td>Tolerations.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--affinity"><a href="./values.yaml#L2296">fusescopeCollector.affinity</a></td>
+            <td id="fusescopeCollector--affinity"><a href="./values.yaml#L2358">fusescopeCollector.affinity</a></td>
             <td>object</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
@@ -2351,13 +2484,258 @@ timeoutSeconds: 5</pre>
             <td>Affinity.</td>
         </tr>
         <tr>
-            <td id="fusescopeCollector--topologySpreadConstraints"><a href="./values.yaml#L2299">fusescopeCollector.topologySpreadConstraints</a></td>
+            <td id="fusescopeCollector--topologySpreadConstraints"><a href="./values.yaml#L2361">fusescopeCollector.topologySpreadConstraints</a></td>
             <td>list</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
 </div>
             </td>
             <td>Topology spread constraints.</td>
+        </tr>
+    </tbody>
+</table>
+<h3>FuseScope Agent</h3>
+<table>
+    <thead>
+        <th>Key</th>
+        <th>Type</th>
+        <th>Default</th>
+        <th>Description</th>
+    </thead>
+    <tbody>
+        <tr>
+            <td id="fusescopeAgent--enabled"><a href="./values.yaml#L2370">fusescopeAgent.enabled</a></td>
+            <td>bool</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">false</pre>
+</div>
+            </td>
+            <td>Run the FuseScope collector in agent mode, a DaemonSet: pod logs, host metrics and kubelet stats of each node, sent to the collector's agents' listener (`fusescopeCollector.agentListener`) over mTLS with TLS 1.3 and a token. It writes no storage and takes no OpAMP configuration. Needs `fusescopeCollector.agentListener.enabled`.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeAgent--image"><a href="./values.yaml#L2374">fusescopeAgent.image</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">fusescopeCollector.image</pre>
+</div>
+            </td>
+            <td>Image. Empty fields take `fusescopeCollector.image`'s.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeAgent--gateway--endpoint"><a href="./values.yaml#L2385">fusescopeAgent.gateway.endpoint</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">RELEASE-fusescope-collector.NAMESPACE.svc:fusescopeCollector.agentListener.port</pre>
+</div>
+            </td>
+            <td>Where the agents send, `host:port`. The name must be in the listener's certificate.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeAgent--gateway--ca--existingSecret"><a href="./values.yaml#L2391">fusescopeAgent.gateway.ca.existingSecret</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">the listener's certificate Secret</pre>
+</div>
+            </td>
+            <td>Secret holding the CA bundle the agents verify the listener's certificate with. Empty, the listener's certificate Secret.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeAgent--gateway--ca--key"><a href="./values.yaml#L2394">fusescopeAgent.gateway.ca.key</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">ca.crt</pre>
+</div>
+            </td>
+            <td>Key in that Secret holding the bundle.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeAgent--tls--existingSecret"><a href="./values.yaml#L2399">fusescopeAgent.tls.existingSecret</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">""</pre>
+</div>
+            </td>
+            <td>`kubernetes.io/tls` Secret with the client certificate and key every agent presents: one per cluster or agent pool, not one per pod.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeAgent--tls--certManager"><a href="./values.yaml#L2404">fusescopeAgent.tls.certManager</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">commonName: fusescope-agent
+duration: 2160h
+enabled: false
+issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: ""
+renewBefore: 360h</pre>
+</div>
+            </td>
+            <td>A cert-manager Certificate (client auth) in `RELEASE-fusescope-agent-tls`, instead of `existingSecret`. A CA issuer sets its `ca.crt`, which the listener verifies agents with by default.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeAgent--tls--certManager--commonName"><a href="./values.yaml#L2412">fusescopeAgent.tls.certManager.commonName</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">fusescope-agent</pre>
+</div>
+            </td>
+            <td>Common name of the agents' certificate.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeAgent--podLogs--enabled"><a href="./values.yaml#L2419">fusescopeAgent.podLogs.enabled</a></td>
+            <td>bool</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">true</pre>
+</div>
+            </td>
+            <td>Read the node's pod logs (`/var/log/pods`), from their end on first start, keeping read offsets on the node (`statePath`). The agents' own logs are left out.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeAgent--hostMetrics--enabled"><a href="./values.yaml#L2425">fusescopeAgent.hostMetrics.enabled</a></td>
+            <td>bool</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">true</pre>
+</div>
+            </td>
+            <td>Node CPU, memory, load and filesystem metrics, from the host root mounted read-only. Not network: without hostNetwork it would be the pod's; the node's network traffic comes from `kubeletStats` (`k8s.node.network.*`).</td>
+        </tr>
+        <tr>
+            <td id="fusescopeAgent--hostMetrics--collectionInterval"><a href="./values.yaml#L2428">fusescopeAgent.hostMetrics.collectionInterval</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">30s</pre>
+</div>
+            </td>
+            <td>Scrape interval.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeAgent--kubeletStats--enabled"><a href="./values.yaml#L2433">fusescopeAgent.kubeletStats.enabled</a></td>
+            <td>bool</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">true</pre>
+</div>
+            </td>
+            <td>Node, pod and container metrics from the node's kubelet, authenticated with the agent's service account (`nodes/stats`).</td>
+        </tr>
+        <tr>
+            <td id="fusescopeAgent--kubeletStats--collectionInterval"><a href="./values.yaml#L2436">fusescopeAgent.kubeletStats.collectionInterval</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">30s</pre>
+</div>
+            </td>
+            <td>Scrape interval.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeAgent--kubeletStats--insecureSkipVerify"><a href="./values.yaml#L2441">fusescopeAgent.kubeletStats.insecureSkipVerify</a></td>
+            <td>bool</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">false</pre>
+</div>
+            </td>
+            <td>Do not verify the kubelet's serving certificate. Only for clusters whose kubelets serve a self-signed one; the agent then trusts whatever answers on the node's port 10250.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeAgent--statePath"><a href="./values.yaml#L2445">fusescopeAgent.statePath</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">/var/lib/fusescope-agent</pre>
+</div>
+            </td>
+            <td>Host directory for the log read offsets, so a restarted agent resumes where it stopped.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeAgent--serviceAccount"><a href="./values.yaml#L2449">fusescopeAgent.serviceAccount</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">annotations: {}
+create: true
+name: ""</pre>
+</div>
+            </td>
+            <td>Service account, with a ClusterRole to read pods, namespaces, nodes and replica sets (pod attributes) and `nodes/stats` (kubelet stats).</td>
+        </tr>
+        <tr>
+            <td id="fusescopeAgent--resources"><a href="./values.yaml#L2455">fusescopeAgent.resources</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">limits:
+    memory: 512Mi
+requests:
+    cpu: 100m
+    memory: 128Mi</pre>
+</div>
+            </td>
+            <td>Resources.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeAgent--podSecurityContext"><a href="./values.yaml#L2468">fusescopeAgent.podSecurityContext</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">uid 0 with podLogs or hostMetrics, else 65532; seccompProfile RuntimeDefault</pre>
+</div>
+            </td>
+            <td>Pod security context. Unset, `runAsUser`, `runAsGroup` and `runAsNonRoot` are uid 0 with `podLogs` or `hostMetrics`, which nodes keep readable by root only, and 65532, non-root, otherwise (collector-server ADR 0011). Set them where the nodes let a non-root user read those files, e.g. `runAsUser: 10001`, `runAsGroup: 10001`, `runAsNonRoot: true`.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeAgent--securityContext"><a href="./values.yaml#L2474">fusescopeAgent.securityContext</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">allowPrivilegeEscalation: false
+capabilities:
+    drop:
+        - ALL
+privileged: false
+readOnlyRootFilesystem: true</pre>
+</div>
+            </td>
+            <td>Container security context. The chart refuses to render it privileged, with privilege escalation, a writable root filesystem, or any capability.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeAgent--podAnnotations"><a href="./values.yaml#L2483">fusescopeAgent.podAnnotations</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
+</div>
+            </td>
+            <td>Pod annotations.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeAgent--priorityClassName"><a href="./values.yaml#L2486">fusescopeAgent.priorityClassName</a></td>
+            <td>string</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">""</pre>
+</div>
+            </td>
+            <td>Priority class.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeAgent--nodeSelector"><a href="./values.yaml#L2489">fusescopeAgent.nodeSelector</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
+</div>
+            </td>
+            <td>Node selector.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeAgent--tolerations"><a href="./values.yaml#L2492">fusescopeAgent.tolerations</a></td>
+            <td>list</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">[]</pre>
+</div>
+            </td>
+            <td>Tolerations. Add the control plane's to collect from it too.</td>
+        </tr>
+        <tr>
+            <td id="fusescopeAgent--affinity"><a href="./values.yaml#L2495">fusescopeAgent.affinity</a></td>
+            <td>object</td>
+            <td>
+                <div style="max-width: 300px;"><pre lang="yaml">{}</pre>
+</div>
+            </td>
+            <td>Affinity.</td>
         </tr>
     </tbody>
 </table>
@@ -2371,7 +2749,7 @@ timeoutSeconds: 5</pre>
     </thead>
     <tbody>
         <tr>
-            <td id="postgresql--enabled"><a href="./values.yaml#L2307">postgresql.enabled</a></td>
+            <td id="postgresql--enabled"><a href="./values.yaml#L2503">postgresql.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">false</pre>
@@ -2391,7 +2769,7 @@ timeoutSeconds: 5</pre>
     </thead>
     <tbody>
         <tr>
-            <td id="engine--enabled"><a href="./values.yaml#L2316">engine.enabled</a></td>
+            <td id="engine--enabled"><a href="./values.yaml#L2512">engine.enabled</a></td>
             <td>bool</td>
             <td>
                 <div style="max-width: 300px;"><pre lang="yaml">false</pre>
