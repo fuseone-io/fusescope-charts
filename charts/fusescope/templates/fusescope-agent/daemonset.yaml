@@ -69,6 +69,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+            # Read by the env detector, ahead of system, which without hostNetwork
+            # would report the pod's hostname as host.name.
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: host.name=$(K8S_NODE_NAME),k8s.node.name=$(K8S_NODE_NAME)
           ports:
             - name: health
               containerPort: 13133

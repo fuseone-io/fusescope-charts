@@ -56,7 +56,8 @@ data:
           memory: {}
           load: {}
           filesystem: {}
-          network: {}
+          # No network scraper: without hostNetwork it reads the pod's own network
+          # namespace. The node's traffic comes from kubelet stats (k8s.node.network.*).
       {{- end }}
       {{- if $a.kubeletStats.enabled }}
       kubelet_stats:

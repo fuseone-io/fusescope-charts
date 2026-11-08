@@ -789,3 +789,36 @@ tests:
             - name: health
               containerPort: 13133
               protocol: TCP
+
+  # Regression (kind smoke test, 2026-11-08): without hostNetwork the system
+  # detector reports the pod's hostname, so host metrics carried the agent pod's
+  # name as host.name and no k8s.node.name. The env detector runs first and wins.
+  - it: should name the node, not the agent pod, on what it collects
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OTEL_RESOURCE_ATTRIBUTES
+            value: host.name=$(K8S_NODE_NAME),k8s.node.name=$(K8S_NODE_NAME)
+  - it: should detect env before system, so the node's name wins
+    template: templates/fusescope-agent/configmap.yaml
+    set:
+      fusescopeAgent.enabled: true
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'detectors: \[env, system\]'
+  # Regression (kind smoke test, 2026-11-08): without hostNetwork the network
+  # scraper reads the pod's own network namespace, so it reported the agent
+  # pod's traffic as the node's. Node traffic comes from kubelet stats instead.
+  - it: should not scrape the pod's network as the node's
+    template: templates/fusescope-agent/configmap.yaml
+    set:
+      fusescopeAgent.enabled: true
+    asserts:
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: 'network: \{\}'
