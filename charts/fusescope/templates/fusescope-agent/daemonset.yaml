@@ -50,8 +50,12 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      # No host namespace: the agent reads the node through read-only mounts only.
+      hostNetwork: false
+      hostPID: false
+      hostIPC: false
       securityContext:
-        {{- toYaml $a.podSecurityContext | nindent 8 }}
+        {{- include "fusescopeAgent.podSecurityContext" . | nindent 8 }}
       containers:
         - name: agent
           image: {{ include "fusescopeAgent.image" . }}
@@ -59,7 +63,7 @@ spec:
           args:
             - --config=/etc/fusescope-agent/config/config.yaml
           securityContext:
-            {{- toYaml $a.securityContext | nindent 12 }}
+            {{- include "fusescopeAgent.securityContext" . | nindent 12 }}
           env:
             - name: K8S_NODE_NAME
               valueFrom:

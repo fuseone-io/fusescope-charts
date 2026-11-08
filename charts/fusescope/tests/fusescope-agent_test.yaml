@@ -346,6 +346,7 @@ tests:
       - equal:
           path: spec.template.spec.containers[0].securityContext
           value:
+            privileged: false
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:
@@ -567,3 +568,224 @@ tests:
             - apiGroups: [""]
               resources: [nodes/stats]
               verbs: [get]
+
+  - it: should drop the kubelet stats rule without kubelet stats, and bind the role to the agents' account only
+    template: templates/fusescope-agent/rbac.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.kubeletStats.enabled: false
+    asserts:
+      - equal:
+          path: rules
+          value:
+            - apiGroups: [""]
+              resources: [pods, namespaces, nodes]
+              verbs: [get, list, watch]
+            - apiGroups: [apps]
+              resources: [replicasets]
+              verbs: [get, list, watch]
+        documentSelector:
+          path: kind
+          value: ClusterRole
+      - equal:
+          path: subjects
+          value:
+            - kind: ServiceAccount
+              name: fusescope-agent
+              namespace: platform
+        documentSelector:
+          path: kind
+          value: ClusterRoleBinding
+
+  # The root exception (collector-server ADR 0004 as amended): uid 0 only to
+  # read pod logs and host metrics, with everything else locked down.
+
+  - it: should run as uid 0, locked down, only to read pod logs and host metrics
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext
+          value:
+            runAsUser: 0
+            runAsGroup: 0
+            runAsNonRoot: false
+            seccompProfile:
+              type: RuntimeDefault
+      - equal:
+          path: spec.template.spec.containers[0].securityContext
+          value:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+
+  - it: should run as uid 0 for host metrics alone
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.podLogs.enabled: false
+      fusescopeAgent.kubeletStats.enabled: false
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.runAsUser
+          value: 0
+
+  - it: should run as non-root when it reads neither pod logs nor host metrics
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.podLogs.enabled: false
+      fusescopeAgent.hostMetrics.enabled: false
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext
+          value:
+            runAsUser: 65532
+            runAsGroup: 65532
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+
+  - it: should run as the user the values set, where nodes allow non-root
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.podSecurityContext.runAsUser: 10001
+      fusescopeAgent.podSecurityContext.runAsGroup: 10001
+      fusescopeAgent.podSecurityContext.runAsNonRoot: true
+      fusescopeAgent.podSecurityContext.fsGroup: 10001
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext
+          value:
+            runAsUser: 10001
+            runAsGroup: 10001
+            runAsNonRoot: true
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+
+  - it: should refuse a privileged agent
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.securityContext.privileged: true
+    asserts:
+      - failedTemplate:
+          errorMessage: "fusescopeAgent.securityContext must keep privileged and allowPrivilegeEscalation false, readOnlyRootFilesystem true, and drop ALL capabilities (collector-server ADR 0004 as amended)"
+
+  - it: should refuse an agent that adds a capability
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.securityContext.capabilities.add: [DAC_READ_SEARCH]
+    asserts:
+      - failedTemplate:
+          errorMessage: "fusescopeAgent.securityContext must keep privileged and allowPrivilegeEscalation false, readOnlyRootFilesystem true, and drop ALL capabilities (collector-server ADR 0004 as amended)"
+
+  - it: should refuse an agent with a writable root filesystem
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.securityContext.readOnlyRootFilesystem: false
+    asserts:
+      - failedTemplate:
+          errorMessage: "fusescopeAgent.securityContext must keep privileged and allowPrivilegeEscalation false, readOnlyRootFilesystem true, and drop ALL capabilities (collector-server ADR 0004 as amended)"
+
+  - it: should share no host namespace
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+    asserts:
+      - equal:
+          path: spec.template.spec.hostNetwork
+          value: false
+      - equal:
+          path: spec.template.spec.hostPID
+          value: false
+      - equal:
+          path: spec.template.spec.hostIPC
+          value: false
+      - notExists:
+          path: spec.template.spec.containers[0].ports[0].hostPort
+
+  - it: should mount every host path read-only except the checkpoint directory
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+    asserts:
+      # Seven volumes, of which only these three are host paths.
+      - lengthEqual:
+          path: spec.template.spec.volumes
+          count: 7
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: pod-logs
+            hostPath:
+              path: /var/log/pods
+              type: Directory
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: state
+            hostPath:
+              path: /var/lib/fusescope-agent
+              type: DirectoryOrCreate
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: hostfs
+            hostPath:
+              path: /
+              type: Directory
+      - equal:
+          path: spec.template.spec.containers[0].volumeMounts
+          value:
+            - name: config
+              mountPath: /etc/fusescope-agent/config
+              readOnly: true
+            - name: tls
+              mountPath: /etc/fusescope-agent/tls
+              readOnly: true
+            - name: gateway-ca
+              mountPath: /etc/fusescope-agent/gateway-ca
+              readOnly: true
+            - name: token
+              mountPath: /etc/fusescope-agent/token
+              readOnly: true
+            - name: pod-logs
+              mountPath: /var/log/pods
+              readOnly: true
+            - name: state
+              mountPath: /var/lib/fusescope-agent/state
+            - name: hostfs
+              mountPath: /hostfs
+              readOnly: true
+              mountPropagation: HostToContainer
+
+  - it: should mount no host path for kubelet stats alone
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.podLogs.enabled: false
+      fusescopeAgent.hostMetrics.enabled: false
+    asserts:
+      - notExists:
+          path: spec.template.spec.volumes[?(@.hostPath)]
+
+  - it: should expose only its health port, on no host port
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].ports
+          value:
+            - name: health
+              containerPort: 13133
+              protocol: TCP

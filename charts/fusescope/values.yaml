@@ -2450,19 +2450,21 @@ fusescopeAgent:
       memory: 128Mi
     limits:
       memory: 512Mi
-  # fusescopeAgent.podSecurityContext -- Pod security context. Root, to read pod logs, which the
-  # node keeps readable by root only; the root filesystem stays read-only and every capability is
-  # dropped.
+  # fusescopeAgent.podSecurityContext -- Pod security context. Unset, `runAsUser`, `runAsGroup` and
+  # `runAsNonRoot` are uid 0 with `podLogs` or `hostMetrics`, which nodes keep readable by root
+  # only, and 65532, non-root, otherwise (collector-server ADR 0004 as amended). Set them where
+  # the nodes let a non-root user read those files, e.g. `runAsUser: 10001`, `runAsGroup: 10001`,
+  # `runAsNonRoot: true`.
+  # @default -- "uid 0 with podLogs or hostMetrics, else 65532; seccompProfile RuntimeDefault"
   # @section -- FuseScope Agent
   podSecurityContext:
-    runAsNonRoot: false
-    runAsUser: 0
-    runAsGroup: 0
     seccompProfile:
       type: RuntimeDefault
-  # fusescopeAgent.securityContext -- Container security context.
+  # fusescopeAgent.securityContext -- Container security context. The chart refuses to render it
+  # privileged, with privilege escalation, a writable root filesystem, or any capability.
   # @section -- FuseScope Agent
   securityContext:
+    privileged: false
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: true
     capabilities:

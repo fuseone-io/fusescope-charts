@@ -893,6 +893,31 @@ Fails on agent settings that cannot work. Included first by every agent template
 {{- end -}}
 {{- end -}}
 
+{{/*
+The agent's pod security context: uid 0 only to read pod logs or host metrics, else 65532;
+runAsUser, runAsGroup and runAsNonRoot set in values win (collector-server ADR 0004 as amended).
+*/}}
+{{- define "fusescopeAgent.podSecurityContext" -}}
+{{- $a := .Values.fusescopeAgent -}}
+{{- $default := dict "runAsUser" 65532 "runAsGroup" 65532 "runAsNonRoot" true -}}
+{{- if or $a.podLogs.enabled $a.hostMetrics.enabled -}}
+{{- $default = dict "runAsUser" 0 "runAsGroup" 0 "runAsNonRoot" false -}}
+{{- end -}}
+{{- toYaml (merge (deepCopy (default dict $a.podSecurityContext)) $default) -}}
+{{- end -}}
+
+{{/*
+The agent's container security context, refused unless it stays locked down.
+*/}}
+{{- define "fusescopeAgent.securityContext" -}}
+{{- $sc := default dict .Values.fusescopeAgent.securityContext -}}
+{{- $caps := default dict $sc.capabilities -}}
+{{- if or $sc.privileged (ne (toString $sc.allowPrivilegeEscalation) "false") (ne (toString $sc.readOnlyRootFilesystem) "true") $caps.add (not (has "ALL" (default list $caps.drop))) -}}
+{{- fail "fusescopeAgent.securityContext must keep privileged and allowPrivilegeEscalation false, readOnlyRootFilesystem true, and drop ALL capabilities (collector-server ADR 0004 as amended)" -}}
+{{- end -}}
+{{- toYaml $sc -}}
+{{- end -}}
+
 {{- define "fusescopeAgent.gatewayEndpoint" -}}
 {{- default (printf "%s.%s.svc:%v" (include "fusescopeCollector.fullname" .) .Release.Namespace .Values.fusescopeCollector.agentListener.port) .Values.fusescopeAgent.gateway.endpoint -}}
 {{- end -}}
