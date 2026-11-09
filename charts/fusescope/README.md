@@ -1,7 +1,7 @@
 
 # FuseScope
 
-![Version: 0.163.0](https://img.shields.io/badge/Version-0.163.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.161.0](https://img.shields.io/badge/AppVersion-0.161.0-informational?style=flat-square)
+![Version: 0.163.1](https://img.shields.io/badge/Version-0.163.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.161.0](https://img.shields.io/badge/AppVersion-0.161.0-informational?style=flat-square)
 
 FuseScope is an open-source observability platform native to OpenTelemetry, with logs, traces and metrics in a single application. It is a hard fork of [SigNoz](https://github.com/SigNoz/signoz) maintained by FuseOne.
 
@@ -193,6 +193,13 @@ The chart renders a disk for the bucket, a filesystem cache disk in front of it 
 
 > [!WARNING]
 > ### Breaking Changes
+> #### Version 0.163.1
+> fusescope-schema 0.4.2 accepts the storage policy the backend sets when a retention moves data to cold storage, `storage_policy = 'tiered'`, on the tables that retention reaches. In 0.4.0 and 0.4.1 that setting was schema drift. On an install that turned cold storage on, charts 0.162.0, 0.162.1 and 0.163.0 refuse it: the Job fails with exit 1 and the collectors' init containers (`check --wait`) never let them start. Another policy, the setting on another table, or any other change to a table's settings is still refused. See [schema changes the backend makes](https://github.com/fuseone-io/fusescope-collector-server/blob/main/docs/spec/fusescope-schema.md#8-schema-changes-the-backend-makes) and [#84](https://github.com/fuseone-io/fusescope-collector-server/issues/84).
+>
+> - **Refused on 0.162.0, 0.162.1 or 0.163.0.** Nothing was written, and nothing needs to be done by hand: upgrade to 0.163.1.
+> - **Held on 0.162.0 with `telemetryStoreMigrator.migrator: fork`.** Remove that override and upgrade to 0.163.1. fusescope-schema adopts the earlier migrator's schema (`0001`), with no change to the telemetry tables, then applies `0002`. After `0002` the way back to the fork is closed (Version 0.162.1).
+> - `telemetryStoreMigrator.migrator: fork` stays available in this version.
+>
 > #### Version 0.162.1
 > fusescope-schema 0.4.1 applies its migration `0002` on the upgrade: it inserts the base rows of `signoz_metadata.column_evolution_metadata` that the earlier collector's migrator left and that an install by 0.162.0 lacks, and keeps the rows already there.
 >
@@ -951,14 +958,14 @@ secretKey: ca.crt</pre>
             <td id="telemetryStoreMigrator--image"><a href="./values.yaml#L1130">telemetryStoreMigrator.image</a></td>
             <td>object</td>
             <td>
-                <div style="max-width: 300px;"><pre lang="yaml">digest: sha256:9951f2479ac6e5150b116cd856569aaae6ed921e9b951f0fd9c93160e7311077
+                <div style="max-width: 300px;"><pre lang="yaml">digest: sha256:fc6906103ab430d065a8001b8c504b76c5f8997c63be6c19af40785afbf859d5
 pullPolicy: IfNotPresent
 registry: ghcr.io
 repository: fuseone-io/fusescope-collector
-tag: 0.4.1</pre>
+tag: 0.4.2</pre>
 </div>
             </td>
-            <td>fusescope-schema's image, the signed FuseScope collector release 0.4.1 pinned by digest, for the Job and the collectors' init containers.</td>
+            <td>fusescope-schema's image, the signed FuseScope collector release 0.4.2 pinned by digest, for the Job and the collectors' init containers.</td>
         </tr>
         <tr>
             <td id="telemetryStoreMigrator--backoffLimit"><a href="./values.yaml#L1141">telemetryStoreMigrator.backoffLimit</a></td>

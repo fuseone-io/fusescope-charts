@@ -1125,13 +1125,13 @@ telemetryStoreMigrator:
   # @section -- Telemetry Store Migrator
   migrator: fusescope-schema
   # telemetryStoreMigrator.image -- fusescope-schema's image, the signed FuseScope collector release
-  # 0.4.1 pinned by digest, for the Job and the collectors' init containers.
+  # 0.4.2 pinned by digest, for the Job and the collectors' init containers.
   # @section -- Telemetry Store Migrator
   image:
     registry: ghcr.io
     repository: fuseone-io/fusescope-collector
-    tag: "0.4.1"
-    digest: sha256:9951f2479ac6e5150b116cd856569aaae6ed921e9b951f0fd9c93160e7311077
+    tag: "0.4.2"
+    digest: sha256:fc6906103ab430d065a8001b8c504b76c5f8997c63be6c19af40785afbf859d5
     pullPolicy: IfNotPresent
   # telemetryStoreMigrator.backoffLimit -- How many times fusescope-schema's Job retries a
   # connection or lease error (exit 2), as while ClickHouse starts on a fresh install. With
