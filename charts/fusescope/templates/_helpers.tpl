@@ -237,17 +237,6 @@ Create the name of the clusterRoleBinding to use
 
 
 {{/*
-Create the name of the service account to use for telemetryStoreMigrator
-*/}}
-{{- define "telemetryStoreMigrator.serviceAccountName" -}}
-{{- if .Values.telemetryStoreMigrator.serviceAccount.create -}}
-    {{ default (include "telemetryStoreMigrator.fullname" .) .Values.telemetryStoreMigrator.serviceAccount.name }}
-{{- else -}}
-    {{ default "default" .Values.telemetryStoreMigrator.serviceAccount.name }}
-{{- end -}}
-{{- end -}}
-
-{{/*
 Return the service name of Clickhouse
 */}}
 {{- define "clickhouse.servicename" -}}

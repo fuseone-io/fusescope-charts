@@ -100,19 +100,6 @@ tests:
           count: 0
         template: templates/telemetrystore-migrator/serviceaccount.yaml
 
-  - it: should keep the earlier account, a hook on upgrades, with migrator fork
-    set:
-      telemetryStoreMigrator.migrator: fork
-    release:
-      upgrade: true
-    template: templates/telemetrystore-migrator/serviceaccount.yaml
-    asserts:
-      - equal:
-          path: metadata.name
-          value: signoz-telemetrystore-migrator
-      - equal:
-          path: metadata.annotations["helm.sh/hook"]
-          value: pre-upgrade
 
   - it: should leave podFailurePolicy out before Kubernetes 1.26, retrying until backoffLimit
     template: templates/telemetrystore-migrator/job.yaml
@@ -356,27 +343,46 @@ tests:
       - hasDocuments:
           count: 0
 
-  # Never two migrators.
-  - it: should render only the earlier migrator with migrator fork
+  # The earlier collector's migrator is gone: fusescope-schema is the only one,
+  # whether the value is left out or set explicitly.
+  - it: should run fusescope-schema with migrator fusescope-schema set explicitly
     set:
-      telemetryStoreMigrator.migrator: fork
+      telemetryStoreMigrator.migrator: fusescope-schema
     asserts:
-      - matchRegex:
-          path: spec.template.spec.containers[0].image
-          pattern: "^ghcr.io/fuseone-io/fusescope-otel-collector:"
+      - equal:
+          path: spec.template.spec.containers[0].command
+          value: ["/fusescope-schema"]
         template: templates/telemetrystore-migrator/job.yaml
-      - hasDocuments:
-          count: 0
-        template: templates/telemetrystore-migrator/configmap.yaml
-      - hasDocuments:
-          count: 0
-        template: templates/telemetrystore-migrator/secret-clickhouse.yaml
-      - notContains:
-          path: spec.template.spec.volumes
-          content:
-            name: fusescope-schema-config
-            configMap: {name: signoz-telemetrystore-migrator-config}
+      - equal:
+          path: metadata.name
+          value: signoz-telemetrystore-migrator-d4376d7844
+        template: templates/telemetrystore-migrator/job.yaml
+
+  - it: should run no image of the earlier collector, with it on, on an upgrade too
+    set:
+      otelCollector.enabled: true
+    release:
+      upgrade: true
+    asserts:
+      - notMatchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: fusescope-otel-collector
+        template: templates/telemetrystore-migrator/job.yaml
+      - lengthEqual:
+          path: spec.template.spec.initContainers
+          count: 1
+        template: templates/otel-collector/deployment.yaml
+      - equal:
+          path: spec.template.spec.initContainers[0].command
+          value: ["/fusescope-schema"]
+        template: templates/otel-collector/deployment.yaml
+      - equal:
+          path: spec.template.spec.initContainers[0].command
+          value: ["/fusescope-schema"]
         template: templates/fusescope-collector/deployment.yaml
+      - notExists:
+          path: metadata.annotations["helm.sh/hook"]
+        template: templates/telemetrystore-migrator/serviceaccount.yaml
 
   - it: should render no migrator when disabled
     set:
@@ -587,7 +593,7 @@ tests:
       telemetryStoreMigrator.enableReplication: false
     asserts:
       - failedTemplate:
-          errorPattern: "enableReplication: false is not supported by fusescope-schema"
+          errorPattern: "enableReplication: false is not supported by fusescope-schema: it migrates only the replicated schema \\(collector spec §2.1\\)\\. Remove it\\.$"
 
   - it: should refuse an image without a digest
     # The render stops at the first template that fails, where the error is reported.
@@ -605,13 +611,23 @@ tests:
       telemetryStoreMigrator.migrator: other
     asserts:
       - failedTemplate:
-          errorPattern: 'telemetryStoreMigrator.migrator must be "fusescope-schema" or "fork"'
+          errorPattern: 'telemetryStoreMigrator.migrator must be "fusescope-schema", not "other"'
 
-  - it: should keep the earlier migrator working with enableReplication false
-    template: templates/telemetrystore-migrator/job.yaml
+  # An install still held on 0.162.0 with the override leaves it as 0.163.1
+  # validated: removing it, fusescope-schema adopts 0001 and applies 0002.
+  - it: should refuse migrator fork, removed, saying how to leave it
+    template: templates/telemetrystore-migrator/serviceaccount.yaml
     set:
       telemetryStoreMigrator.migrator: fork
-      telemetryStoreMigrator.enableReplication: false
     asserts:
-      - isKind:
-          of: Job
+      - failedTemplate:
+          errorPattern: 'telemetryStoreMigrator.migrator: fork, the earlier collector''s migrator, was removed in 0.164.0\. Remove the override: fusescope-schema adopts the schema it created \(0001\), with no change to the telemetry tables, then applies 0002\. See Version 0.163.1 in the chart README\.'
+
+  - it: should refuse migrator fork with the migrator disabled too
+    template: templates/telemetrystore-migrator/serviceaccount.yaml
+    set:
+      telemetryStoreMigrator.enabled: false
+      telemetryStoreMigrator.migrator: fork
+    asserts:
+      - failedTemplate:
+          errorPattern: "telemetryStoreMigrator.migrator: fork, the earlier collector's migrator, was removed in 0.164.0"

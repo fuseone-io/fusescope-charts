@@ -61,22 +61,6 @@ spec:
       initContainers:
         {{- if include "fusescopeSchema.enabled" . }}
         {{- include "fusescopeSchema.checkContainer" . | nindent 8 }}
-        {{- else if include "telemetryStoreMigrator.fork" . }}
-        - name: check
-          image: {{ include "otelCollector.image" . }}
-          imagePullPolicy: {{ .Values.otelCollector.image.pullPolicy }}
-          command:
-            - "/fusescope-otel-collector"
-          args:
-            - "migrate"
-            - "sync"
-            - "check"
-          env:
-            {{- include "snippet.telemetryStoreMigrator-env" . | nindent 12 }}
-          {{- with .Values.telemetryStoreMigrator.resources }}
-          resources:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
         {{- end }}
       containers:
         - name: collector

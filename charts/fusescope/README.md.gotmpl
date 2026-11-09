@@ -193,6 +193,14 @@ The chart renders a disk for the bucket, a filesystem cache disk in front of it 
 
 > [!WARNING]
 > ### Breaking Changes
+> #### Version 0.164.0
+> The earlier collector's migrator is removed: fusescope-schema is the only one. The chart no longer renders fusescope-otel-collector's migrate Job, its ServiceAccount or its `migrate sync check` init containers.
+>
+> - **`telemetryStoreMigrator.migrator: fork` now fails the install** with how to leave it. On an install held on 0.162.0 with that override, remove it and upgrade, as in Version 0.163.1: fusescope-schema 0.4.2, the same as 0.163.1's, adopts the earlier migrator's schema (`0001`), with no change to the telemetry tables, then applies `0002`.
+> - **From 0.163.1, nothing changes for the migrator.** The Job's spec is the same, so the upgrade keeps the Job and runs no new one.
+> - **Values removed:** `telemetryStoreMigrator.migrator`, `upgradeHelmHooks` and `enableReplication`. Leaving `upgradeHelmHooks` set has no effect. `migrator: fusescope-schema` is still accepted. `enableReplication: false` still fails, as since 0.162.0.
+> - `otelCollector`, the earlier collector itself, is unchanged and still off by default. With it on, its init container is fusescope-schema's `check --wait`.
+>
 > #### Version 0.163.1
 > fusescope-schema 0.4.2 accepts the storage policy the backend sets when a retention moves data to cold storage, `storage_policy = 'tiered'`, on the tables that retention reaches. In 0.4.0 and 0.4.1 that setting was schema drift. On an install that turned cold storage on, charts 0.162.0, 0.162.1 and 0.163.0 refuse it: the Job fails with exit 1 and the collectors' init containers (`check --wait`) never let them start. Another policy, the setting on another table, or any other change to a table's settings is still refused. See [schema changes the backend makes](https://github.com/fuseone-io/fusescope-collector-server/blob/main/docs/spec/fusescope-schema.md#8-schema-changes-the-backend-makes) and [#84](https://github.com/fuseone-io/fusescope-collector-server/issues/84).
 >
