@@ -343,6 +343,35 @@ tests:
       - hasDocuments:
           count: 0
 
+  # Values an install may still carry from 0.163.1 or earlier: migrator
+  # fusescope-schema is accepted, enableReplication true and upgradeHelmHooks
+  # are ignored. The Job keeps its name, so its spec, and is no hook.
+  - it: should keep the Job and add no hook with the legacy values set, on an upgrade
+    set:
+      telemetryStoreMigrator.migrator: fusescope-schema
+      telemetryStoreMigrator.enableReplication: true
+      telemetryStoreMigrator.upgradeHelmHooks: true
+    release:
+      upgrade: true
+    asserts:
+      - hasDocuments:
+          count: 1
+        template: templates/telemetrystore-migrator/job.yaml
+      - equal:
+          path: metadata.name
+          value: signoz-telemetrystore-migrator-d4376d7844
+        template: templates/telemetrystore-migrator/job.yaml
+      - notExists:
+          path: metadata.annotations
+        template: templates/telemetrystore-migrator/job.yaml
+      - notExists:
+          path: metadata.annotations
+        template: templates/telemetrystore-migrator/serviceaccount.yaml
+      - equal:
+          path: metadata.name
+          value: signoz-telemetrystore-migrator-schema
+        template: templates/telemetrystore-migrator/serviceaccount.yaml
+
   # The earlier collector's migrator is gone: fusescope-schema is the only one,
   # whether the value is left out or set explicitly.
   - it: should run fusescope-schema with migrator fusescope-schema set explicitly
@@ -358,7 +387,8 @@ tests:
           value: signoz-telemetrystore-migrator-d4376d7844
         template: templates/telemetrystore-migrator/job.yaml
 
-  - it: should run no image of the earlier collector, with it on, on an upgrade too
+  # With otelCollector on, its image runs as that collector, never as a migrator.
+  - it: should run the earlier collector's image in no migrator Job or init container, with it on, on an upgrade too
     set:
       otelCollector.enabled: true
     release:
