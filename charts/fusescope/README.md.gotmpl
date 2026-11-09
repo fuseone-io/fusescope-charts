@@ -193,6 +193,13 @@ The chart renders a disk for the bucket, a filesystem cache disk in front of it 
 
 > [!WARNING]
 > ### Breaking Changes
+> #### Version 0.163.1
+> fusescope-schema 0.4.2 accepts the storage policy the backend sets when a retention moves data to cold storage, `storage_policy = 'tiered'`, on the tables that retention reaches. In 0.4.0 and 0.4.1 that setting was schema drift. On an install that turned cold storage on, charts 0.162.0, 0.162.1 and 0.163.0 refuse it: the Job fails with exit 1 and the collectors' init containers (`check --wait`) never let them start. Another policy, the setting on another table, or any other change to a table's settings is still refused. See [schema changes the backend makes](https://github.com/fuseone-io/fusescope-collector-server/blob/main/docs/spec/fusescope-schema.md#8-schema-changes-the-backend-makes) and [#84](https://github.com/fuseone-io/fusescope-collector-server/issues/84).
+>
+> - **Refused on 0.162.0, 0.162.1 or 0.163.0.** Nothing was written, and nothing needs to be done by hand: upgrade to 0.163.1.
+> - **Held on 0.162.0 with `telemetryStoreMigrator.migrator: fork`.** Remove that override and upgrade to 0.163.1. fusescope-schema adopts the earlier migrator's schema (`0001`), with no change to the telemetry tables, then applies `0002`. After `0002` the way back to the fork is closed (Version 0.162.1).
+> - `telemetryStoreMigrator.migrator: fork` stays available in this version.
+>
 > #### Version 0.162.1
 > fusescope-schema 0.4.1 applies its migration `0002` on the upgrade: it inserts the base rows of `signoz_metadata.column_evolution_metadata` that the earlier collector's migrator left and that an install by 0.162.0 lacks, and keeps the rows already there.
 >
