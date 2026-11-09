@@ -1,0 +1,54 @@
+# Refuses a chart change whose default install runs an AGPL image (fuseone-io/fusescope ADR 0001,
+# amendment of 2026-11-08; fuseone-io/fusescope#229). The guard is fusescope's scripts/agplguard:
+# it renders charts/fusescope with its default values and fails on an image from
+# fusescope-otel-collector or fusescope-schema-migrator.
+name: AGPL guard
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - charts/**
+      - .github/workflows/agpl-guard.yaml
+  push:
+    branches:
+      - main
+    paths:
+      - charts/**
+      - .github/workflows/agpl-guard.yaml
+
+permissions:
+  contents: read
+
+jobs:
+  default-install-images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: checkout the guard
+        uses: actions/checkout@v4
+        with:
+          repository: fuseone-io/fusescope
+          ref: main
+          path: fusescope
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: fusescope/go.mod
+          cache-dependency-path: fusescope/go.sum
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.12.1
+      # The guard builds charts/fusescope's own dependencies; the clickhouse subchart's,
+      # zookeeper, is built first so every image the default install runs is rendered.
+      - name: subchart dependencies
+        run: |
+          helm dependency build charts/zookeeper
+          helm dependency build charts/clickhouse
+      # -target points the guard's binary check at itself, so it does not load the backend.
+      - name: default install runs no AGPL image
+        working-directory: fusescope
+        run: go run ./scripts/agplguard -target ./scripts/agplguard -chart "$GITHUB_WORKSPACE/charts/fusescope"
