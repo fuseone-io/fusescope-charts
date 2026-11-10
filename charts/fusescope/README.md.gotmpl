@@ -196,8 +196,7 @@ The chart renders a disk for the bucket, a filesystem cache disk in front of it 
 > #### Version 0.165.0
 > The earlier collector (`otelCollector`, fusescope-otel-collector, AGPL-3.0) is removed: the chart no longer renders its Deployment, ConfigMap, Service, ServiceAccount, ClusterRole, ClusterRoleBinding, HPA or KEDA scaler. It was off by default since 0.161.0, and no image of it is left in the chart.
 >
-> - **`otelCollector.enabled: true` now fails the install** with how to leave it. Remove the override: the FuseScope collector receives OTLP behind the same Service name and OTLP ports. Send what the earlier collector's other receivers took (Jaeger, Heroku and JSON logs) as OTLP.
->   - **A `helm upgrade` given no values reuses the release's, the override included.** It is then refused again. Prefer `--set otelCollector.enabled=false`. Alternatively, use `--reset-values -f <complete-values.yaml>`. `--reset-values` discards the release's stored values, so reapply every customization.
+> - **`otelCollector.enabled: true` now fails the render.** Remove the override: the FuseScope collector receives OTLP behind the same Service name and OTLP ports. Send what the earlier collector's other receivers took (Jaeger, Heroku and JSON logs) as OTLP.
 > - **With `otelCollector.enabled: false`, the default, nothing changes:** the compat Service and its Ingress render as in 0.164.0. The Ingress's template moved to `templates/fusescope-collector/ingress-otlp-compat.yaml`, and its labels are now the FuseScope collector's.
 > - **Values kept:** `otelCollector.name`, `service`, `ports.otlp`, `ports.otlp-http` (`enabled`, `servicePort`, `nodePort`) and `ingress`, which configure that Service and Ingress. **Values removed:** every other `otelCollector` key. Left in a release's values, they are ignored.
 >

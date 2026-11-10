@@ -869,7 +869,7 @@ Fails on otelCollector.enabled: the earlier collector was removed in 0.165.0.
 */}}
 {{- define "fusescopeCollector.compatService" -}}
 {{- if .Values.otelCollector.enabled -}}
-{{- fail "otelCollector.enabled: true, the earlier collector (fusescope-otel-collector), was removed in 0.165.0. Remove the override: the FuseScope collector (fusescopeCollector) receives OTLP behind a Service with the earlier collector's name and OTLP ports, which otelCollector.service, otelCollector.ports.otlp, otelCollector.ports.otlp-http and otelCollector.ingress still configure. A helm upgrade given no values reuses the release's, the override included: prefer --set otelCollector.enabled=false. See Version 0.165.0 in the chart README." -}}
+{{- fail "otelCollector.enabled: true, the earlier collector (fusescope-otel-collector), was removed in 0.165.0. Remove the override: the FuseScope collector (fusescopeCollector) receives OTLP." -}}
 {{- end -}}
 {{- if include "fusescopeCollector.otlpEnabled" . -}}
 true
