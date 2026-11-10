@@ -651,7 +651,7 @@ tests:
       telemetryStoreMigrator.migrator: fork
     asserts:
       - failedTemplate:
-          errorPattern: 'telemetryStoreMigrator.migrator: fork, the earlier collector''s migrator, was removed in 0.164.0\. Remove the override: fusescope-schema adopts the schema it created \(0001\), with no change to the telemetry tables, then applies 0002\. A helm upgrade given no values reuses the release''s, the override included: pass your values with --reset-values, or set telemetryStoreMigrator.migrator=fusescope-schema\. See Version 0.164.0 in the chart README\.'
+          errorPattern: 'telemetryStoreMigrator.migrator: fork, the earlier collector''s migrator, was removed in 0.164.0\. Remove the override: fusescope-schema adopts the schema it created \(0001\), with no change to the telemetry tables, then applies 0002\. A helm upgrade given no values reuses the release''s, the override included: prefer --set telemetryStoreMigrator.migrator=fusescope-schema\. Alternatively, use --reset-values -f <complete-values\.yaml>; --reset-values discards the release''s stored values, so reapply every customization\. See Version 0.164.0 in the chart README\.'
 
   # Kind validation of #43: without fsGroup the password file, mode 0440, is
   # root's, and the earlier collector's init container, not root, cannot read

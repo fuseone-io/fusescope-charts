@@ -197,7 +197,7 @@ The chart renders a disk for the bucket, a filesystem cache disk in front of it 
 > The earlier collector's migrator is removed: fusescope-schema is the only one. The chart no longer renders fusescope-otel-collector's migrate Job, its ServiceAccount or its `migrate sync check` init containers.
 >
 > - **`telemetryStoreMigrator.migrator: fork` now fails the install** with how to leave it. On an install held on 0.162.0 with that override, remove it and upgrade, as in Version 0.163.1: fusescope-schema 0.4.2, the same as 0.163.1's, adopts the earlier migrator's schema (`0001`), with no change to the telemetry tables, then applies `0002`.
->   - **A `helm upgrade` given no values reuses the release's, the override included.** It is then refused again. Pass your values with `--reset-values`, or set `telemetryStoreMigrator.migrator=fusescope-schema`.
+>   - **A `helm upgrade` given no values reuses the release's, the override included.** It is then refused again. Prefer `--set telemetryStoreMigrator.migrator=fusescope-schema`. Alternatively, use `--reset-values -f <complete-values.yaml>`. `--reset-values` discards the release's stored values, so reapply every customization.
 > - **From 0.163.1, nothing changes for the migrator.** The Job's spec is the same, so the upgrade keeps the Job and runs no new one.
 > - **Values removed:** `telemetryStoreMigrator.migrator`, `upgradeHelmHooks` and `enableReplication`. Leaving `upgradeHelmHooks` set has no effect. `migrator: fusescope-schema` is still accepted. `enableReplication: false` still fails, as since 0.162.0.
 > - **`otelCollector`, the earlier collector itself, is still off by default.** With it on, its init container is fusescope-schema's `check --wait`.
