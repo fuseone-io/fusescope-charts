@@ -56,8 +56,13 @@ spec:
       {{- with .Values.otelCollector.topologySpreadConstraints }}
       topologySpreadConstraints: {{ toYaml . | nindent 8 }}
       {{- end }}
+      {{- $podSecurityContext := deepCopy (.Values.otelCollector.podSecurityContext | default dict) }}
+      {{- if and (include "fusescopeSchema.enabled" .) (not (hasKey $podSecurityContext "fsGroup")) }}
+      {{- /* The init container, not root, reads the password file (0440) only through the pod's fsGroup. */}}
+      {{- $_ := set $podSecurityContext "fsGroup" .Values.telemetryStoreMigrator.podSecurityContext.fsGroup }}
+      {{- end }}
       securityContext:
-        {{- toYaml .Values.otelCollector.podSecurityContext | nindent 8 }}
+        {{- toYaml $podSecurityContext | nindent 8 }}
       initContainers:
         {{- if include "fusescopeSchema.enabled" . }}
         {{- include "fusescopeSchema.checkContainer" . | nindent 8 }}

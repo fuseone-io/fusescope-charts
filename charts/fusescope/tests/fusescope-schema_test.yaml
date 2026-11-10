@@ -651,7 +651,41 @@ tests:
       telemetryStoreMigrator.migrator: fork
     asserts:
       - failedTemplate:
-          errorPattern: 'telemetryStoreMigrator.migrator: fork, the earlier collector''s migrator, was removed in 0.164.0\. Remove the override: fusescope-schema adopts the schema it created \(0001\), with no change to the telemetry tables, then applies 0002\. See Version 0.163.1 in the chart README\.'
+          errorPattern: 'telemetryStoreMigrator.migrator: fork, the earlier collector''s migrator, was removed in 0.164.0\. Remove the override: fusescope-schema adopts the schema it created \(0001\), with no change to the telemetry tables, then applies 0002\. A helm upgrade given no values reuses the release''s, the override included: pass your values with --reset-values, or set telemetryStoreMigrator.migrator=fusescope-schema\. See Version 0.164.0 in the chart README\.'
+
+  # Kind validation of #43: without fsGroup the password file, mode 0440, is
+  # root's, and the earlier collector's init container, not root, cannot read
+  # it (check: read password_file: permission denied).
+  - it: should give the earlier collector's pod fusescope-schema's fsGroup, so its init container reads the password
+    template: templates/otel-collector/deployment.yaml
+    set:
+      otelCollector.enabled: true
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.fsGroup
+          value: 65532
+      - contains:
+          path: spec.template.spec.initContainers[0].volumeMounts
+          content: {name: fusescope-schema-clickhouse, mountPath: /etc/fusescope-schema/clickhouse, readOnly: true}
+
+  - it: should keep the earlier collector's own fsGroup and pod security context
+    template: templates/otel-collector/deployment.yaml
+    set:
+      otelCollector.enabled: true
+      otelCollector.podSecurityContext: {fsGroup: 2000, runAsNonRoot: true}
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext
+          value: {fsGroup: 2000, runAsNonRoot: true}
+
+  - it: should leave the earlier collector's pod security context alone without the migrator
+    template: templates/otel-collector/deployment.yaml
+    set:
+      otelCollector.enabled: true
+      telemetryStoreMigrator.enabled: false
+    asserts:
+      - notExists:
+          path: spec.template.spec.securityContext.fsGroup
 
   - it: should refuse migrator fork with the migrator disabled too
     template: templates/telemetrystore-migrator/serviceaccount.yaml

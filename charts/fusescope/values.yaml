@@ -1676,7 +1676,9 @@ otelCollector:
       labelSelector:
         matchLabels:
           app.kubernetes.io/component: otel-collector
-  # otelCollector.podSecurityContext -- Pod-level security context.
+  # otelCollector.podSecurityContext -- Pod-level security context. Without `fsGroup`, the chart
+  # sets fusescope-schema's (`telemetryStoreMigrator.podSecurityContext.fsGroup`), so that the
+  # init container can read the ClickHouse password file.
   # @section -- Otel Collector
   # @default -- {}
   podSecurityContext: {}

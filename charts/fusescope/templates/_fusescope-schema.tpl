@@ -13,7 +13,7 @@ are checked only when an install still sets them.
 {{- define "fusescopeSchema.enabled" -}}
 {{- $m := .Values.telemetryStoreMigrator -}}
 {{- if eq (toString $m.migrator) "fork" -}}
-{{- fail "telemetryStoreMigrator.migrator: fork, the earlier collector's migrator, was removed in 0.164.0. Remove the override: fusescope-schema adopts the schema it created (0001), with no change to the telemetry tables, then applies 0002. See Version 0.163.1 in the chart README." -}}
+{{- fail "telemetryStoreMigrator.migrator: fork, the earlier collector's migrator, was removed in 0.164.0. Remove the override: fusescope-schema adopts the schema it created (0001), with no change to the telemetry tables, then applies 0002. A helm upgrade given no values reuses the release's, the override included: pass your values with --reset-values, or set telemetryStoreMigrator.migrator=fusescope-schema. See Version 0.164.0 in the chart README." -}}
 {{- end -}}
 {{- if ne (toString (default "fusescope-schema" $m.migrator)) "fusescope-schema" -}}
 {{- fail (printf "telemetryStoreMigrator.migrator must be \"fusescope-schema\", not %q" (toString $m.migrator)) -}}
