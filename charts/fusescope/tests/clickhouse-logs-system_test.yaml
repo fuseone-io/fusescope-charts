@@ -1,0 +1,43 @@
+suite: the ClickHouse subchart no longer runs the SigNoz collector sidecar (logs.system)
+
+templates:
+  - charts/clickhouse/templates/clickhouse-instance/*.yaml
+
+release:
+  name: fusescope
+  namespace: platform
+
+tests:
+  # clickhouse 24.1.21 removed logs.system: a release that still sets it renders
+  # no sidecar, ConfigMap, volume or image of signoz-otel-collector.
+  - it: should render no logs.system sidecar when the old value is still set
+    set:
+      clickhouse:
+        logs:
+          system:
+            enabled: true
+    asserts:
+      - containsDocument:
+          kind: ConfigMap
+          apiVersion: v1
+          name: fusescope-clickhouse-logs-system-config
+        not: true
+      - notContains:
+          path: spec.templates.podTemplates[0].spec.containers
+          content:
+            name: logs-system-exporter
+          any: true
+        template: charts/clickhouse/templates/clickhouse-instance/clickhouse-instance.yaml
+      - notContains:
+          path: spec.templates.podTemplates[0].spec.volumes
+          content:
+            name: logs-system-config
+          any: true
+        template: charts/clickhouse/templates/clickhouse-instance/clickhouse-instance.yaml
+      - notExists:
+          path: spec.templates.podTemplates[0].spec.containers[0].lifecycle
+        template: charts/clickhouse/templates/clickhouse-instance/clickhouse-instance.yaml
+      - notMatchRegex:
+          path: spec.templates.podTemplates[0].spec.containers[*].image
+          pattern: signoz-otel-collector
+        template: charts/clickhouse/templates/clickhouse-instance/clickhouse-instance.yaml

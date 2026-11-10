@@ -236,22 +236,3 @@ tests:
           content:
             name: data-volume
             mountPath: /var/lib/clickhouse
-  - it: should have configmap when logs.system.enabled=true
-    set:
-      logs:
-        system:
-          enabled: true
-    asserts:
-      - contains:
-          path: spec.templates.podTemplates[0].spec.volumes
-          count: 1
-          content:
-            name: logs-system-config
-            configMap:
-              name: clickhouse-logs-system-config
-      - contains:
-          path: spec.templates.podTemplates[0].spec.containers[1].volumeMounts
-          count: 1
-          content:
-            name: logs-system-config
-            mountPath: /conf

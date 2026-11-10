@@ -1,7 +1,7 @@
 
 # FuseScope
 
-![Version: 0.165.0](https://img.shields.io/badge/Version-0.165.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.161.0](https://img.shields.io/badge/AppVersion-0.161.0-informational?style=flat-square)
+![Version: 0.166.0](https://img.shields.io/badge/Version-0.166.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.161.0](https://img.shields.io/badge/AppVersion-0.161.0-informational?style=flat-square)
 
 FuseScope is an open-source observability platform native to OpenTelemetry, with logs, traces and metrics in a single application. It is a hard fork of [SigNoz](https://github.com/SigNoz/signoz) maintained by FuseOne.
 
@@ -193,6 +193,11 @@ The chart renders a disk for the bucket, a filesystem cache disk in front of it 
 
 > [!WARNING]
 > ### Breaking Changes
+> #### Version 0.166.0
+> The ClickHouse subchart (24.1.21) drops `clickhouse.logs.system`, the optional sidecar that ran SigNoz's collector (`signoz/signoz-otel-collector`) to collect ClickHouse system tables as logs. It was off by default.
+>
+> - **`clickhouse.logs.system` is ignored.** Left in a release's values, it renders no sidecar, ConfigMap, volume or image.
+>
 > #### Version 0.165.0
 > The earlier collector (`otelCollector`, fusescope-otel-collector, AGPL-3.0) is removed: the chart no longer renders its Deployment, ConfigMap, Service, ServiceAccount, ClusterRole, ClusterRoleBinding, HPA or KEDA scaler. It was off by default since 0.161.0, and no image of it is left in the chart.
 >
