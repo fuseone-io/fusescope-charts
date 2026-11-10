@@ -5,19 +5,11 @@ templates:
   - templates/fusescope-collector/deployment.yaml
   - templates/fusescope-collector/service.yaml
   - templates/fusescope-collector/service-otlp-compat.yaml
+  - templates/fusescope-collector/ingress-otlp-compat.yaml
   - templates/fusescope-collector/serviceaccount.yaml
   - templates/fusescope-collector/ingress.yaml
   - templates/fusescope-collector/certificates.yaml
   - templates/fusescope-collector/hpa.yaml
-  - templates/otel-collector/configmap.yaml
-  - templates/otel-collector/deployment.yaml
-  - templates/otel-collector/service.yaml
-  - templates/otel-collector/serviceaccount.yaml
-  - templates/otel-collector/clusterrole.yaml
-  - templates/otel-collector/clusterrolebinding.yaml
-  - templates/otel-collector/hpa.yaml
-  - templates/otel-collector/keda-autoscaler.yaml
-  - templates/otel-collector/ingress.yaml
   - templates/telemetrystore-migrator/job.yaml
 
 release:
@@ -33,45 +25,35 @@ capabilities:
     - autoscaling/v2
 
 tests:
-  - it: should install no earlier collector by default
-    asserts:
-      - hasDocuments:
-          count: 0
-        template: templates/otel-collector/deployment.yaml
-      - hasDocuments:
-          count: 0
-        template: templates/otel-collector/configmap.yaml
-      - hasDocuments:
-          count: 0
-        template: templates/otel-collector/serviceaccount.yaml
-      - hasDocuments:
-          count: 0
-        template: templates/otel-collector/service.yaml
-      - hasDocuments:
-          count: 0
-        template: templates/otel-collector/clusterrole.yaml
-      - hasDocuments:
-          count: 0
-        template: templates/otel-collector/clusterrolebinding.yaml
-      - hasDocuments:
-          count: 0
-        template: templates/otel-collector/ingress.yaml
-
-  - it: should install no earlier collector autoscaler while it is off
+  # The earlier collector was removed in 0.165.0: its keys left in a release's values are
+  # ignored, and only its endpoint keys (name, service, ports.otlp, ports.otlp-http, ingress)
+  # still apply, to the compat Service and Ingress.
+  - it: should render no earlier collector, with its other keys left in the values
     set:
-      otelCollector.autoscaling.enabled: true
+      otelCollector:
+        enabled: false
+        image: {registry: ghcr.io, repository: fuseone-io/fusescope-otel-collector, tag: 0.145.0}
+        replicaCount: 3
+        resources: {requests: {cpu: 100m}}
+        autoscaling: {enabled: true, keda: {enabled: true}}
+        clusterRole: {create: true}
+        serviceAccount: {create: true}
+        config: {receivers: {otlp: {}}}
     asserts:
+      - isKind:
+          of: Service
+        template: templates/fusescope-collector/service-otlp-compat.yaml
+      - equal:
+          path: spec.selector["app.kubernetes.io/component"]
+          value: fusescope-collector
+        template: templates/fusescope-collector/service-otlp-compat.yaml
+      - notMatchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: fusescope-otel-collector
+        template: templates/fusescope-collector/deployment.yaml
       - hasDocuments:
           count: 0
-        template: templates/otel-collector/hpa.yaml
-
-  - it: should install no earlier collector KEDA scaler while it is off
-    set:
-      otelCollector.autoscaling: {enabled: true, keda: {enabled: true}}
-    asserts:
-      - hasDocuments:
-          count: 0
-        template: templates/otel-collector/keda-autoscaler.yaml
+        template: templates/fusescope-collector/hpa.yaml
 
   - it: should run the FuseScope collector by default with the OTLP ports
     template: templates/fusescope-collector/deployment.yaml
@@ -264,7 +246,7 @@ tests:
               protocol: TCP
 
   - it: should keep the earlier collector's OTLP ingress routing, to the compat Service
-    template: templates/otel-collector/ingress.yaml
+    template: templates/fusescope-collector/ingress-otlp-compat.yaml
     set:
       otelCollector.ingress.enabled: true
     asserts:
@@ -385,78 +367,31 @@ tests:
           path: data["config.yaml"]
           pattern: "    metrics/spanmetrics:\\n      receivers: \\[fusescope_spanmetrics\\]\\n"
 
-  - it: should keep the earlier collector when asked, without the compat Service
+  - it: should refuse otelCollector.enabled, the earlier collector removed in 0.165.0
+    template: templates/fusescope-collector/service-otlp-compat.yaml
     set:
       otelCollector.enabled: true
       fusescopeCollector.otlp.enabled: false
     asserts:
-      - isKind:
-          of: Deployment
-        template: templates/otel-collector/deployment.yaml
-      - hasDocuments:
-          count: 1
-        template: templates/otel-collector/configmap.yaml
-      - equal:
-          path: metadata.name
-          value: fusescope-otel-collector
-        template: templates/otel-collector/service.yaml
-      - equal:
-          path: spec.selector["app.kubernetes.io/component"]
-          value: otel-collector
-        template: templates/otel-collector/service.yaml
-      - hasDocuments:
-          count: 1
-        template: templates/otel-collector/serviceaccount.yaml
-      - hasDocuments:
-          count: 0
-        template: templates/fusescope-collector/service-otlp-compat.yaml
-      - hasDocuments:
-          count: 0
-        template: templates/fusescope-collector/deployment.yaml
-      - hasDocuments:
-          count: 0
-        template: templates/fusescope-collector/configmap.yaml
+      - failedTemplate:
+          errorPattern: "otelCollector.enabled: true, the earlier collector \\(fusescope-otel-collector\\), was removed in 0.165.0"
 
-  - it: should keep the earlier collector for OTLP next to the FuseScope collector for RUM
-    set:
-      otelCollector.enabled: true
-      fusescopeCollector.otlp.enabled: false
-      signoz.ingestPolicy.tokens.existingSecret: ingest-tokens
-      signoz.ingestPolicy.tls.existingSecret: ingest-tls
-      fusescopeCollector.rum.enabled: true
-      fusescopeCollector.rum.tls.existingSecret: rum-tls
-    asserts:
-      - isKind:
-          of: Deployment
-        template: templates/otel-collector/deployment.yaml
-      - hasDocuments:
-          count: 0
-        template: templates/fusescope-collector/service-otlp-compat.yaml
-      - notMatchRegex:
-          path: data["config.yaml"]
-          pattern: "\\n  otlp:\\n|receivers: \\[otlp"
-        template: templates/fusescope-collector/configmap.yaml
-      - notContains:
-          path: spec.ports
-          content: {name: otlp}
-          any: true
-        template: templates/fusescope-collector/service.yaml
-
-  - it: should run both collectors without the compat Service
+  - it: should refuse otelCollector.enabled next to the FuseScope collector too
+    template: templates/fusescope-collector/service-otlp-compat.yaml
     set:
       otelCollector.enabled: true
     asserts:
-      - hasDocuments:
-          count: 0
-        template: templates/fusescope-collector/service-otlp-compat.yaml
-      - equal:
-          path: metadata.name
-          value: fusescope-otel-collector
-        template: templates/otel-collector/service.yaml
-      - equal:
-          path: metadata.name
-          value: fusescope-collector
-        template: templates/fusescope-collector/service.yaml
+      - failedTemplate:
+          errorPattern: "was removed in 0.165.0"
+
+  - it: should refuse otelCollector.enabled with the FuseScope collector off too
+    template: templates/fusescope-collector/service-otlp-compat.yaml
+    set:
+      otelCollector.enabled: true
+      fusescopeCollector.enabled: false
+    asserts:
+      - failedTemplate:
+          errorPattern: "was removed in 0.165.0"
 
   - it: should scale with an HPA when enabled, leaving replicas to it
     set:

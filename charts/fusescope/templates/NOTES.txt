@@ -4,20 +4,16 @@
 {{- if include "fusescopeCollector.active" . }}
 - fusescope-collector version: '{{ .Values.fusescopeCollector.image.tag }}'
 {{- end }}
-{{- if .Values.otelCollector.enabled }}
-- otel-collector version: '{{ .Values.otelCollector.image.tag }}'
-{{- end }}
 {{- if include "fusescopeCollector.compatService" . }}
 
 OTLP is received by the FuseScope collector, at {{ include "otelCollector.fullname" . }}:{{ .Values.otelCollector.ports.otlp.servicePort }} (gRPC)
 and :{{ index .Values.otelCollector.ports "otlp-http" "servicePort" }} (HTTP), the earlier collector's Service name and ports.
-Since chart 0.161.0 it replaces the earlier collector (otelCollector), now off by default. To keep
-the earlier collector, set otelCollector.enabled=true and fusescopeCollector.otlp.enabled=false.
+The earlier collector (otelCollector) was removed in chart 0.165.0.
 {{- end }}
-{{- if not (or .Values.otelCollector.enabled (include "fusescopeCollector.otlpEnabled" .)) }}
+{{- if not (include "fusescopeCollector.otlpEnabled" .) }}
 
 WARNING: no collector in this release receives OTLP: set fusescopeCollector.otlp.enabled=true
-(the default), or otelCollector.enabled=true for the earlier collector.
+(the default).
 {{- end }}
 {{- if and .Values.fusescopeCollector.enabled (not .Values.fusescopeCollector.rum.enabled) }}
 
@@ -78,9 +74,6 @@ Generates deprecation notices for NOTES.txt
 {{- end -}}
 {{- if (dig "initContainers" "migration" nil .Values.signoz) -}}
   {{- $messages = append $messages "The '.Values.signoz.initContainers.migration' has been removed as it is no longer required. Please remove it from your values overrides." }}
-{{- end }}
-{{- if (dig "initContainers" "init" nil .Values.otelCollector) -}}
-  {{- $messages = append $messages "The '.Values.otelCollector.initContainers.init' has been removed as it is no longer required. Please remove it from your values overrides." }}
 {{- end }}
 {{- if not (empty $messages) -}}
 DEPRECATION NOTICE:

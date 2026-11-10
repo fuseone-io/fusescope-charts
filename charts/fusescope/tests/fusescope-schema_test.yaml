@@ -6,8 +6,6 @@ templates:
   - templates/telemetrystore-migrator/secret-clickhouse.yaml
   - templates/fusescope-collector/deployment.yaml
   - templates/fusescope-collector/configmap.yaml
-  - templates/otel-collector/deployment.yaml
-  - templates/otel-collector/configmap.yaml
   - templates/secrets-clickhouse-external.yaml
   - templates/telemetrystore-migrator/serviceaccount.yaml
 
@@ -147,20 +145,6 @@ tests:
       - equal:
           path: spec.template.spec.initContainers[0].args[1]
           value: --wait=25m
-
-  - it: should wait with check --wait in the earlier collector's init container too
-    template: templates/otel-collector/deployment.yaml
-    set:
-      otelCollector.enabled: true
-    asserts:
-      - equal:
-          path: spec.template.spec.initContainers[0].args
-          value: ["check", "--wait=10m", "--config=/etc/fusescope-schema/config/config.json"]
-      - contains:
-          path: spec.template.spec.volumes
-          content:
-            name: fusescope-schema-config
-            configMap: {name: signoz-telemetrystore-migrator-config}
 
   # One connection: the Job and the init container mount the same ConfigMap
   # and the same Secret, at the same paths.
@@ -387,10 +371,7 @@ tests:
           value: signoz-telemetrystore-migrator-d4376d7844
         template: templates/telemetrystore-migrator/job.yaml
 
-  # With otelCollector on, its image runs as that collector, never as a migrator.
-  - it: should run the earlier collector's image in no migrator Job or init container, with it on, on an upgrade too
-    set:
-      otelCollector.enabled: true
+  - it: should run the earlier collector's image in no migrator Job or init container, on an upgrade too
     release:
       upgrade: true
     asserts:
@@ -398,14 +379,6 @@ tests:
           path: spec.template.spec.containers[0].image
           pattern: fusescope-otel-collector
         template: templates/telemetrystore-migrator/job.yaml
-      - lengthEqual:
-          path: spec.template.spec.initContainers
-          count: 1
-        template: templates/otel-collector/deployment.yaml
-      - equal:
-          path: spec.template.spec.initContainers[0].command
-          value: ["/fusescope-schema"]
-        template: templates/otel-collector/deployment.yaml
       - equal:
           path: spec.template.spec.initContainers[0].command
           value: ["/fusescope-schema"]
@@ -652,40 +625,6 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: 'telemetryStoreMigrator.migrator: fork, the earlier collector''s migrator, was removed in 0.164.0\. Remove the override: fusescope-schema adopts the schema it created \(0001\), with no change to the telemetry tables, then applies 0002\. A helm upgrade given no values reuses the release''s, the override included: prefer --set telemetryStoreMigrator.migrator=fusescope-schema\. Alternatively, use --reset-values -f <complete-values\.yaml>; --reset-values discards the release''s stored values, so reapply every customization\. See Version 0.164.0 in the chart README\.'
-
-  # Kind validation of #43: without fsGroup the password file, mode 0440, is
-  # root's, and the earlier collector's init container, not root, cannot read
-  # it (check: read password_file: permission denied).
-  - it: should give the earlier collector's pod fusescope-schema's fsGroup, so its init container reads the password
-    template: templates/otel-collector/deployment.yaml
-    set:
-      otelCollector.enabled: true
-    asserts:
-      - equal:
-          path: spec.template.spec.securityContext.fsGroup
-          value: 65532
-      - contains:
-          path: spec.template.spec.initContainers[0].volumeMounts
-          content: {name: fusescope-schema-clickhouse, mountPath: /etc/fusescope-schema/clickhouse, readOnly: true}
-
-  - it: should keep the earlier collector's own fsGroup and pod security context
-    template: templates/otel-collector/deployment.yaml
-    set:
-      otelCollector.enabled: true
-      otelCollector.podSecurityContext: {fsGroup: 2000, runAsNonRoot: true}
-    asserts:
-      - equal:
-          path: spec.template.spec.securityContext
-          value: {fsGroup: 2000, runAsNonRoot: true}
-
-  - it: should leave the earlier collector's pod security context alone without the migrator
-    template: templates/otel-collector/deployment.yaml
-    set:
-      otelCollector.enabled: true
-      telemetryStoreMigrator.enabled: false
-    asserts:
-      - notExists:
-          path: spec.template.spec.securityContext.fsGroup
 
   - it: should refuse migrator fork with the migrator disabled too
     template: templates/telemetrystore-migrator/serviceaccount.yaml
