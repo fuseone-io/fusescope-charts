@@ -193,6 +193,12 @@ The chart renders a disk for the bucket, a filesystem cache disk in front of it 
 
 > [!WARNING]
 > ### Breaking Changes
+> #### Version 0.166.0
+> The ClickHouse subchart (24.1.21) drops `clickhouse.logs.system`, the optional sidecar that ran SigNoz's collector (`signoz/signoz-otel-collector`) to collect ClickHouse system tables as logs. It was off by default.
+>
+> - **`clickhouse.logs.system` is ignored.** Left in a release's values, it renders no sidecar, ConfigMap, volume or image.
+> - **The ClickHouse pod drops the `*-scripts` ConfigMap**, with its volume and `/scripts` mount: its `wait-until-ready.sh` ran only for the sidecar. The upgrade rolls the ClickHouse pods once.
+>
 > #### Version 0.165.0
 > The earlier collector (`otelCollector`, fusescope-otel-collector, AGPL-3.0) is removed: the chart no longer renders its Deployment, ConfigMap, Service, ServiceAccount, ClusterRole, ClusterRoleBinding, HPA or KEDA scaler. It was off by default since 0.161.0, and no image of it is left in the chart.
 >

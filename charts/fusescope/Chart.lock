@@ -1,12 +1,12 @@
 dependencies:
 - name: clickhouse
   repository: file://../clickhouse
-  version: 24.1.20
+  version: 24.1.21
 - name: postgresql
   repository: file://../postgresql
   version: 0.0.3
 - name: fusescope-engine
   repository: file://../fusescope-engine
   version: 0.1.0
-digest: sha256:6eef3200899564bedd5322f78445647a458d0b2f31b791f640765d2e5407777b
-generated: "2026-10-30T14:01:45.53963347-03:00"
+digest: sha256:bf2014a4ec1e81887f12043950e3d5e9fb06392aa210bd1a782e8d85549e12ac
+generated: "2026-11-10T18:29:08.563942721-03:00"
