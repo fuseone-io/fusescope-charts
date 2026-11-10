@@ -1,3 +1,4 @@
+{{- /* The earlier collector's OTLP ingress, routed to the compat Service. */ -}}
 {{- if .Values.otelCollector.ingress.enabled -}}
 {{- $fullName := include "otelCollector.fullname" . -}}
 {{- $ingressApiIsStable := eq (include "ingress.isStable" .) "true" -}}
@@ -7,7 +8,7 @@ kind: Ingress
 metadata:
   name: {{ $fullName }}
   labels:
-    {{- include "otelCollector.labels" . | nindent 4 }}
+    {{- include "fusescopeCollector.labels" . | nindent 4 }}
   {{- with .Values.otelCollector.ingress.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
