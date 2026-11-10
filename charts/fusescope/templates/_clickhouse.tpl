@@ -191,21 +191,6 @@ Return the ClickHouse Traces URL
 {{- end -}}
 
 
-{{/*
-Common ENV variables for the telemetry store migrator containers
-*/}}
-{{- define "snippet.telemetryStoreMigrator-env" }}
-{{- include "snippet.clickhouse-credentials" . }}
-- name: SIGNOZ_OTEL_COLLECTOR_CLICKHOUSE_DSN
-  value: "tcp://$(CLICKHOUSE_USER):$(CLICKHOUSE_PASSWORD)@$(CLICKHOUSE_HOST):$(CLICKHOUSE_PORT)"
-- name: SIGNOZ_OTEL_COLLECTOR_CLICKHOUSE_CLUSTER
-  value: $(CLICKHOUSE_CLUSTER)
-- name: SIGNOZ_OTEL_COLLECTOR_TIMEOUT
-  value: {{ .Values.telemetryStoreMigrator.timeout | default "10m" | quote }}
-- name: SIGNOZ_OTEL_COLLECTOR_CLICKHOUSE_REPLICATION
-  value: {{ .Values.telemetryStoreMigrator.enableReplication | quote }}
-{{- end }}
-
 {{- define "clickhouse.cluster" -}}
 {{- if .Values.clickhouse.enabled -}}
   {{ .Values.clickhouse.cluster }}

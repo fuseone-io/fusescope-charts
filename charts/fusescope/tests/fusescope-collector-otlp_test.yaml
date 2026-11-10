@@ -458,18 +458,6 @@ tests:
           value: fusescope-collector
         template: templates/fusescope-collector/service.yaml
 
-  - it: should still migrate the schema with the earlier collector's image while it is off, with migrator fork
-    template: templates/telemetrystore-migrator/job.yaml
-    set:
-      telemetryStoreMigrator.migrator: fork
-    asserts:
-      - matchRegex:
-          path: spec.template.spec.initContainers[0].image
-          pattern: "^ghcr.io/fuseone-io/fusescope-otel-collector:"
-      - matchRegex:
-          path: spec.template.spec.containers[0].image
-          pattern: "^ghcr.io/fuseone-io/fusescope-otel-collector:"
-
   - it: should scale with an HPA when enabled, leaving replicas to it
     set:
       fusescopeCollector.autoscaling.enabled: true
@@ -510,26 +498,6 @@ tests:
     asserts:
       - hasDocuments:
           count: 0
-
-  - it: should wait for the migrated schema before writing, with the fork migrator's image
-    template: templates/fusescope-collector/deployment.yaml
-    set:
-      telemetryStoreMigrator.migrator: fork
-    asserts:
-      - equal:
-          path: spec.template.spec.initContainers[0].name
-          value: schema
-      - equal:
-          path: spec.template.spec.initContainers[0].args
-          value: ["migrate", "sync", "check"]
-      - matchRegex:
-          path: spec.template.spec.initContainers[0].image
-          pattern: fusescope-otel-collector
-      - contains:
-          path: spec.template.spec.initContainers[0].env
-          content:
-            name: SIGNOZ_OTEL_COLLECTOR_CLICKHOUSE_DSN
-            value: "tcp://$(CLICKHOUSE_USER):$(CLICKHOUSE_PASSWORD)@$(CLICKHOUSE_HOST):$(CLICKHOUSE_PORT)"
 
   - it: should not wait for a schema when the chart does not migrate it
     template: templates/fusescope-collector/deployment.yaml

@@ -6,30 +6,25 @@ only from a Secret mounted as a file.
 */}}
 
 {{/*
-True when telemetryStoreMigrator runs fusescope-schema; fails on settings it
-cannot run with.
+True when telemetryStoreMigrator is enabled; fails on settings fusescope-schema
+cannot run with. `migrator` and `enableReplication` are no longer values: they
+are checked only when an install still sets them.
 */}}
 {{- define "fusescopeSchema.enabled" -}}
 {{- $m := .Values.telemetryStoreMigrator -}}
-{{- if not (has $m.migrator (list "fusescope-schema" "fork")) -}}
-{{- fail (printf "telemetryStoreMigrator.migrator must be \"fusescope-schema\" or \"fork\", not %q" (toString $m.migrator)) -}}
+{{- if eq (toString $m.migrator) "fork" -}}
+{{- fail "telemetryStoreMigrator.migrator: fork, the earlier collector's migrator, was removed in 0.164.0. Remove the override: fusescope-schema adopts the schema it created (0001), with no change to the telemetry tables, then applies 0002. A helm upgrade given no values reuses the release's, the override included: prefer --set telemetryStoreMigrator.migrator=fusescope-schema. Alternatively, use --reset-values -f <complete-values.yaml>; --reset-values discards the release's stored values, so reapply every customization. See Version 0.164.0 in the chart README." -}}
 {{- end -}}
-{{- if and $m.enabled (eq $m.migrator "fusescope-schema") -}}
-{{- if not $m.enableReplication -}}
-{{- fail "telemetryStoreMigrator.enableReplication: false is not supported by fusescope-schema: it migrates only the replicated schema (collector spec §2.1). Keep it true, or set telemetryStoreMigrator.migrator: fork" -}}
+{{- if ne (toString (default "fusescope-schema" $m.migrator)) "fusescope-schema" -}}
+{{- fail (printf "telemetryStoreMigrator.migrator must be \"fusescope-schema\", not %q" (toString $m.migrator)) -}}
+{{- end -}}
+{{- if $m.enabled -}}
+{{- if and (hasKey $m "enableReplication") (not $m.enableReplication) -}}
+{{- fail "telemetryStoreMigrator.enableReplication: false is not supported by fusescope-schema: it migrates only the replicated schema (collector spec §2.1). Remove it." -}}
 {{- end -}}
 {{- if not $m.image.digest -}}
 {{- fail "telemetryStoreMigrator.image.digest is required: fusescope-schema runs only a signed image pinned by digest" -}}
 {{- end -}}
-true
-{{- end -}}
-{{- end -}}
-
-{{/*
-True when the earlier collector's migrator runs instead.
-*/}}
-{{- define "telemetryStoreMigrator.fork" -}}
-{{- if and .Values.telemetryStoreMigrator.enabled (eq .Values.telemetryStoreMigrator.migrator "fork") -}}
 true
 {{- end -}}
 {{- end -}}

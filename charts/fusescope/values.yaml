@@ -1113,17 +1113,13 @@ signoz:
 # @section -- Telemetry Store Migrator
 # @default -- "Please checkout the default values in values.yml"
 telemetryStoreMigrator:
-  # telemetryStoreMigrator.enabled -- Enable the Telemetry Store Migrator component.
+  # telemetryStoreMigrator.enabled -- Migrate the schema with fusescope-schema, the FuseScope schema
+  # migrator, a second binary of the FuseScope collector image (collector ADR 0010). It migrates
+  # only the replicated schema. The earlier collector's migrator (`migrator: fork`) was removed in
+  # 0.164.0: setting it fails, as does `enableReplication: false`.
   # @default -- true
   # @section -- Telemetry Store Migrator
   enabled: true
-  # telemetryStoreMigrator.migrator -- Which migrator runs: `fusescope-schema`, the FuseScope
-  # schema migrator, a second binary of the FuseScope collector image (collector ADR 0010), or
-  # `fork`, the earlier collector's (`otelCollector.image`). Only the one chosen is rendered.
-  # fusescope-schema migrates only the replicated schema: `enableReplication: false` fails.
-  # @default -- "fusescope-schema"
-  # @section -- Telemetry Store Migrator
-  migrator: fusescope-schema
   # telemetryStoreMigrator.image -- fusescope-schema's image, the signed FuseScope collector release
   # 0.4.2 pinned by digest, for the Job and the collectors' init containers.
   # @section -- Telemetry Store Migrator
@@ -1171,17 +1167,8 @@ telemetryStoreMigrator:
   # @default -- {}
   # @section -- Telemetry Store Migrator
   annotations: {}
-  # telemetryStoreMigrator.upgradeHelmHooks -- Enable Helm pre-upgrade hooks and ArgoCD Sync hooks.
-  # For `migrator: fork` only: fusescope-schema's Job is renamed whenever its spec changes instead.
-  # @default -- true
-  # @section -- Telemetry Store Migrator
-  upgradeHelmHooks: true
-  # telemetryStoreMigrator.enableReplication -- Whether to enable replication for the Telemetry Store Migrator.
-  # @default -- true
-  # @section -- Telemetry Store Migrator
-  enableReplication: true
-  # telemetryStoreMigrator.timeout -- Timeout for the migration; with fusescope-schema, how long
-  # the collectors' init container waits for it (`check --wait`).
+  # telemetryStoreMigrator.timeout -- How long the collectors' init container waits for the
+  # migrated schema (`check --wait`).
   # @default -- "10m"
   # @section -- Telemetry Store Migrator
   timeout: "10m"
@@ -1225,8 +1212,8 @@ otelCollector:
   # otelCollector.enabled -- Install the earlier OpenTelemetry Collector (fusescope-otel-collector).
   # Off by default: the FuseScope collector (`fusescopeCollector`) receives OTLP and writes
   # ClickHouse instead, behind a Service with this collector's name and OTLP ports. To keep this
-  # collector, set it to `true` and `fusescopeCollector.otlp.enabled` to `false`. Its image still
-  # runs the schema migrations (`telemetryStoreMigrator`) whatever this is set to.
+  # collector, set it to `true` and `fusescopeCollector.otlp.enabled` to `false`. The schema is
+  # migrated by fusescope-schema (`telemetryStoreMigrator`) whatever this is set to.
   # @default -- false
   # @section -- Otel Collector
   enabled: false
@@ -1689,7 +1676,9 @@ otelCollector:
       labelSelector:
         matchLabels:
           app.kubernetes.io/component: otel-collector
-  # otelCollector.podSecurityContext -- Pod-level security context.
+  # otelCollector.podSecurityContext -- Pod-level security context. Without `fsGroup`, the chart
+  # sets fusescope-schema's (`telemetryStoreMigrator.podSecurityContext.fsGroup`), so that the
+  # init container can read the ClickHouse password file.
   # @section -- Otel Collector
   # @default -- {}
   podSecurityContext: {}
