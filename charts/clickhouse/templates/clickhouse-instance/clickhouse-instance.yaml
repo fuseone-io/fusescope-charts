@@ -178,9 +178,6 @@ spec:
             - name: custom-functions-volume
               configMap:
                 name: {{ include "clickhouse.fullname" . }}-custom-functions
-            - name: scripts
-              configMap:
-                name: {{ include "clickhouse.fullname" . }}-scripts
           {{- if and (not .Values.templates.volumeClaimTemplates) (not .Values.persistence.enabled) }}
             - name: data-volume
               emptyDir: {}
@@ -292,8 +289,6 @@ spec:
                   mountPath: /var/lib/clickhouse/user_scripts
                 - name: custom-functions-volume
                   mountPath: /etc/clickhouse-server/functions
-                - name: scripts
-                  mountPath: /scripts
               {{- if and (not .Values.templates.volumeClaimTemplates) (not .Values.persistence.enabled) }}
                 - name: data-volume
                   mountPath: /var/lib/clickhouse

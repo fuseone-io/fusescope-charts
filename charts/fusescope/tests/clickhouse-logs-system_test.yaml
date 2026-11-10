@@ -9,7 +9,8 @@ release:
 
 tests:
   # clickhouse 24.1.21 removed logs.system: a release that still sets it renders
-  # no sidecar, ConfigMap, volume or image of signoz-otel-collector.
+  # no sidecar, ConfigMap, volume or image of signoz-otel-collector, nor the
+  # scripts ConfigMap whose wait-until-ready.sh only the sidecar's hook ran.
   - it: should render no logs.system sidecar when the old value is still set
     set:
       clickhouse:
@@ -22,6 +23,23 @@ tests:
           apiVersion: v1
           name: fusescope-clickhouse-logs-system-config
         not: true
+      - containsDocument:
+          kind: ConfigMap
+          apiVersion: v1
+          name: fusescope-clickhouse-scripts
+        not: true
+      - notContains:
+          path: spec.templates.podTemplates[0].spec.volumes
+          content:
+            name: scripts
+          any: true
+        template: charts/clickhouse/templates/clickhouse-instance/clickhouse-instance.yaml
+      - notContains:
+          path: spec.templates.podTemplates[0].spec.containers[0].volumeMounts
+          content:
+            mountPath: /scripts
+          any: true
+        template: charts/clickhouse/templates/clickhouse-instance/clickhouse-instance.yaml
       - notContains:
           path: spec.templates.podTemplates[0].spec.containers
           content:
