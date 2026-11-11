@@ -194,9 +194,9 @@ The chart renders a disk for the bucket, a filesystem cache disk in front of it 
 > [!WARNING]
 > ### Breaking Changes
 > #### Version 0.166.1
-> The FuseScope collector moves from 0.3.1 to 0.6.0, pinned by its signed multi-arch digest (`sha256:f1cbf544…87df2`). This is also the image of the agents' DaemonSet.
+> The FuseScope collector moves from 0.3.1 to 0.6.1, pinned by its signed multi-arch digest (`sha256:bca9dd69…53baf`). This is also the image of the agents' DaemonSet.
 >
-> - **What changes for logs:** a `grok_parser` whose pattern does not compile no longer refuses the whole OpAMP push. It fails each record and `on_error` decides, as the pipeline preview shows (collector 0.5.0). The log pipelines now run on the `logspipeline` library that the preview is moving to (collector 0.6.0, ADR 0012).
+> - **What changes for logs:** a `grok_parser` whose pattern does not compile no longer refuses the whole OpAMP push. It fails each record and `on_error` decides, as the pipeline preview shows (collector 0.5.0). The log pipelines now run on the `logspipeline` library that the preview is moving to (collector 0.6.0, ADR 0012). Collector 0.6.1 only adds to that library the stage at which a configuration is refused; what the collector accepts, refuses and outputs does not change.
 > - **No configuration change.** The collector added the `file` exporter in 0.5.0, but the chart does not configure it. `fusescope-schema` stays on 0.4.2, unchanged since then.
 >
 > #### Version 0.166.0
@@ -1569,14 +1569,14 @@ timeoutSeconds: 5</pre>
             <td id="fusescopeCollector--image"><a href="./values.yaml#L1468">fusescopeCollector.image</a></td>
             <td>object</td>
             <td>
-                <div style="max-width: 300px;"><pre lang="yaml">digest: sha256:f1cbf544209a1bf5f777f21bce8a3b584f236f8322c507c659ebab46e2587df2
+                <div style="max-width: 300px;"><pre lang="yaml">digest: sha256:bca9dd696fb69558dff92eb52fc7f3400f79b38ea645501acb7afc3394e53baf
 pullPolicy: IfNotPresent
 registry: ghcr.io
 repository: fuseone-io/fusescope-collector
-tag: 0.6.0</pre>
+tag: 0.6.1</pre>
 </div>
             </td>
-            <td>Collector image, by `tag` and `digest`: with both, the image is `<tag>@<digest>` and the digest is what is pulled. The default is the signed 0.6.0 multi-arch index.</td>
+            <td>Collector image, by `tag` and `digest`: with both, the image is `<tag>@<digest>` and the digest is what is pulled. The default is the signed 0.6.1 multi-arch index.</td>
         </tr>
         <tr>
             <td id="fusescopeCollector--imagePullSecrets"><a href="./values.yaml#L1476">fusescopeCollector.imagePullSecrets</a></td>
