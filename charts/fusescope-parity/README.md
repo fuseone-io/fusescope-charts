@@ -32,12 +32,17 @@ takes its real values, the promoted image digest included, from
   - A round's `activeDeadlineSeconds` must exceed its `budgetSeconds` by
     at least `marginSeconds`.
 - **Settings:** the settings files are rendered into
-  `<release>-settings`:
-  - `hourly.yaml` and `daily.yaml` carry each round's budget;
-  - `investigate.yaml` carries no round bounds.
-
-  None of them holds a secret: the ClickHouse DSN comes from
-  `credentials.clickhouse_dsn_file`.
+  `<release>-settings`: `hourly.yaml`, `daily.yaml` and `investigate.yaml`.
+  - All three carry the one `round` block. An investigation plans a window
+    again with its report's seed and sample, so it must plan as the round
+    did.
+  - The rounds add only their `budgetSeconds`.
+  - The block's keys are closed and bounded by the schema, and `budget` is
+    not one of them.
+  - None of the files holds a secret: the ClickHouse DSN comes from
+    `credentials.clickhouse_dsn_file`.
+- **Provenance:** every report records `build.backendCommit` (40 hex) and
+  `build.engineVersion`, both required.
 
 ## RBAC
 
@@ -84,8 +89,14 @@ destinations it uses:
 | investigation | `dns`, `engine`, `clickhouse`, `bucket`, `sts`, `prometheus`, `audit`, `idp` |
 
 - **Rules:** every destination a workload uses must be given. Each rule
-  names its peers and its ports, and a peer of `0.0.0.0/0` or `::/0` is
-  refused.
+  names its peers and its ports, and every port names its `port`.
+- **Peers:** a peer is one of:
+  - an `ipBlock` no wider than `/8` (IPv4) or `/32` (IPv6);
+  - a `podSelector` by `matchLabels`, with a `namespaceSelector` by
+    `matchLabels` for another namespace.
+
+  An empty peer, an empty selector or a selector without labels is
+  refused, since each reaches more than it names.
 - **Outside the cluster:** S3, STS and the IdP are reached through VPC
   endpoints, or through the fixed egress proxy `proxy.url`.
   - With the proxy, `egress.proxy` replaces `bucket`, `sts` and `idp`.

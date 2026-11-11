@@ -160,11 +160,13 @@ for key in ("hourly.yaml", "daily.yaml", "investigate.yaml"):
         fail(f"{key} reads the DSN from {s['clickhouse']}")
     if s["secret"]["namespace"] != keys:
         fail(f"{key} writes run keys to {s['secret']['namespace']}")
+planning = values["round"]
 for key in ("hourly", "daily"):
-    if yaml.safe_load(settings[f"{key}.yaml"])["round"]["budget"] != f"{values['rounds'][key]['budgetSeconds']}s":
-        fail(f"{key}.yaml carries another budget")
-if "round" in yaml.safe_load(settings["investigate.yaml"]):
-    fail("the investigation's settings carry a round's bounds")
+    rnd = dict(yaml.safe_load(settings[f"{key}.yaml"])["round"])
+    if rnd.pop("budget") != f"{values['rounds'][key]['budgetSeconds']}s" or rnd != planning:
+        fail(f"{key}.yaml plans with {rnd}, not {planning}")
+if yaml.safe_load(settings["investigate.yaml"]).get("round", {}) != planning:
+    fail("the investigation plans otherwise than the rounds it reproduces")
 PY
 }
 
@@ -217,6 +219,17 @@ kubeconform -strict -summary -kubernetes-version 1.30.0 "$work/proxied-render.ya
 check "$work/proxied-render.yaml" "$work/proxied.yaml"
 echo "chart through a proxy: bucket, STS and IdP through it, in-cluster calls direct, the cleanup without it"
 
+# Planning the rounds and the investigation share.
+python3 - "$staging" "$work/planned.yaml" <<'PY'
+import sys, yaml
+base = yaml.safe_load(open(sys.argv[1]))
+base["round"] = {"max_rows": 123, "windowed_above": 10, "deadline": "20s", "retry_wait": "0s", "operations_limit": 50, "list_limit": 20, "max_pairs": 900, "concurrency": 3}
+yaml.safe_dump(base, open(sys.argv[2], "w"))
+PY
+helm template check "$chart" -f "$work/planned.yaml" --namespace parity > "$work/planned-render.yaml"
+check "$work/planned-render.yaml" "$work/planned.yaml"
+echo "chart plans the investigation as the rounds it reproduces"
+
 refuse() {
     if helm template check "$chart" --namespace parity "$@" >/dev/null 2>"$work/err"; then
         echo "the chart rendered what it must refuse: $*" >&2
@@ -253,5 +266,55 @@ refuse -f "$staging" --set pushgateway.url=http://pushgateway.monitoring.svc:909
 refuse -f "$staging" --set investigate.issuer=http://idp.example.com
 refuse -f "$staging" --set runKeys.namespace=Parity_Keys
 refuse -f "$staging" --set build.backendCommit=1234
+refuse -f "$staging" --set-string build.backendCommit=1234
+refuse -f "$staging" --set build.backendCommit=
+refuse -f "$staging" --set build.engineVersion=
+refuse -f "$staging" --set runKeys.expiry=0h
+refuse -f "$staging" --set runKeys.expiry=0h0m0s
+refuse -f "$staging" --set 'health.exporters={clickhousetraces}'
+refuse -f "$staging" --set 'health.exporters={clickhousetraces,clickhousetraces}'
+refuse -f "$staging" --set 'health.exporters={clickhousetraces,otlp engine}'
+refuse -f "$staging" --set 'health.instanceLabel=pod name'
+refuse -f "$staging" --set round.Budget=6h
+refuse -f "$staging" --set round.budget=6h
+refuse -f "$staging" --set round.unknown=1
+refuse -f "$staging" --set rounds.hourly.round.max_rows=10
+refuse -f "$staging" --set round.max_rows=0
+refuse -f "$staging" --set round.operations_limit=5001
+refuse -f "$staging" --set round.deadline=0s
+refuse -f "$staging" --set round.deadline=soon
+refuse -f "$staging" --set round.max_rows=100
+refuse -f "$staging" --set round.max_rows=10 --set round.windowed_above=10
+
+# Egress rules that would reach more than they name.
+refuse_egress() {
+    printf '%s\n' "$2" > "$work/rule.yaml"
+    python3 - "$staging" "$work/rule.yaml" "$1" "$work/opened.yaml" <<'PY'
+import sys, yaml
+base = yaml.safe_load(open(sys.argv[1]))
+base["egress"][sys.argv[3]] = yaml.safe_load(open(sys.argv[2]))
+yaml.safe_dump(base, open(sys.argv[4], "w"))
+PY
+    refuse -f "$work/opened.yaml"
+}
+refuse_egress apiServer '[{to: [{}], ports: [{port: 443}]}]'
+refuse_egress apiServer '[{to: [], ports: [{port: 443}]}]'
+refuse_egress apiServer '[{to: [{ipBlock: {cidr: 10.0.0.0/28}}], ports: []}]'
+refuse_egress engine '[{to: [{podSelector: {matchLabels: {app: q}}, namespaces: [fusescope]}], ports: [{port: 8815}]}]'
+refuse_egress apiServer '[{to: [{ipBlock: {cidr: 10.0.0.0/28}}], ports: [{}]}]'
+refuse_egress apiServer '[{to: [{ipBlock: {cidr: 10.0.0.0/28}}], ports: [{protocol: TCP}]}]'
+refuse_egress apiServer '[{to: [{ipBlock: {cidr: 10.0.0.0/28}}, {}], ports: [{port: 443}]}]'
+refuse_egress engine '[{to: [{podSelector: {}}], ports: [{port: 8815}]}]'
+refuse_egress engine '[{to: [{namespaceSelector: {}, podSelector: {matchLabels: {app: q}}}], ports: [{port: 8815}]}]'
+refuse_egress engine '[{to: [{namespaceSelector: {matchLabels: {team: a}}}], ports: [{port: 8815}]}]'
+refuse_egress engine '[{to: [{namespaceSelector: {matchLabels: {team: a}}, podSelector: {matchExpressions: [{key: app, operator: Exists}]}}], ports: [{port: 8815}]}]'
+refuse_egress engine '[{to: [{namespaceSelector: {matchLabels: {}}, podSelector: {matchLabels: {app: q}}}], ports: [{port: 8815}]}]'
+refuse_egress bucket '[{to: [{ipBlock: {cidr: 0.0.0.0/1}}], ports: [{port: 443}]}]'
+refuse_egress bucket '[{to: [{ipBlock: {cidr: 128.0.0.0/1}}], ports: [{port: 443}]}]'
+refuse_egress idp '[{to: [{ipBlock: {cidr: "2000::/3"}}], ports: [{port: 443}]}]'
+refuse_egress bucket '[{to: [{ipBlock: {cidr: 10.0.16.0/28}, podSelector: {matchLabels: {app: q}}}], ports: [{port: 443}]}]'
+refuse_egress bucket '[{to: [{ipBlock: {cidr: not-a-cidr}}], ports: [{port: 443}]}]'
+refuse_egress idp '[{to: [{ipBlock: {cidr: "2001:db8::/16"}}], ports: [{port: 443}]}]'
+refuse_egress bucket '[{to: [{ipBlock: {cidr: host.example/28}}], ports: [{port: 443}]}]'
 helm template check "$chart" --namespace parity -f "$staging" --set rounds.hourly.activeDeadlineSeconds=1500 >/dev/null
-echo "chart refuses a release without its image digest, with a tag, a malformed digest or no repository; Secrets missing or alike; no tenants or on-call group; run keys in the release's namespace; a deadline inside its budget plus margin; a budget set twice; a daily round that leaves no hour; an egress rule without peers or ports, to every address, or missing for a workload; an unknown value, a time out of range, a plain-HTTP endpoint or a malformed namespace"
+echo "chart refuses a release without its image digest, with a tag, a malformed digest or no repository; Secrets missing or alike; no tenants or on-call group; run keys in the release's namespace; a deadline inside its budget plus margin; a budget set twice; a daily round that leaves no hour; an egress rule without peers or ports, to every address, or missing for a workload; an unknown value, a time out of range, a plain-HTTP endpoint or a malformed namespace; a report without its backend commit and engine version; a zero run key expiry; a health source the backend refuses; an unknown, budget or out-of-range planning setting; and an egress peer or port that reaches more than it names"

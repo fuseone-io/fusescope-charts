@@ -82,11 +82,13 @@ app.kubernetes.io/component: {{ .component }}
 {{- if eq $v.runKeys.namespace .Release.Namespace -}}
 {{- fail "runKeys.namespace must differ from the release's: it holds only the run keys" -}}
 {{- end -}}
+{{- with $v.round -}}
+{{- if and (hasKey . "max_rows") (ge (int64 .windowed_above) (int64 .max_rows)) -}}
+{{- fail "round.windowed_above must stay below round.max_rows" -}}
+{{- end -}}
+{{- end -}}
 {{- range $class := list "hourly" "daily" -}}
 {{- $r := index $v.rounds $class -}}
-{{- if hasKey $r.round "budget" -}}
-{{- fail (printf "rounds.%s.round.budget: set rounds.%s.budgetSeconds" $class $class) -}}
-{{- end -}}
 {{- if lt (int $r.activeDeadlineSeconds) (add (int $r.budgetSeconds) (int $v.marginSeconds)) -}}
 {{- fail (printf "rounds.%s.activeDeadlineSeconds must be at least budgetSeconds + marginSeconds (%d)" $class (add (int $r.budgetSeconds) (int $v.marginSeconds))) -}}
 {{- end -}}
@@ -96,12 +98,15 @@ app.kubernetes.io/component: {{ .component }}
 {{- end -}}
 {{- range $dest, $rules := $v.egress -}}
 {{- range $rule := $rules -}}
-{{- if or (not $rule.to) (not $rule.ports) -}}
-{{- fail (printf "egress.%s: every rule names its peers and its ports; an empty one allows everything" $dest) -}}
-{{- end -}}
 {{- range $peer := $rule.to -}}
-{{- if and $peer.ipBlock (regexMatch "/0$" $peer.ipBlock.cidr) -}}
-{{- fail (printf "egress.%s: %s allows every address" $dest $peer.ipBlock.cidr) -}}
+{{- with $peer.ipBlock -}}
+{{- if not (regexMatch "^[0-9a-fA-F:.]+/[0-9]{1,3}$" .cidr) -}}
+{{- fail (printf "egress.%s: %q is not a CIDR" $dest .cidr) -}}
+{{- end -}}
+{{- $prefix := int (last (splitList "/" .cidr)) -}}
+{{- if lt $prefix (ternary 32 8 (contains ":" .cidr)) -}}
+{{- fail (printf "egress.%s: %s is wider than /%d" $dest .cidr (ternary 32 8 (contains ":" .cidr))) -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
@@ -118,10 +123,9 @@ app.kubernetes.io/component: {{ .component }}
 {{/* The settings file of a round of .class, or of the investigation. */}}
 {{- define "fsp.settings" -}}
 {{- $v := .Values -}}
-{{- $round := dict -}}
+{{- $round := deepCopy $v.round -}}
 {{- if .class -}}
-{{- $r := index $v.rounds .class -}}
-{{- $round = merge (dict "budget" (printf "%ds" (int $r.budgetSeconds))) $r.round -}}
+{{- $_ := set $round "budget" (printf "%ds" (int (index $v.rounds .class).budgetSeconds)) -}}
 {{- end -}}
 {{- $jwt := dict "key_file" "/etc/parity/engine/jwt.pem" -}}
 {{- with $v.engine.jwtIssuer }}{{ $_ := set $jwt "issuer" . }}{{ end -}}

@@ -12,7 +12,8 @@ image:
   pullPolicy: IfNotPresent
 imagePullSecrets: []
 
-# What a round records of what it compared, in its report.
+# What a round records of what it compared, in its report. Required: the
+# backend commit the image was built from (40 hex) and the engine version.
 build:
   backendCommit: ""
   engineVersion: ""
@@ -85,6 +86,11 @@ oncall:
 # the daily one: each side spans startingDeadlineSeconds +
 # activeDeadlineSeconds + marginSeconds from its scheduled minute.
 marginSeconds: 300
+# The settings' round section, shared by both rounds and the investigation,
+# which plans a window again as its round did: deadline, retry_wait,
+# concurrency, max_pairs, max_rows, windowed_above (with max_rows),
+# operations_limit, list_limit. Each round sets only its budget, below.
+round: {}
 rounds:
   hourly:
     minute: 5
@@ -93,8 +99,6 @@ rounds:
     budgetSeconds: 1200
     startingDeadlineSeconds: 300
     activeDeadlineSeconds: 1800
-    # Other keys of the settings' round section; budget is set above.
-    round: {}
     resources: {}
   daily:
     hour: 3
@@ -102,7 +106,6 @@ rounds:
     budgetSeconds: 5400
     startingDeadlineSeconds: 600
     activeDeadlineSeconds: 7200
-    round: {}
     resources: {}
 cleanup:
   hour: 12
@@ -126,9 +129,10 @@ serviceAccounts:
   investigate:
     annotations: {}
 
-# Egress, by destination. Each is a list of NetworkPolicy egress rules,
-# every one with its peers and ports; a peer of 0.0.0.0/0 or ::/0 is
-# refused. A workload gets only the destinations it uses:
+# Egress, by destination. Each is a list of NetworkPolicy egress rules, every
+# one with its peers and ports. A peer is an ipBlock no wider than /8 (IPv4)
+# or /32 (IPv6), or a podSelector by matchLabels, with a namespaceSelector by
+# matchLabels for another namespace; every port names its port. A workload gets only the destinations it uses:
 #   run:         dns apiServer engine clickhouse bucket sts prometheus pushgateway
 #   cleanup:     dns apiServer
 #   investigate: dns engine clickhouse bucket sts prometheus audit idp
