@@ -85,9 +85,39 @@ namespace, and they must all differ:
 
   Only the `credentials` key of each Secret is mounted, for its own
   workload, never for the cleanup. With them, `sts` is not a destination.
-- `bucket.endpoint` (`https://` only) and `bucket.region` name the store.
+- `bucket.endpoint` (`https://` only) and `bucket.region` name the store,
+  which must meet the store requirements below.
   `bucket.caConfigMap`, a ConfigMap with `ca.crt`, holds the CA its
   certificate chains to; it is not a secret, so the two workloads share it.
+
+## Store requirements
+
+A store other than AWS S3 is accepted only if it honours what the
+parity's guarantees rest on. A store that ignores any of these answers
+`200`, so nothing fails: reports are overwritten, requeue updates are
+lost, and the requeue is left unencrypted, all in silence.
+
+- **No overwrite:** a `PutObject` with `If-None-Match: *` on a key that
+  exists is refused with `412`. Reports are published this way, never
+  replacing another.
+- **Real CAS:** a `PutObject` with `If-Match` is refused when the ETag is
+  not the object's current one (`412`), or when the key does not exist
+  (`412` or `404`). The requeue is replaced this way.
+- **SSE-KMS:**
+  - a `PutObject` with `x-amz-server-side-encryption: aws:kms` and a key id
+    the store does not hold is refused;
+  - an object written with a valid key reports `aws:kms` and that key id
+    on `HeadObject`.
+
+| Store | Status |
+|---|---|
+| AWS S3 | the reference |
+| RustFS 1.0.3, with its local KMS (`RUSTFS_KMS_ENABLE`, backend `local`) | validated: each requirement above checked with the parity's own client |
+| Google Cloud Storage, XML API (S3 interoperability) | **incompatible**: it accepts `If-None-Match`, `If-Match` and `aws:kms` and ignores all three. Its signing and checksum differences are not the obstacle. GCS support is wanted, through a port of its own in the parity: generation preconditions and the bucket's CMEK. That is separate work. |
+
+Any other store must pass the same checks before a release points at it.
+The demo rehearsal in `fusescope-infra` runs them as a preflight, on a
+prefix of its own, before the parity's first round.
 
 ## Egress
 

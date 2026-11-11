@@ -65,7 +65,8 @@ bucket:
   name: ""
   # The KMS key the requeue is written under.
   kmsKeyId: ""
-  # Empty for AWS S3; https://host:port of another S3-compatible store.
+  # Empty for AWS S3; https://host:port of another store that meets the
+  # store requirements of the README (GCS's XML API does not).
   endpoint: ""
   # Empty takes the region workload identity sets.
   region: ""
