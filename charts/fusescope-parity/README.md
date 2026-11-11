@@ -14,10 +14,10 @@ takes its real values, the promoted image digest included, from
 
 | Workload | Kind | ServiceAccount | Mounts |
 |---|---|---|---|
-| hourly round | CronJob `<release>-run-hourly` | `<release>-run` | settings, tenants, engine client, ClickHouse DSN, Pushgateway and Prometheus tokens, a report `emptyDir` |
+| hourly round | CronJob `<release>-run-hourly` | `<release>-run` | settings, tenants, engine client, ClickHouse DSN, Pushgateway and Prometheus tokens, a report `emptyDir`; with a store of its own, `secrets.bucketRun` and the store's CA |
 | daily round | CronJob `<release>-run-daily` | `<release>-run` | as the hourly round |
 | cleanup | CronJob `<release>-cleanup` | `<release>-cleanup` | settings |
-| investigation | StatefulSet `<release>-investigate`, zero replicas | `<release>-investigate` | settings, tenants, engine client, ClickHouse DSN, Prometheus and audit tokens |
+| investigation | StatefulSet `<release>-investigate`, zero replicas | `<release>-investigate` | settings, tenants, engine client, ClickHouse DSN, Prometheus and audit tokens; with a store of its own, `secrets.bucketInvestigate` and the store's CA |
 
 - **Pods:** every pod runs as `65532:65532`, with a read-only root, no
   privilege escalation, all capabilities dropped and the default seccomp
@@ -76,15 +76,18 @@ namespace, and they must all differ:
 - `secrets.pushgateway`, `secrets.prometheus`, `secrets.audit`: `token`
   each.
 - `tenants.configMap`: the tenants file D1 maintains.
-- `secrets.bucket`, optional, for an S3-compatible store without workload
-  identity:
-  - `credentials`, an AWS shared credentials file;
-  - with `bucket.caBundle`, also `ca.crt`, the CA the store's certificate
-    chains to.
+- `secrets.bucketRun` and `secrets.bucketInvestigate`, both or neither,
+  for an S3-compatible store without workload identity. Each holds
+  `credentials`, an AWS shared credentials file:
+  - the rounds' may write reports and the requeue;
+  - the investigation's only reads reports, since on-call can exec into
+    its pod.
 
-  It is mounted for the rounds and the investigation only, never for the
-  cleanup. With it, `sts` is not a destination.
-  `bucket.endpoint` (`https://` only) and `bucket.region` name the store.
+  Only the `credentials` key of each Secret is mounted, for its own
+  workload, never for the cleanup. With them, `sts` is not a destination.
+- `bucket.endpoint` (`https://` only) and `bucket.region` name the store.
+  `bucket.caConfigMap`, a ConfigMap with `ca.crt`, holds the CA its
+  certificate chains to; it is not a secret, so the two workloads share it.
 
 ## Egress
 

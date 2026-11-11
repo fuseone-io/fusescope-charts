@@ -18,7 +18,7 @@ app.kubernetes.io/component: {{ .component }}
 {{/* The destinations each workload reaches. */}}
 {{- define "fsp.destinations" -}}
 {{- $direct := dict "run" (list "dns" "apiServer" "engine" "clickhouse" "prometheus" "pushgateway") "cleanup" (list "dns" "apiServer") "investigate" (list "dns" "engine" "clickhouse" "prometheus" "audit") -}}
-{{- $sts := ternary (list) (list "sts") (not (empty .Values.secrets.bucket)) -}}
+{{- $sts := ternary (list) (list "sts") (not (empty .Values.secrets.bucketRun)) -}}
 {{- $outside := dict "run" (concat (list "bucket") $sts) "cleanup" (list) "investigate" (concat (list "bucket") $sts (list "idp")) -}}
 {{- $names := index $direct .component -}}
 {{- $far := index $outside .component -}}
@@ -65,12 +65,15 @@ app.kubernetes.io/component: {{ .component }}
 {{- range $key := list "engineClient" "clickhouse" "pushgateway" "prometheus" "audit" -}}
 {{- $_ := required (printf "secrets.%s" $key) (index $v.secrets $key) -}}
 {{- end -}}
-{{- $names := compact (values (pick $v.secrets "engineClient" "clickhouse" "pushgateway" "prometheus" "audit" "bucket")) -}}
+{{- $names := compact (values (pick $v.secrets "engineClient" "clickhouse" "pushgateway" "prometheus" "audit" "bucketRun" "bucketInvestigate")) -}}
 {{- if ne (len $names) (len (uniq $names)) -}}
 {{- fail (printf "every Secret must differ, since each workload mounts only some of them: %v" $names) -}}
 {{- end -}}
-{{- if and $v.bucket.caBundle (not $v.secrets.bucket) -}}
-{{- fail "bucket.caBundle: the store's CA comes in secrets.bucket" -}}
+{{- if ne (empty $v.secrets.bucketRun) (empty $v.secrets.bucketInvestigate) -}}
+{{- fail "secrets.bucketRun and secrets.bucketInvestigate: both or neither, so neither workload falls back to another identity" -}}
+{{- end -}}
+{{- if and $v.bucket.caConfigMap (not $v.bucket.endpoint) -}}
+{{- fail "bucket.caConfigMap: a CA of its own is for a store of its own, at bucket.endpoint" -}}
 {{- end -}}
 {{- if and $v.bucket.endpoint $v.proxy.url -}}
 {{- fail "bucket.endpoint: a store of its own is reached directly, not through proxy.url" -}}
@@ -224,13 +227,13 @@ containers:
       - name: AWS_REGION
         value: {{ . | quote }}
       {{- end }}
-      {{- if $v.secrets.bucket }}
+      {{- if $v.secrets.bucketRun }}
       - name: AWS_SHARED_CREDENTIALS_FILE
         value: /etc/parity/bucket/credentials
       {{- end }}
-      {{- if $v.bucket.caBundle }}
+      {{- if $v.bucket.caConfigMap }}
       - name: AWS_CA_BUNDLE
-        value: /etc/parity/bucket/ca.crt
+        value: /etc/parity/bucket-ca/ca.crt
       {{- end }}
       {{- end }}
       {{- if and $v.proxy.url (has "proxy" (splitList " " (include "fsp.destinations" .))) }}
@@ -257,7 +260,7 @@ containers:
         mountPath: /etc/parity/tenants
         readOnly: true
       {{- end }}
-      {{- range $name := list "engineClient" "clickhouse" "pushgateway" "prometheus" "audit" "bucket" }}
+      {{- range $name := list "engineClient" "clickhouse" "pushgateway" "prometheus" "audit" }}
       {{- if has $name $.volumes }}
       - name: {{ $name | kebabcase }}
         mountPath: /etc/parity/{{ $name | replace "engineClient" "engine" }}
@@ -267,6 +270,16 @@ containers:
       {{- if has "reports" .volumes }}
       - name: reports
         mountPath: /var/lib/parity/reports
+      {{- end }}
+      {{- with .bucketSecret }}
+      - name: bucket
+        mountPath: /etc/parity/bucket
+        readOnly: true
+      {{- end }}
+      {{- if and (ne .component "cleanup") $v.bucket.caConfigMap }}
+      - name: bucket-ca
+        mountPath: /etc/parity/bucket-ca
+        readOnly: true
       {{- end }}
 volumes:
   - name: settings
@@ -280,7 +293,7 @@ volumes:
         - key: {{ $v.tenants.key }}
           path: tenants.yaml
   {{- end }}
-  {{- range $name := list "engineClient" "clickhouse" "pushgateway" "prometheus" "audit" "bucket" }}
+  {{- range $name := list "engineClient" "clickhouse" "pushgateway" "prometheus" "audit" }}
   {{- if has $name $.volumes }}
   - name: {{ $name | kebabcase }}
     secret:
@@ -292,5 +305,22 @@ volumes:
   - name: reports
     emptyDir:
       sizeLimit: {{ $v.reportsSizeLimit }}
+  {{- end }}
+  {{- with .bucketSecret }}
+  - name: bucket
+    secret:
+      secretName: {{ . }}
+      defaultMode: 0440
+      items:
+        - key: credentials
+          path: credentials
+  {{- end }}
+  {{- if and (ne .component "cleanup") $v.bucket.caConfigMap }}
+  - name: bucket-ca
+    configMap:
+      name: {{ $v.bucket.caConfigMap }}
+      items:
+        - key: ca.crt
+          path: ca.crt
   {{- end }}
 {{- end -}}

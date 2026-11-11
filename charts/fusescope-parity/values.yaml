@@ -42,11 +42,12 @@ secrets:
   pushgateway: ""
   prometheus: ""
   audit: ""
-  # credentials: an AWS shared credentials file, for a store without
-  # workload identity; with bucket.caBundle, also ca.crt, the store's CA.
-  # Mounted for the rounds and the investigation only; with it, sts is not
-  # reached.
-  bucket: ""
+  # For a store without workload identity, both or neither: credentials,
+  # an AWS shared credentials file. The rounds' writes reports and the
+  # requeue; the investigation's only reads reports. Each is mounted for its
+  # workload alone, never for the cleanup; with them, sts is not reached.
+  bucketRun: ""
+  bucketInvestigate: ""
 
 engine:
   # host:port of the engine's Flight SQL.
@@ -68,9 +69,8 @@ bucket:
   endpoint: ""
   # Empty takes the region workload identity sets.
   region: ""
-  # Whether secrets.bucket holds ca.crt, the CA the store's certificate
-  # chains to.
-  caBundle: false
+  # A ConfigMap with ca.crt, the CA the store's certificate chains to.
+  caConfigMap: ""
 
 pushgateway:
   url: ""
@@ -148,7 +148,7 @@ serviceAccounts:
 #   run:         dns apiServer engine clickhouse bucket sts prometheus pushgateway
 #   cleanup:     dns apiServer
 #   investigate: dns engine clickhouse bucket sts prometheus audit idp
-# With secrets.bucket, sts is not reached.
+# With secrets.bucketRun and bucketInvestigate, sts is not reached.
 # With proxy.url set, bucket, sts and idp are reached through it and
 # proxy replaces them.
 egress:

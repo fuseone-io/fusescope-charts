@@ -1,6 +1,6 @@
-# An S3-compatible store without workload identity, as in a rehearsal: static
-# credentials mounted for the rounds and the investigation, the store's own
-# CA, and no STS. Every value is fictitious.
+# An S3-compatible store without workload identity, as in a rehearsal: a
+# writing credential for the rounds, a reading one for the investigation, the
+# store's own CA, and no STS. Every value is fictitious.
 image:
   repository: ghcr.io/example/fusescope-parity
   digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
@@ -15,7 +15,8 @@ secrets:
   pushgateway: parity-pushgateway
   prometheus: parity-prometheus
   audit: parity-audit
-  bucket: parity-bucket
+  bucketRun: parity-bucket-run
+  bucketInvestigate: parity-bucket-investigate
 engine:
   endpoint: 192.0.2.20:8815
   serverName: fusescope-engine-flight
@@ -24,7 +25,7 @@ bucket:
   kmsKeyId: 00000000-0000-0000-0000-000000000000
   endpoint: https://192.0.2.10:9000
   region: us-east-1
-  caBundle: true
+  caConfigMap: parity-bucket-ca
 pushgateway:
   url: https://192.0.2.30:9091
 health:

@@ -91,7 +91,10 @@
         "audit": {
           "type": "string"
         },
-        "bucket": {
+        "bucketRun": {
+          "type": "string"
+        },
+        "bucketInvestigate": {
           "type": "string"
         }
       }
@@ -141,8 +144,8 @@
           "type": "string",
           "pattern": "^([a-z0-9-]+)?$"
         },
-        "caBundle": {
-          "type": "boolean"
+        "caConfigMap": {
+          "type": "string"
         }
       }
     },
