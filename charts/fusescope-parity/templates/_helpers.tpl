@@ -235,6 +235,10 @@ containers:
       - name: AWS_CA_BUNDLE
         value: /etc/parity/bucket-ca/ca.crt
       {{- end }}
+      {{- if $v.trust.caConfigMap }}
+      - name: SSL_CERT_FILE
+        value: /etc/parity/trust/ca-bundle.crt
+      {{- end }}
       {{- end }}
       {{- if and $v.proxy.url (has "proxy" (splitList " " (include "fsp.destinations" .))) }}
       - name: HTTPS_PROXY
@@ -281,6 +285,11 @@ containers:
         mountPath: /etc/parity/bucket-ca
         readOnly: true
       {{- end }}
+      {{- if and (ne .component "cleanup") $v.trust.caConfigMap }}
+      - name: trust
+        mountPath: /etc/parity/trust
+        readOnly: true
+      {{- end }}
 volumes:
   - name: settings
     configMap:
@@ -322,5 +331,13 @@ volumes:
       items:
         - key: ca.crt
           path: ca.crt
+  {{- end }}
+  {{- if and (ne .component "cleanup") $v.trust.caConfigMap }}
+  - name: trust
+    configMap:
+      name: {{ $v.trust.caConfigMap }}
+      items:
+        - key: ca-bundle.crt
+          path: ca-bundle.crt
   {{- end }}
 {{- end -}}
