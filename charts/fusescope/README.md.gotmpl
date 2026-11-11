@@ -193,6 +193,12 @@ The chart renders a disk for the bucket, a filesystem cache disk in front of it 
 
 > [!WARNING]
 > ### Breaking Changes
+> #### Version 0.166.1
+> The FuseScope collector moves from 0.3.1 to 0.6.1, pinned by its signed multi-arch digest (`sha256:bca9dd69…53baf`). This is also the image of the agents' DaemonSet.
+>
+> - **What changes for logs:** a `grok_parser` whose pattern does not compile no longer refuses the whole OpAMP push. It fails each record and `on_error` decides, as the pipeline preview shows (collector 0.5.0). The log pipelines now run on the `logspipeline` library that the preview is moving to (collector 0.6.0, ADR 0012). Collector 0.6.1 only adds to that library the stage at which a configuration is refused; what the collector accepts, refuses and outputs does not change.
+> - **No configuration change.** The collector added the `file` exporter in 0.5.0, but the chart does not configure it. `fusescope-schema` stays on 0.4.2, unchanged since then.
+>
 > #### Version 0.166.0
 > The ClickHouse subchart (24.1.21) drops `clickhouse.logs.system`, the optional sidecar that ran SigNoz's collector (`signoz/signoz-otel-collector`) to collect ClickHouse system tables as logs. It was off by default.
 >
