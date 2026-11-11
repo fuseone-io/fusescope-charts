@@ -1,0 +1,91 @@
+# An S3-compatible store without workload identity, as in a rehearsal: a
+# writing credential for the rounds, a reading one for the investigation, the
+# store's own CA, and no STS. Every value is fictitious.
+image:
+  repository: ghcr.io/example/fusescope-parity
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+build:
+  backendCommit: "0000000000000000000000000000000000000000"
+  engineVersion: "0.0.0"
+tenants:
+  configMap: parity-tenants
+secrets:
+  engineClient: parity-engine-client
+  clickhouse: parity-clickhouse
+  pushgateway: parity-pushgateway
+  prometheus: parity-prometheus
+  audit: parity-audit
+  bucketRun: parity-bucket-run
+  bucketInvestigate: parity-bucket-investigate
+engine:
+  endpoint: 192.0.2.20:8815
+  serverName: fusescope-engine-flight
+bucket:
+  name: parity-demo
+  kmsKeyId: 00000000-0000-0000-0000-000000000000
+  endpoint: https://192.0.2.10:9000
+  region: us-east-1
+  caConfigMap: parity-bucket-ca
+pushgateway:
+  url: https://192.0.2.30:9091
+health:
+  url: https://192.0.2.30:9090
+  exporters: [fusescope_clickhouse, otlp/engine]
+investigate:
+  issuer: https://192.0.2.40:5556/dex
+  group: parity-oncall
+  auditEndpoint: https://192.0.2.50:4318
+oncall:
+  group: oidc:parity-oncall
+egress:
+  dns:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+  apiServer:
+    - to:
+        - ipBlock: {cidr: 192.0.2.1/32}
+      ports:
+        - {protocol: TCP, port: 6443}
+  engine:
+    - to:
+        - ipBlock: {cidr: 192.0.2.20/32}
+      ports:
+        - {protocol: TCP, port: 8815}
+  clickhouse:
+    - to:
+        - ipBlock: {cidr: 192.0.2.21/32}
+      ports:
+        - {protocol: TCP, port: 9440}
+  bucket:
+    - to:
+        - ipBlock: {cidr: 192.0.2.10/32}
+      ports:
+        - {protocol: TCP, port: 9000}
+  prometheus:
+    - to:
+        - ipBlock: {cidr: 192.0.2.30/32}
+      ports:
+        - {protocol: TCP, port: 9090}
+  pushgateway:
+    - to:
+        - ipBlock: {cidr: 192.0.2.30/32}
+      ports:
+        - {protocol: TCP, port: 9091}
+  audit:
+    - to:
+        - ipBlock: {cidr: 192.0.2.50/32}
+      ports:
+        - {protocol: TCP, port: 4318}
+  idp:
+    - to:
+        - ipBlock: {cidr: 192.0.2.40/32}
+      ports:
+        - {protocol: TCP, port: 5556}

@@ -30,6 +30,9 @@ margin = values["marginSeconds"]
 image = f"{values['image']['repository']}@{values['image']['digest']}"
 group = values["oncall"]["group"]
 proxied = bool(values.get("proxy", {}).get("url"))
+bucket = values["bucket"]
+keyed = bool(values["secrets"].get("bucketRun"))
+ca = bool(bucket.get("caConfigMap"))
 
 if any(d["kind"] in ("ClusterRole", "ClusterRoleBinding") for d in docs):
     fail("a cluster-wide grant")
@@ -67,9 +70,9 @@ for d in docs:
 if set(pods) != {"check-run-hourly", "check-run-daily", "check-cleanup", "check-investigate"}:
     fail(f"workloads {sorted(pods)}")
 mounts = {
-    "run": {"settings", "tenants", "engine-client", "clickhouse", "pushgateway", "prometheus", "reports"},
+    "run": {"settings", "tenants", "engine-client", "clickhouse", "pushgateway", "prometheus", "reports"} | ({"bucket"} if keyed else set()) | ({"bucket-ca"} if ca else set()),
     "cleanup": {"settings"},
-    "investigate": {"settings", "tenants", "engine-client", "clickhouse", "prometheus", "audit"},
+    "investigate": {"settings", "tenants", "engine-client", "clickhouse", "prometheus", "audit"} | ({"bucket"} if keyed else set()) | ({"bucket-ca"} if ca else set()),
 }
 for name, template in pods.items():
     component = template["metadata"]["labels"]["app.kubernetes.io/component"]
@@ -102,6 +105,28 @@ for name, template in pods.items():
         fail(f"{name} proxy env {env}")
     if want_proxy and not {".svc", ".cluster.local", "fusescope-engine-flight.fusescope.svc", "pushgateway.monitoring.svc"} <= set(env["NO_PROXY"].split(",")):
         fail(f"{name} sends in-cluster calls to the proxy: {env['NO_PROXY']}")
+    store = {}
+    if component != "cleanup":
+        if bucket.get("endpoint"):
+            store["AWS_ENDPOINT_URL_S3"] = bucket["endpoint"]
+        if bucket.get("region"):
+            store["AWS_REGION"] = bucket["region"]
+        if keyed:
+            store["AWS_SHARED_CREDENTIALS_FILE"] = "/etc/parity/bucket/credentials"
+        if ca:
+            store["AWS_CA_BUNDLE"] = "/etc/parity/bucket-ca/ca.crt"
+    if {k: v for k, v in env.items() if k.startswith("AWS_")} != store:
+        fail(f"{name} reaches the bucket with {env}, not {store}")
+    if keyed and component != "cleanup":
+        m = next(m for m in c["volumeMounts"] if m["name"] == "bucket")
+        v = next(v for v in pod["volumes"] if v["name"] == "bucket")
+        own = values["secrets"]["bucketRun" if component == "run" else "bucketInvestigate"]
+        if m["mountPath"] != "/etc/parity/bucket" or v["secret"]["secretName"] != own or v["secret"].get("items") != [{"key": "credentials", "path": "credentials"}]:
+            fail(f"{name} mounts the bucket's credentials from {v} at {m}, not {own}")
+    if ca and component != "cleanup":
+        v = next(v for v in pod["volumes"] if v["name"] == "bucket-ca")
+        if v.get("configMap", {}).get("name") != bucket["caConfigMap"]:
+            fail(f"{name} trusts the store through {v}")
     args = c["args"]
     expected = {"run": "run", "cleanup": "cleanup", "investigate": "wait"}[component]
     if args[0] != expected:
@@ -132,9 +157,9 @@ for key in ("hourly", "daily"):
         fail(f"the {key} round may be killed inside its budget")
 
 reach = {
-    "run": ["dns", "apiServer", "engine", "clickhouse", "prometheus", "pushgateway"] + (["proxy"] if proxied else ["bucket", "sts"]),
+    "run": ["dns", "apiServer", "engine", "clickhouse", "prometheus", "pushgateway"] + (["proxy"] if proxied else ["bucket"] + ([] if keyed else ["sts"])),
     "cleanup": ["dns", "apiServer"],
-    "investigate": ["dns", "engine", "clickhouse", "prometheus", "audit"] + (["proxy"] if proxied else ["bucket", "sts", "idp"]),
+    "investigate": ["dns", "engine", "clickhouse", "prometheus", "audit"] + (["proxy"] if proxied else ["bucket"] + ([] if keyed else ["sts"]) + ["idp"]),
 }
 policies = {d["metadata"]["labels"]["app.kubernetes.io/component"]: d["spec"] for d in docs if d["kind"] == "NetworkPolicy"}
 if set(policies) != set(reach):
@@ -259,6 +284,15 @@ refuse -f "$staging" --set 'egress.idp[0].to[0].ipBlock.cidr=::/0'
 refuse -f "$staging" --set egress.audit=null
 refuse -f "$staging" --set proxy.url=https://egress-proxy.example.com:3128
 refuse -f "$staging" --set unknown=1
+store="$chart/ci/s3-compatible-values.yaml"
+refuse -f "$store" --set bucket.endpoint=http://192.0.2.10:9000
+refuse -f "$store" --set secrets.bucketRun=
+refuse -f "$store" --set secrets.bucketInvestigate=
+refuse -f "$store" --set secrets.bucketInvestigate=parity-bucket-run
+refuse -f "$store" --set secrets.bucketRun=parity-audit
+refuse -f "$store" --set secrets.bucket=parity-bucket
+refuse -f "$store" --set proxy.url=https://egress-proxy.example.com:3128 --set 'egress.proxy[0].to[0].ipBlock.cidr=10.0.32.0/28' --set 'egress.proxy[0].ports[0].port=3128'
+refuse -f "$staging" --set bucket.caConfigMap=parity-bucket-ca
 refuse -f "$staging" --set rounds.daily.hour=24
 refuse -f "$staging" --set rounds.hourly.minute=60
 refuse -f "$staging" --set marginSeconds=-1
@@ -317,4 +351,4 @@ refuse_egress bucket '[{to: [{ipBlock: {cidr: not-a-cidr}}], ports: [{port: 443}
 refuse_egress idp '[{to: [{ipBlock: {cidr: "2001:db8::/16"}}], ports: [{port: 443}]}]'
 refuse_egress bucket '[{to: [{ipBlock: {cidr: host.example/28}}], ports: [{port: 443}]}]'
 helm template check "$chart" --namespace parity -f "$staging" --set rounds.hourly.activeDeadlineSeconds=1500 >/dev/null
-echo "chart refuses a release without its image digest, with a tag, a malformed digest or no repository; Secrets missing or alike; no tenants or on-call group; run keys in the release's namespace; a deadline inside its budget plus margin; a budget set twice; a daily round that leaves no hour; an egress rule without peers or ports, to every address, or missing for a workload; an unknown value, a time out of range, a plain-HTTP endpoint or a malformed namespace; a report without its backend commit and engine version; a zero run key expiry; a health source the backend refuses; an unknown, budget or out-of-range planning setting; and an egress peer or port that reaches more than it names"
+echo "chart refuses a release without its image digest, with a tag, a malformed digest or no repository; Secrets missing or alike; no tenants or on-call group; run keys in the release's namespace; a deadline inside its budget plus margin; a budget set twice; a daily round that leaves no hour; an egress rule without peers or ports, to every address, or missing for a workload; an unknown value, a time out of range, a plain-HTTP endpoint or a malformed namespace; a store CA or one bucket credential without the other, the investigation given the rounds' credential, a store endpoint behind the proxy, or a bucket Secret shared; a report without its backend commit and engine version; a zero run key expiry; a health source the backend refuses; an unknown, budget or out-of-range planning setting; and an egress peer or port that reaches more than it names"

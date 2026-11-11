@@ -90,6 +90,12 @@
         },
         "audit": {
           "type": "string"
+        },
+        "bucketRun": {
+          "type": "string"
+        },
+        "bucketInvestigate": {
+          "type": "string"
         }
       }
     },
@@ -128,6 +134,17 @@
           "type": "string"
         },
         "kmsKeyId": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string",
+          "pattern": "^(https://.+)?$"
+        },
+        "region": {
+          "type": "string",
+          "pattern": "^([a-z0-9-]+)?$"
+        },
+        "caConfigMap": {
           "type": "string"
         }
       }

@@ -35,4 +35,4 @@ spec:
         {{- include "fsp.selector" (dict "Release" .Release "component" "investigate") | nindent 8 }}
     spec:
       terminationGracePeriodSeconds: 5
-      {{- include "fsp.pod" (merge (dict "component" "investigate" "account" "investigate" "args" (list "wait") "volumes" $volumes "resources" $v.investigation.resources) $base) | nindent 6 }}
+      {{- include "fsp.pod" (merge (dict "component" "investigate" "account" "investigate" "args" (list "wait") "volumes" $volumes "bucketSecret" $v.secrets.bucketInvestigate "resources" $v.investigation.resources) $base) | nindent 6 }}

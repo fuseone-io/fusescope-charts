@@ -18,7 +18,8 @@ app.kubernetes.io/component: {{ .component }}
 {{/* The destinations each workload reaches. */}}
 {{- define "fsp.destinations" -}}
 {{- $direct := dict "run" (list "dns" "apiServer" "engine" "clickhouse" "prometheus" "pushgateway") "cleanup" (list "dns" "apiServer") "investigate" (list "dns" "engine" "clickhouse" "prometheus" "audit") -}}
-{{- $outside := dict "run" (list "bucket" "sts") "cleanup" (list) "investigate" (list "bucket" "sts" "idp") -}}
+{{- $sts := ternary (list) (list "sts") (not (empty .Values.secrets.bucketRun)) -}}
+{{- $outside := dict "run" (concat (list "bucket") $sts) "cleanup" (list) "investigate" (concat (list "bucket") $sts (list "idp")) -}}
 {{- $names := index $direct .component -}}
 {{- $far := index $outside .component -}}
 {{- if and .Values.proxy.url $far -}}
@@ -64,9 +65,18 @@ app.kubernetes.io/component: {{ .component }}
 {{- range $key := list "engineClient" "clickhouse" "pushgateway" "prometheus" "audit" -}}
 {{- $_ := required (printf "secrets.%s" $key) (index $v.secrets $key) -}}
 {{- end -}}
-{{- $names := values (pick $v.secrets "engineClient" "clickhouse" "pushgateway" "prometheus" "audit") -}}
+{{- $names := compact (values (pick $v.secrets "engineClient" "clickhouse" "pushgateway" "prometheus" "audit" "bucketRun" "bucketInvestigate")) -}}
 {{- if ne (len $names) (len (uniq $names)) -}}
 {{- fail (printf "every Secret must differ, since each workload mounts only some of them: %v" $names) -}}
+{{- end -}}
+{{- if ne (empty $v.secrets.bucketRun) (empty $v.secrets.bucketInvestigate) -}}
+{{- fail "secrets.bucketRun and secrets.bucketInvestigate: both or neither, so neither workload falls back to another identity" -}}
+{{- end -}}
+{{- if and $v.bucket.caConfigMap (not $v.bucket.endpoint) -}}
+{{- fail "bucket.caConfigMap: a CA of its own is for a store of its own, at bucket.endpoint" -}}
+{{- end -}}
+{{- if and $v.bucket.endpoint $v.proxy.url -}}
+{{- fail "bucket.endpoint: a store of its own is reached directly, not through proxy.url" -}}
 {{- end -}}
 {{- $_ := required "tenants.configMap: the tenants file D1 maintains" $v.tenants.configMap -}}
 {{- $_ := required "engine.endpoint" $v.engine.endpoint -}}
@@ -208,6 +218,24 @@ containers:
       - name: PARITY_ENGINE_VERSION
         value: {{ . | quote }}
       {{- end }}
+      {{- if ne .component "cleanup" }}
+      {{- with $v.bucket.endpoint }}
+      - name: AWS_ENDPOINT_URL_S3
+        value: {{ . | quote }}
+      {{- end }}
+      {{- with $v.bucket.region }}
+      - name: AWS_REGION
+        value: {{ . | quote }}
+      {{- end }}
+      {{- if $v.secrets.bucketRun }}
+      - name: AWS_SHARED_CREDENTIALS_FILE
+        value: /etc/parity/bucket/credentials
+      {{- end }}
+      {{- if $v.bucket.caConfigMap }}
+      - name: AWS_CA_BUNDLE
+        value: /etc/parity/bucket-ca/ca.crt
+      {{- end }}
+      {{- end }}
       {{- if and $v.proxy.url (has "proxy" (splitList " " (include "fsp.destinations" .))) }}
       - name: HTTPS_PROXY
         value: {{ $v.proxy.url | quote }}
@@ -243,6 +271,16 @@ containers:
       - name: reports
         mountPath: /var/lib/parity/reports
       {{- end }}
+      {{- with .bucketSecret }}
+      - name: bucket
+        mountPath: /etc/parity/bucket
+        readOnly: true
+      {{- end }}
+      {{- if and (ne .component "cleanup") $v.bucket.caConfigMap }}
+      - name: bucket-ca
+        mountPath: /etc/parity/bucket-ca
+        readOnly: true
+      {{- end }}
 volumes:
   - name: settings
     configMap:
@@ -267,5 +305,22 @@ volumes:
   - name: reports
     emptyDir:
       sizeLimit: {{ $v.reportsSizeLimit }}
+  {{- end }}
+  {{- with .bucketSecret }}
+  - name: bucket
+    secret:
+      secretName: {{ . }}
+      defaultMode: 0440
+      items:
+        - key: credentials
+          path: credentials
+  {{- end }}
+  {{- if and (ne .component "cleanup") $v.bucket.caConfigMap }}
+  - name: bucket-ca
+    configMap:
+      name: {{ $v.bucket.caConfigMap }}
+      items:
+        - key: ca.crt
+          path: ca.crt
   {{- end }}
 {{- end -}}
