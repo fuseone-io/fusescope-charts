@@ -1,0 +1,267 @@
+{{- define "fsp.name" -}}
+{{- .Release.Name | trunc 40 | trimSuffix "-" -}}
+{{- end -}}
+
+{{- define "fsp.labels" -}}
+app.kubernetes.io/name: fusescope-parity
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version }}
+{{- end -}}
+
+{{- define "fsp.selector" -}}
+app.kubernetes.io/name: fusescope-parity
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: {{ .component }}
+{{- end -}}
+
+{{/* The destinations each workload reaches. */}}
+{{- define "fsp.destinations" -}}
+{{- $direct := dict "run" (list "dns" "apiServer" "engine" "clickhouse" "prometheus" "pushgateway") "cleanup" (list "dns" "apiServer") "investigate" (list "dns" "engine" "clickhouse" "prometheus" "audit") -}}
+{{- $outside := dict "run" (list "bucket" "sts") "cleanup" (list) "investigate" (list "bucket" "sts" "idp") -}}
+{{- $names := index $direct .component -}}
+{{- $far := index $outside .component -}}
+{{- if and .Values.proxy.url $far -}}
+{{- $names = append $names "proxy" -}}
+{{- else -}}
+{{- $names = concat $names $far -}}
+{{- end -}}
+{{- join " " $names -}}
+{{- end -}}
+
+{{/* Minutes of the day, from 0, that a job scheduled at .minute spans: its starting and active deadlines and the margin, rounded up. */}}
+{{- define "fsp.span" -}}
+{{- div (add .startingDeadlineSeconds .activeDeadlineSeconds .margin 59) 60 -}}
+{{- end -}}
+
+{{/* The hours the hourly round runs: every hour whose span stays clear of the daily round's, both ways round the clock. */}}
+{{- define "fsp.hourlyHours" -}}
+{{- $v := .Values -}}
+{{- $h := $v.rounds.hourly -}}
+{{- $d := $v.rounds.daily -}}
+{{- $hs := int (include "fsp.span" (dict "startingDeadlineSeconds" $h.startingDeadlineSeconds "activeDeadlineSeconds" $h.activeDeadlineSeconds "margin" $v.marginSeconds)) -}}
+{{- $ds := int (include "fsp.span" (dict "startingDeadlineSeconds" $d.startingDeadlineSeconds "activeDeadlineSeconds" $d.activeDeadlineSeconds "margin" $v.marginSeconds)) -}}
+{{- $daily := add (mul (int $d.hour) 60) (int $d.minute) -}}
+{{- $hours := list -}}
+{{- range $hour := until 24 -}}
+{{- $start := add (mul $hour 60) (int $h.minute) -}}
+{{- $after := mod (add (sub $start $daily) 1440) 1440 -}}
+{{- $before := mod (add (sub $daily $start) 1440) 1440 -}}
+{{- if and (ge $after $ds) (ge $before $hs) -}}
+{{- $hours = append $hours $hour -}}
+{{- end -}}
+{{- end -}}
+{{- join "," $hours -}}
+{{- end -}}
+
+{{/* Refuses a release that would run half-configured, unpinned or wider than it must. */}}
+{{- define "fsp.validate" -}}
+{{- $v := .Values -}}
+{{- $_ := required "image.repository" $v.image.repository -}}
+{{- if not (regexMatch "^sha256:[0-9a-f]{64}$" (required "image.digest: the index digest parity-image.yaml signed" $v.image.digest)) -}}
+{{- fail (printf "image.digest must be sha256:<64 hex>, not %q" $v.image.digest) -}}
+{{- end -}}
+{{- range $key := list "engineClient" "clickhouse" "pushgateway" "prometheus" "audit" -}}
+{{- $_ := required (printf "secrets.%s" $key) (index $v.secrets $key) -}}
+{{- end -}}
+{{- $names := values (pick $v.secrets "engineClient" "clickhouse" "pushgateway" "prometheus" "audit") -}}
+{{- if ne (len $names) (len (uniq $names)) -}}
+{{- fail (printf "every Secret must differ, since each workload mounts only some of them: %v" $names) -}}
+{{- end -}}
+{{- $_ := required "tenants.configMap: the tenants file D1 maintains" $v.tenants.configMap -}}
+{{- $_ := required "engine.endpoint" $v.engine.endpoint -}}
+{{- $_ := required "engine.serverName" $v.engine.serverName -}}
+{{- $_ := required "bucket.name" $v.bucket.name -}}
+{{- $_ := required "bucket.kmsKeyId" $v.bucket.kmsKeyId -}}
+{{- $_ := required "pushgateway.url" $v.pushgateway.url -}}
+{{- $_ := required "health.url" $v.health.url -}}
+{{- $_ := required "investigate.issuer" $v.investigate.issuer -}}
+{{- $_ := required "investigate.group" $v.investigate.group -}}
+{{- $_ := required "investigate.auditEndpoint" $v.investigate.auditEndpoint -}}
+{{- $_ := required "oncall.group" $v.oncall.group -}}
+{{- if eq $v.runKeys.namespace .Release.Namespace -}}
+{{- fail "runKeys.namespace must differ from the release's: it holds only the run keys" -}}
+{{- end -}}
+{{- range $class := list "hourly" "daily" -}}
+{{- $r := index $v.rounds $class -}}
+{{- if hasKey $r.round "budget" -}}
+{{- fail (printf "rounds.%s.round.budget: set rounds.%s.budgetSeconds" $class $class) -}}
+{{- end -}}
+{{- if lt (int $r.activeDeadlineSeconds) (add (int $r.budgetSeconds) (int $v.marginSeconds)) -}}
+{{- fail (printf "rounds.%s.activeDeadlineSeconds must be at least budgetSeconds + marginSeconds (%d)" $class (add (int $r.budgetSeconds) (int $v.marginSeconds))) -}}
+{{- end -}}
+{{- end -}}
+{{- if not (include "fsp.hourlyHours" .) -}}
+{{- fail "no hour is left for the hourly round clear of the daily one" -}}
+{{- end -}}
+{{- range $dest, $rules := $v.egress -}}
+{{- range $rule := $rules -}}
+{{- if or (not $rule.to) (not $rule.ports) -}}
+{{- fail (printf "egress.%s: every rule names its peers and its ports; an empty one allows everything" $dest) -}}
+{{- end -}}
+{{- range $peer := $rule.to -}}
+{{- if and $peer.ipBlock (regexMatch "/0$" $peer.ipBlock.cidr) -}}
+{{- fail (printf "egress.%s: %s allows every address" $dest $peer.ipBlock.cidr) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- range $component := list "run" "cleanup" "investigate" -}}
+{{- range $dest := splitList " " (include "fsp.destinations" (dict "component" $component "Values" $v)) -}}
+{{- if not (index $v.egress $dest) -}}
+{{- fail (printf "egress.%s: the %s workload reaches it" $dest $component) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/* The settings file of a round of .class, or of the investigation. */}}
+{{- define "fsp.settings" -}}
+{{- $v := .Values -}}
+{{- $round := dict -}}
+{{- if .class -}}
+{{- $r := index $v.rounds .class -}}
+{{- $round = merge (dict "budget" (printf "%ds" (int $r.budgetSeconds))) $r.round -}}
+{{- end -}}
+{{- $jwt := dict "key_file" "/etc/parity/engine/jwt.pem" -}}
+{{- with $v.engine.jwtIssuer }}{{ $_ := set $jwt "issuer" . }}{{ end -}}
+{{- with $v.engine.jwtAudience }}{{ $_ := set $jwt "audience" . }}{{ end -}}
+{{- $clickhouse := dict -}}
+{{- with $v.clickhouse.cluster }}{{ $_ := set $clickhouse "cluster" . }}{{ end -}}
+{{- $settings := dict
+  "version" 1
+  "engine" (dict "provider" "flight" "flight" (dict
+    "endpoint" $v.engine.endpoint
+    "tls" (dict "cert_file" "/etc/parity/engine/tls.crt" "key_file" "/etc/parity/engine/tls.key" "ca_file" "/etc/parity/engine/ca.crt" "server_name" $v.engine.serverName)
+    "jwt" $jwt))
+  "clickhouse" (dict "provider" "clickhouse" "clickhouse" $clickhouse)
+  "credentials" (dict "clickhouse_dsn_file" "/etc/parity/clickhouse/dsn")
+  "pushgateway" (dict "url" $v.pushgateway.url "token_file" "/etc/parity/pushgateway/token")
+  "bucket" (dict "name" $v.bucket.name "kms_key_id" $v.bucket.kmsKeyId)
+  "secret" (dict "namespace" $v.runKeys.namespace "expiry" $v.runKeys.expiry)
+  "health" (dict "url" $v.health.url "token_file" "/etc/parity/prometheus/token" "instance_label" $v.health.instanceLabel "exporters" $v.health.exporters)
+  "investigate" (dict "issuer" $v.investigate.issuer "audience" $v.investigate.audience "group" $v.investigate.group "audit_endpoint" $v.investigate.auditEndpoint "audit_token_file" "/etc/parity/audit/token")
+-}}
+{{- if $round }}{{ $_ := set $settings "round" $round }}{{ end -}}
+{{- toYaml $settings -}}
+{{- end -}}
+
+{{/* The hosts reached directly when a proxy is set: the cluster's and every in-cluster endpoint. */}}
+{{- define "fsp.noProxy" -}}
+{{- $v := .Values -}}
+{{- $hosts := list ".svc" ".cluster.local" (first (splitList ":" $v.engine.endpoint)) -}}
+{{- range $u := list $v.pushgateway.url $v.health.url $v.investigate.auditEndpoint -}}
+{{- $hosts = append $hosts (first (splitList ":" (urlParse $u).host)) -}}
+{{- end -}}
+{{- with $v.proxy.noProxy }}{{ $hosts = append $hosts . }}{{ end -}}
+{{- join "," (uniq $hosts) -}}
+{{- end -}}
+
+{{/* The pod spec of .component, with its .args, .account and .volumes (names of Secrets, tenants, settings, reports). */}}
+{{- define "fsp.pod" -}}
+{{- $v := .Values -}}
+serviceAccountName: {{ include "fsp.name" . }}-{{ .account }}
+automountServiceAccountToken: true
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+{{- with $v.imagePullSecrets }}
+imagePullSecrets:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- with $v.nodeSelector }}
+nodeSelector:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- with $v.tolerations }}
+tolerations:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- with $v.affinity }}
+affinity:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- with .restartPolicy }}
+restartPolicy: {{ . }}
+{{- end }}
+containers:
+  - name: parity
+    image: "{{ $v.image.repository }}@{{ $v.image.digest }}"
+    imagePullPolicy: {{ $v.image.pullPolicy }}
+    args: {{ toJson .args }}
+    env:
+      - name: PARITY_IMAGE_DIGEST
+        value: {{ $v.image.digest | quote }}
+      {{- with $v.build.backendCommit }}
+      - name: PARITY_BACKEND_COMMIT
+        value: {{ . | quote }}
+      {{- end }}
+      {{- with $v.build.engineVersion }}
+      - name: PARITY_ENGINE_VERSION
+        value: {{ . | quote }}
+      {{- end }}
+      {{- if and $v.proxy.url (has "proxy" (splitList " " (include "fsp.destinations" .))) }}
+      - name: HTTPS_PROXY
+        value: {{ $v.proxy.url | quote }}
+      - name: NO_PROXY
+        value: {{ include "fsp.noProxy" . | quote }}
+      {{- end }}
+    securityContext:
+      readOnlyRootFilesystem: true
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: ["ALL"]
+    {{- with .resources }}
+    resources:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    volumeMounts:
+      - name: settings
+        mountPath: /etc/parity/settings
+        readOnly: true
+      {{- if has "tenants" .volumes }}
+      - name: tenants
+        mountPath: /etc/parity/tenants
+        readOnly: true
+      {{- end }}
+      {{- range $name := list "engineClient" "clickhouse" "pushgateway" "prometheus" "audit" }}
+      {{- if has $name $.volumes }}
+      - name: {{ $name | kebabcase }}
+        mountPath: /etc/parity/{{ $name | replace "engineClient" "engine" }}
+        readOnly: true
+      {{- end }}
+      {{- end }}
+      {{- if has "reports" .volumes }}
+      - name: reports
+        mountPath: /var/lib/parity/reports
+      {{- end }}
+volumes:
+  - name: settings
+    configMap:
+      name: {{ include "fsp.name" . }}-settings
+  {{- if has "tenants" .volumes }}
+  - name: tenants
+    configMap:
+      name: {{ $v.tenants.configMap }}
+      items:
+        - key: {{ $v.tenants.key }}
+          path: tenants.yaml
+  {{- end }}
+  {{- range $name := list "engineClient" "clickhouse" "pushgateway" "prometheus" "audit" }}
+  {{- if has $name $.volumes }}
+  - name: {{ $name | kebabcase }}
+    secret:
+      secretName: {{ index $v.secrets $name }}
+      defaultMode: 0440
+  {{- end }}
+  {{- end }}
+  {{- if has "reports" .volumes }}
+  - name: reports
+    emptyDir:
+      sizeLimit: {{ $v.reportsSizeLimit }}
+  {{- end }}
+{{- end -}}

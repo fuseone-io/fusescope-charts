@@ -1,0 +1,42 @@
+{{- $v := .Values -}}
+{{- $base := dict "Values" $v "Release" .Release "Chart" .Chart -}}
+{{- $runVolumes := list "tenants" "engineClient" "clickhouse" "pushgateway" "prometheus" "reports" -}}
+{{- $jobs := list
+  (dict "name" "run-hourly" "class" "hourly" "schedule" (printf "%d %s * * *" (int $v.rounds.hourly.minute) (include "fsp.hourlyHours" .)) "spec" $v.rounds.hourly)
+  (dict "name" "run-daily" "class" "daily" "schedule" (printf "%d %d * * *" (int $v.rounds.daily.minute) (int $v.rounds.daily.hour)) "spec" $v.rounds.daily)
+  (dict "name" "cleanup" "class" "" "schedule" (printf "%d %d * * *" (int $v.cleanup.minute) (int $v.cleanup.hour)) "spec" $v.cleanup)
+-}}
+{{- range $job := $jobs }}
+{{- $component := ternary "run" "cleanup" (ne $job.class "") }}
+{{- $args := list "cleanup" "-settings" "/etc/parity/settings/investigate.yaml" }}
+{{- $volumes := list }}
+{{- if $job.class }}
+{{- $args = list "run" "-settings" (printf "/etc/parity/settings/%s.yaml" $job.class) "-tenants" "/etc/parity/tenants/tenants.yaml" "-reports" "/var/lib/parity/reports" }}
+{{- $volumes = $runVolumes }}
+{{- end }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "fsp.name" $ }}-{{ $job.name }}
+  labels:
+    {{- include "fsp.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+spec:
+  schedule: {{ $job.schedule | quote }}
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: {{ $job.spec.startingDeadlineSeconds }}
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: {{ $job.spec.activeDeadlineSeconds }}
+      template:
+        metadata:
+          labels:
+            {{- include "fsp.selector" (dict "Release" $.Release "component" $component) | nindent 12 }}
+        spec:
+          {{- include "fsp.pod" (merge (dict "component" $component "account" $component "args" $args "volumes" $volumes "resources" $job.spec.resources "restartPolicy" "Never") $base) | nindent 10 }}
+{{- end }}

@@ -1,0 +1,593 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repository": {
+          "type": "string"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^(sha256:[0-9a-f]{64})?$"
+        },
+        "pullPolicy": {
+          "type": "string",
+          "enum": [
+            "IfNotPresent",
+            "Always",
+            "Never"
+          ]
+        }
+      }
+    },
+    "imagePullSecrets": {
+      "type": "array"
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "backendCommit": {
+          "type": "string"
+        },
+        "engineVersion": {
+          "type": "string"
+        }
+      }
+    },
+    "runKeys": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "namespace": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$"
+        },
+        "expiry": {
+          "type": "string",
+          "pattern": "^([0-9]+(h|m|s))+$"
+        }
+      }
+    },
+    "tenants": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "configMap": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "secrets": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "engineClient": {
+          "type": "string"
+        },
+        "clickhouse": {
+          "type": "string"
+        },
+        "pushgateway": {
+          "type": "string"
+        },
+        "prometheus": {
+          "type": "string"
+        },
+        "audit": {
+          "type": "string"
+        }
+      }
+    },
+    "engine": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "endpoint": {
+          "type": "string"
+        },
+        "serverName": {
+          "type": "string"
+        },
+        "jwtIssuer": {
+          "type": "string"
+        },
+        "jwtAudience": {
+          "type": "string"
+        }
+      }
+    },
+    "clickhouse": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cluster": {
+          "type": "string"
+        }
+      }
+    },
+    "bucket": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "kmsKeyId": {
+          "type": "string"
+        }
+      }
+    },
+    "pushgateway": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^(https://.+)?$"
+        }
+      }
+    },
+    "health": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^(https://.+)?$"
+        },
+        "instanceLabel": {
+          "type": "string",
+          "minLength": 1
+        },
+        "exporters": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "investigate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "issuer": {
+          "type": "string",
+          "pattern": "^(https://.+)?$"
+        },
+        "audience": {
+          "type": "string",
+          "minLength": 1
+        },
+        "group": {
+          "type": "string"
+        },
+        "auditEndpoint": {
+          "type": "string",
+          "pattern": "^(https://.+)?$"
+        }
+      }
+    },
+    "oncall": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "group": {
+          "type": "string"
+        }
+      }
+    },
+    "marginSeconds": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "rounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hourly": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "minute": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 59
+            },
+            "budgetSeconds": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "startingDeadlineSeconds": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "activeDeadlineSeconds": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "round": {
+              "type": "object"
+            },
+            "resources": {
+              "type": "object"
+            }
+          }
+        },
+        "daily": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "hour": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 23
+            },
+            "minute": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 59
+            },
+            "budgetSeconds": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "startingDeadlineSeconds": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "activeDeadlineSeconds": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "round": {
+              "type": "object"
+            },
+            "resources": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hour": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 23
+        },
+        "minute": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 59
+        },
+        "startingDeadlineSeconds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "activeDeadlineSeconds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "resources": {
+          "type": "object"
+        }
+      }
+    },
+    "investigation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "resources": {
+          "type": "object"
+        }
+      }
+    },
+    "reportsSizeLimit": {
+      "type": "string",
+      "minLength": 1
+    },
+    "serviceAccounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "run": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "annotations": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "cleanup": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "annotations": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "investigate": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "annotations": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "egress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "to",
+              "ports"
+            ],
+            "properties": {
+              "to": {
+                "type": "array",
+                "minItems": 1
+              },
+              "ports": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        },
+        "apiServer": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "to",
+              "ports"
+            ],
+            "properties": {
+              "to": {
+                "type": "array",
+                "minItems": 1
+              },
+              "ports": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        },
+        "engine": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "to",
+              "ports"
+            ],
+            "properties": {
+              "to": {
+                "type": "array",
+                "minItems": 1
+              },
+              "ports": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        },
+        "clickhouse": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "to",
+              "ports"
+            ],
+            "properties": {
+              "to": {
+                "type": "array",
+                "minItems": 1
+              },
+              "ports": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        },
+        "bucket": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "to",
+              "ports"
+            ],
+            "properties": {
+              "to": {
+                "type": "array",
+                "minItems": 1
+              },
+              "ports": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        },
+        "sts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "to",
+              "ports"
+            ],
+            "properties": {
+              "to": {
+                "type": "array",
+                "minItems": 1
+              },
+              "ports": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        },
+        "prometheus": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "to",
+              "ports"
+            ],
+            "properties": {
+              "to": {
+                "type": "array",
+                "minItems": 1
+              },
+              "ports": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        },
+        "pushgateway": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "to",
+              "ports"
+            ],
+            "properties": {
+              "to": {
+                "type": "array",
+                "minItems": 1
+              },
+              "ports": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        },
+        "audit": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "to",
+              "ports"
+            ],
+            "properties": {
+              "to": {
+                "type": "array",
+                "minItems": 1
+              },
+              "ports": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        },
+        "idp": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "to",
+              "ports"
+            ],
+            "properties": {
+              "to": {
+                "type": "array",
+                "minItems": 1
+              },
+              "ports": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        },
+        "proxy": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "to",
+              "ports"
+            ],
+            "properties": {
+              "to": {
+                "type": "array",
+                "minItems": 1
+              },
+              "ports": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "proxy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^(https?://.+)?$"
+        },
+        "noProxy": {
+          "type": "string"
+        }
+      }
+    },
+    "nodeSelector": {
+      "type": "object"
+    },
+    "tolerations": {
+      "type": "array"
+    },
+    "affinity": {
+      "type": "object"
+    }
+  }
+}

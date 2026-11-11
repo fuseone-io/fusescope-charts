@@ -1,0 +1,21 @@
+{{- range $component := list "run" "cleanup" "investigate" }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "fsp.name" $ }}-{{ $component }}
+  labels:
+    {{- include "fsp.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "fsp.selector" (dict "Release" $.Release "component" $component) | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  egress:
+    {{- range $dest := splitList " " (include "fsp.destinations" (dict "component" $component "Values" $.Values)) }}
+    {{- toYaml (index $.Values.egress $dest) | nindent 4 }}
+    {{- end }}
+{{- end }}

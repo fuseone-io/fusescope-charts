@@ -1,0 +1,38 @@
+{{- $v := .Values -}}
+{{- $base := dict "Values" $v "Release" .Release "Chart" .Chart -}}
+{{- $volumes := list "tenants" "engineClient" "clickhouse" "prometheus" "audit" -}}
+# Held at zero replicas: on-call scales it to one, execs `parity investigate`
+# into <name>-investigate-0, and scales it back. A StatefulSet, so the pod's
+# name is fixed and RBAC can name it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "fsp.name" . }}-investigate
+  labels:
+    {{- include "fsp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: investigate
+spec:
+  clusterIP: None
+  selector:
+    {{- include "fsp.selector" (dict "Release" .Release "component" "investigate") | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "fsp.name" . }}-investigate
+  labels:
+    {{- include "fsp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: investigate
+spec:
+  replicas: 0
+  serviceName: {{ include "fsp.name" . }}-investigate
+  selector:
+    matchLabels:
+      {{- include "fsp.selector" (dict "Release" .Release "component" "investigate") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "fsp.selector" (dict "Release" .Release "component" "investigate") | nindent 8 }}
+    spec:
+      terminationGracePeriodSeconds: 5
+      {{- include "fsp.pod" (merge (dict "component" "investigate" "account" "investigate" "args" (list "wait") "volumes" $volumes "resources" $v.investigation.resources) $base) | nindent 6 }}

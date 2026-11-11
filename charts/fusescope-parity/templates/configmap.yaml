@@ -1,0 +1,14 @@
+{{- include "fsp.validate" . -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "fsp.name" . }}-settings
+  labels:
+    {{- include "fsp.labels" . | nindent 4 }}
+data:
+  hourly.yaml: |
+    {{- include "fsp.settings" (dict "Values" .Values "class" "hourly") | nindent 4 }}
+  daily.yaml: |
+    {{- include "fsp.settings" (dict "Values" .Values "class" "daily") | nindent 4 }}
+  investigate.yaml: |
+    {{- include "fsp.settings" (dict "Values" .Values "class" "") | nindent 4 }}
