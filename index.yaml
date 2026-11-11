@@ -1575,6 +1575,31 @@ entries:
     urls:
     - https://github.com/fuseone-io/fusescope-charts/releases/download/fusescope-engine-0.1.0/fusescope-engine-0.1.0.tgz
     version: 0.1.0
+  fusescope-parity:
+  - annotations:
+      fusescope.io/status: experimental
+    apiVersion: v2
+    appVersion: 0.0.0
+    created: "2026-11-11T15:07:12.18034931Z"
+    description: FuseScope parity (D5), the trace views compared between ClickHouse
+      and fusescope-engine in staging. Staging only; never part of a production release.
+    digest: 2a7ffa026488825451b7dc0ea8e9a92abad2dcf5a09a0486ddadb86516542e52
+    home: https://github.com/fuseone-io/fusescope
+    keywords:
+    - FuseScope
+    - parity
+    kubeVersion: '>=1.27.0-0'
+    maintainers:
+    - name: FuseOne
+      url: https://github.com/fuseone-io
+    name: fusescope-parity
+    sources:
+    - https://github.com/fuseone-io/fusescope
+    - https://github.com/fuseone-io/fusescope-charts
+    type: application
+    urls:
+    - https://github.com/fuseone-io/fusescope-charts/releases/download/fusescope-parity-0.1.0/fusescope-parity-0.1.0.tgz
+    version: 0.1.0
   k8s-infra:
   - apiVersion: v2
     appVersion: 0.139.0
@@ -1683,4 +1708,4 @@ entries:
     urls:
     - https://github.com/fuseone-io/fusescope-charts/releases/download/zookeeper-0.0.1/zookeeper-0.0.1.tgz
     version: 0.0.1
-generated: "2026-11-11T13:58:39.373957178Z"
+generated: "2026-11-11T15:07:12.180466853Z"
