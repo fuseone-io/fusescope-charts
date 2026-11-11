@@ -1,0 +1,19 @@
+apiVersion: v2
+name: fusescope-parity
+version: 0.1.0
+appVersion: "0.0.0"
+description: FuseScope parity (D5), the trace views compared between ClickHouse and fusescope-engine in staging. Staging only; never part of a production release.
+type: application
+kubeVersion: ">=1.27.0-0"
+home: https://github.com/fuseone-io/fusescope
+sources:
+  - https://github.com/fuseone-io/fusescope
+  - https://github.com/fuseone-io/fusescope-charts
+keywords:
+  - FuseScope
+  - parity
+maintainers:
+  - name: FuseOne
+    url: https://github.com/fuseone-io
+annotations:
+  fusescope.io/status: experimental

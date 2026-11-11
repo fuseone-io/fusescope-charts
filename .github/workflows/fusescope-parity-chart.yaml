@@ -1,0 +1,44 @@
+name: FuseScope parity chart
+
+# The parity chart is not in ct.yaml: an install needs Secrets, a tenants
+# file and a second namespace a kind cluster does not have. This checks what
+# it renders instead: RBAC, hardening, schedules, egress and refusals.
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - charts/fusescope-parity/**
+      - scripts/fusescope-parity-chart-check.sh
+      - .github/workflows/fusescope-parity-chart.yaml
+  push:
+    branches:
+      - main
+    paths:
+      - charts/fusescope-parity/**
+      - scripts/fusescope-parity-chart-check.sh
+      - .github/workflows/fusescope-parity-chart.yaml
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
+        with:
+          version: v3.12.1
+          checksum-policy: required
+      - name: install kubeconform
+        run: |
+          curl -fsSL -o kubeconform.tar.gz "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM}/kubeconform-linux-amd64.tar.gz"
+          echo "${KUBECONFORM_SHA256}  kubeconform.tar.gz" | sha256sum -c -
+          sudo tar -xzf kubeconform.tar.gz -C /usr/local/bin kubeconform
+        env:
+          KUBECONFORM: v0.7.0
+          KUBECONFORM_SHA256: c31518ddd122663b3f3aa874cfe8178cb0988de944f29c74a0b9260920d115d3
+      - run: scripts/fusescope-parity-chart-check.sh

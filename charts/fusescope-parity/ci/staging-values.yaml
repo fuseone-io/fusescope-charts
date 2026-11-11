@@ -1,0 +1,125 @@
+# The shape of a staging release. Every value is fictitious; the real ones
+# live in fusescope-infra.
+image:
+  repository: ghcr.io/example/fusescope-parity
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+build:
+  backendCommit: "0000000000000000000000000000000000000000"
+  engineVersion: "0.0.0"
+tenants:
+  configMap: parity-tenants
+secrets:
+  engineClient: parity-engine-client
+  clickhouse: parity-clickhouse
+  pushgateway: parity-pushgateway
+  prometheus: parity-prometheus
+  audit: parity-audit
+engine:
+  endpoint: fusescope-engine-flight.fusescope.svc:8815
+  serverName: fusescope-engine-flight
+clickhouse:
+  cluster: cluster
+bucket:
+  name: parity-staging.example.com
+  kmsKeyId: arn:aws:kms:us-east-1:000000000000:key/00000000-0000-0000-0000-000000000000
+pushgateway:
+  url: https://pushgateway.monitoring.svc:9091
+health:
+  url: https://prometheus.monitoring.svc:9090
+  exporters: [clickhousetraces, otlp/engine]
+investigate:
+  issuer: https://idp.example.com
+  group: staging-oncall
+  auditEndpoint: https://parity-audit-collector.audit.svc:4318
+oncall:
+  group: oidc:staging-oncall
+serviceAccounts:
+  run:
+    annotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::000000000000:role/parity-run
+  investigate:
+    annotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::000000000000:role/parity-investigate
+egress:
+  dns:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+  apiServer:
+    - to:
+        - ipBlock: {cidr: 10.0.0.0/28}
+      ports:
+        - {protocol: TCP, port: 443}
+  engine:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: fusescope
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: fusescope-engine
+              app.kubernetes.io/component: querier
+      ports:
+        - {protocol: TCP, port: 8815}
+  clickhouse:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: fusescope
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: clickhouse
+      ports:
+        - {protocol: TCP, port: 9440}
+  bucket:
+    - to:
+        - ipBlock: {cidr: 10.0.16.0/28}
+      ports:
+        - {protocol: TCP, port: 443}
+  sts:
+    - to:
+        - ipBlock: {cidr: 10.0.16.16/28}
+      ports:
+        - {protocol: TCP, port: 443}
+  prometheus:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - {protocol: TCP, port: 9090}
+  pushgateway:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: pushgateway
+      ports:
+        - {protocol: TCP, port: 9091}
+  audit:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: audit
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: parity-audit-collector
+      ports:
+        - {protocol: TCP, port: 4318}
+  idp:
+    - to:
+        - ipBlock: {cidr: 10.0.16.32/28}
+      ports:
+        - {protocol: TCP, port: 443}

@@ -1,0 +1,162 @@
+# The parity of D5, run in staging: an hourly and a daily round, a daily
+# cleanup of expired run keys, and an investigation pod held at zero
+# replicas. Nothing here is a real value: a staging release takes its
+# values from fusescope-infra.
+
+image:
+  # Required, with digest: the image is pulled by digest only and a tag is
+  # refused, since a tag can move after the signature was checked.
+  repository: ""
+  # sha256:<64 hex>, the index digest parity-image.yaml signed.
+  digest: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# What a round records of what it compared, in its report. Required: the
+# backend commit the image was built from (40 hex) and the engine version.
+build:
+  backendCommit: ""
+  engineVersion: ""
+
+# The namespace that holds only the run keys. The parity creates them, the
+# cleanup lists and deletes them, on-call reads them.
+runKeys:
+  namespace: parity-run-keys
+  # How long a key lives before the cleanup deletes it.
+  expiry: 2160h
+
+# The tenants file D1 maintains, in a ConfigMap of the release's namespace.
+tenants:
+  configMap: ""
+  key: tenants.yaml
+
+# Secrets created outside the chart, in the release's namespace.
+secrets:
+  # tls.crt and tls.key (the parity's client identity on the engine),
+  # ca.crt (the engine's CA) and jwt.pem (the key the parity signs tenant
+  # tokens with, under its own kid).
+  engineClient: ""
+  # dsn: the ClickHouse DSN of a readonly = 1 user.
+  clickhouse: ""
+  # token, each.
+  pushgateway: ""
+  prometheus: ""
+  audit: ""
+
+engine:
+  # host:port of the engine's Flight SQL.
+  endpoint: ""
+  # The name the engine's certificate carries.
+  serverName: ""
+  # Empty takes the backend's defaults; the engine accepts one issuer.
+  jwtIssuer: ""
+  jwtAudience: ""
+
+clickhouse:
+  cluster: ""
+
+bucket:
+  name: ""
+  # The KMS key the requeue is written under.
+  kmsKeyId: ""
+
+pushgateway:
+  url: ""
+
+health:
+  # The staging Prometheus the dual-write health is read from.
+  url: ""
+  instanceLabel: pod
+  exporters: []
+
+investigate:
+  # The company IdP; the client is public, its audience this one.
+  issuer: ""
+  audience: fusescope-parity-investigate
+  group: ""
+  # The dedicated audit collector's OTLP HTTP endpoint.
+  auditEndpoint: ""
+
+# The group, as the cluster's OIDC names it, that may read run keys, scale
+# the investigation pod and exec into it.
+oncall:
+  group: ""
+
+# Times are UTC. The hourly round skips every hour whose run could overlap
+# the daily one: each side spans startingDeadlineSeconds +
+# activeDeadlineSeconds + marginSeconds from its scheduled minute.
+marginSeconds: 300
+# The settings' round section, shared by both rounds and the investigation,
+# which plans a window again as its round did: deadline, retry_wait,
+# concurrency, max_pairs, max_rows, windowed_above (with max_rows),
+# operations_limit, list_limit. Each round sets only its budget, below.
+round: {}
+rounds:
+  hourly:
+    minute: 5
+    # The round's own budget; activeDeadlineSeconds must exceed it by at
+    # least marginSeconds.
+    budgetSeconds: 1200
+    startingDeadlineSeconds: 300
+    activeDeadlineSeconds: 1800
+    resources: {}
+  daily:
+    hour: 3
+    minute: 0
+    budgetSeconds: 5400
+    startingDeadlineSeconds: 600
+    activeDeadlineSeconds: 7200
+    resources: {}
+cleanup:
+  hour: 12
+  minute: 30
+  startingDeadlineSeconds: 600
+  activeDeadlineSeconds: 600
+  resources: {}
+investigation:
+  resources: {}
+
+# The local directory a report is built in before its upload.
+reportsSizeLimit: 1Gi
+
+# Workload identity per ServiceAccount, for example
+# eks.amazonaws.com/role-arn.
+serviceAccounts:
+  run:
+    annotations: {}
+  cleanup:
+    annotations: {}
+  investigate:
+    annotations: {}
+
+# Egress, by destination. Each is a list of NetworkPolicy egress rules, every
+# one with its peers and ports. A peer is an ipBlock no wider than /8 (IPv4)
+# or /32 (IPv6), or a podSelector by matchLabels, with a namespaceSelector by
+# matchLabels for another namespace; every port names its port. A workload gets only the destinations it uses:
+#   run:         dns apiServer engine clickhouse bucket sts prometheus pushgateway
+#   cleanup:     dns apiServer
+#   investigate: dns engine clickhouse bucket sts prometheus audit idp
+# With proxy.url set, bucket, sts and idp are reached through it and
+# proxy replaces them.
+egress:
+  dns: []
+  apiServer: []
+  engine: []
+  clickhouse: []
+  bucket: []
+  sts: []
+  prometheus: []
+  pushgateway: []
+  audit: []
+  idp: []
+  proxy: []
+
+proxy:
+  # https://host:port of a fixed egress proxy; empty for VPC endpoints.
+  url: ""
+  # Hosts reached directly; the cluster's own are added.
+  noProxy: ""
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

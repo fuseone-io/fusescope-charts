@@ -55,6 +55,13 @@ any two of them alike:
 A pod reads its Secrets at start: after rotating one, change the role's
 `rolloutTokens` entry or `kubectl rollout restart` it.
 
+In staging, the parity (`fusescope-parity` chart) queries the engine as a
+client of its own. It needs no change here:
+- its client CA is appended to `public-ca.crt`;
+- its public key, under its own `kid`, goes in `jwks.json`.
+
+It signs with `auth.issuer`, the one issuer the engine accepts.
+
 `ci/staging-values.yaml` is the shape of a staging release and
 `ci/dev-values.yaml` of a development one. Under the `fusescope` chart the
 same values sit under `engine`.

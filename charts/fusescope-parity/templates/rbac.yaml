@@ -1,0 +1,41 @@
+{{- $name := include "fsp.name" . -}}
+{{- $keys := .Values.runKeys.namespace -}}
+{{- $grants := list
+  (dict "role" "run-keys-writer" "namespace" $keys "subject" (dict "kind" "ServiceAccount" "name" (printf "%s-run" $name) "namespace" .Release.Namespace)
+    "rules" (list (dict "apiGroups" (list "") "resources" (list "secrets") "verbs" (list "create"))))
+  (dict "role" "run-keys-cleanup" "namespace" $keys "subject" (dict "kind" "ServiceAccount" "name" (printf "%s-cleanup" $name) "namespace" .Release.Namespace)
+    "rules" (list (dict "apiGroups" (list "") "resources" (list "secrets") "verbs" (list "list" "delete"))))
+  (dict "role" "run-keys-oncall" "namespace" $keys "subject" (dict "kind" "Group" "apiGroup" "rbac.authorization.k8s.io" "name" .Values.oncall.group)
+    "rules" (list (dict "apiGroups" (list "") "resources" (list "secrets") "verbs" (list "get"))))
+  (dict "role" "investigate-oncall" "namespace" .Release.Namespace "subject" (dict "kind" "Group" "apiGroup" "rbac.authorization.k8s.io" "name" .Values.oncall.group)
+    "rules" (list
+      (dict "apiGroups" (list "apps") "resources" (list "statefulsets/scale") "resourceNames" (list (printf "%s-investigate" $name)) "verbs" (list "get" "patch"))
+      (dict "apiGroups" (list "") "resources" (list "pods") "resourceNames" (list (printf "%s-investigate-0" $name)) "verbs" (list "get"))
+      (dict "apiGroups" (list "") "resources" (list "pods/exec") "resourceNames" (list (printf "%s-investigate-0" $name)) "verbs" (list "create"))))
+-}}
+{{- range $g := $grants }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}-{{ $g.role }}
+  namespace: {{ $g.namespace }}
+  labels:
+    {{- include "fsp.labels" $ | nindent 4 }}
+rules:
+  {{- toYaml $g.rules | nindent 2 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}-{{ $g.role }}
+  namespace: {{ $g.namespace }}
+  labels:
+    {{- include "fsp.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}-{{ $g.role }}
+subjects:
+  - {{- toYaml $g.subject | nindent 4 }}
+{{- end }}
