@@ -305,6 +305,16 @@ refuse -f "$staging" --set bucket.caConfigMap=parity-bucket-ca
 refuse -f "$store" --set trust.caConfigMap=Parity_Trust
 refuse -f "$store" --set trust.caConfigMap=-parity-trust
 refuse -f "$store" --set trust.unknown=1
+refuse -f "$store" --set trust.caConfigMap=a..b
+refuse -f "$store" --set trust.caConfigMap=parity-trust.
+refuse -f "$store" --set trust.caConfigMap=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+refuse -f "$store" --set trust.caConfigMap=parity.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+refuse -f "$store" --set trust.caConfigMap=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+refuse -f "$store" --set bucket.caConfigMap=a..b
+refuse -f "$store" --set bucket.caConfigMap=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+# The edges a name may reach: a 63-character label, and dots between labels.
+helm template check "$chart" --namespace parity -f "$store" --set trust.caConfigMap=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.parity.trust >/dev/null
+helm template check "$chart" --namespace parity -f "$store" --set bucket.caConfigMap=ca.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa >/dev/null
 refuse -f "$staging" --set rounds.daily.hour=24
 refuse -f "$staging" --set rounds.hourly.minute=60
 refuse -f "$staging" --set marginSeconds=-1
