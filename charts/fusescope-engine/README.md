@@ -41,14 +41,31 @@ any two of them alike:
   `FS_BUCKET_SECRET_KEY`, each its own Postgres user and bucket identity.
   `secrets.migrator` holds the one user allowed DDL, for the migration Job;
   no role migrates.
-- With `tls.enabled` (the default): `tls.clientCASecret` with
-  `public-ca.crt` (the backend's client CAs) and `hot-ca.crt` (the
-  queriers'), two sets of self-signed roots sharing no key; and
+- With `tls.enabled` (the default), `tls.clientCASecret` holds three sets of
+  client CAs. They are self-signed roots, and no two share a key:
+  - `public-ca.crt` holds the backend's and the parity's client CAs, for
+    Flight SQL;
+  - `hot-ca.crt` holds the queriers' client CA, for the hot window;
+  - `ingest-ca.crt` holds the collectors' client CA, for OTLP ingest. Only the
+    ingester's configuration names it.
+
+  Each key is projected by name. The ingester gets all three, the querier
+  `public-ca.crt` and `hot-ca.crt`, and the compactor none. A Secret missing
+  a key keeps the pod from starting.
+- Also with `tls.enabled`, each serving role has its own identity,
   `tls.identities.ingester` and `tls.identities.querier`, each with
-  `tls.crt` and `tls.key`. The ingester's names
-  `*.<release>-ingester-hot.<namespace>.svc` and must not chain to
-  `hot-ca.crt`; the querier's names `<release>-flight` and is the one
-  identity issued under `hot-ca.crt`. The compactor gets none.
+  `tls.crt` and `tls.key`:
+  - the ingester's names `*.<release>-ingester-hot.<namespace>.svc` and
+    `<release>-ingest`, and must not chain to `hot-ca.crt`. A collector
+    trusts the CA that issued it;
+  - the querier's names `<release>-flight` and is the one identity issued
+    under `hot-ca.crt`. A Flight SQL client trusts that CA;
+  - the compactor gets none.
+- **Engine version:** this chart needs engine 0.0.2 or later.
+  - From 0.0.2, an ingester with TLS does not start without
+    `ingest_client_ca`.
+  - Engine 0.0.1 refuses the key.
+  - `appVersion` is 0.0.3.
 - With `auth.mode=jwt` (the default, which requires TLS):
   `auth.jwksConfigMap`, a ConfigMap with `jwks.json`, and `auth.issuer`.
 

@@ -42,7 +42,7 @@ app.kubernetes.io/component: {{ .role }}
 {{- end -}}
 {{- $_ := required "bucket.name" $v.bucket.name -}}
 {{- if $v.tls.enabled -}}
-{{- $_ := required "tls.clientCASecret: the Secret with public-ca.crt and hot-ca.crt" $v.tls.clientCASecret -}}
+{{- $_ := required "tls.clientCASecret: the Secret with public-ca.crt, hot-ca.crt and ingest-ca.crt" $v.tls.clientCASecret -}}
 {{- $_ := required "tls.identities.ingester: the ingester's Secret with tls.crt and tls.key" $v.tls.identities.ingester -}}
 {{- $_ := required "tls.identities.querier: the querier's Secret with tls.crt and tls.key" $v.tls.identities.querier -}}
 {{- end -}}
@@ -114,6 +114,9 @@ cert = "/etc/fusescope/tls/tls.crt"
 key = "/etc/fusescope/tls/tls.key"
 public_client_ca = "/etc/fusescope/ca/public-ca.crt"
 hot_client_ca = "/etc/fusescope/ca/hot-ca.crt"
+{{- if eq .role "ingester" }}
+ingest_client_ca = "/etc/fusescope/ca/ingest-ca.crt"
+{{- end }}
 reload_interval_secs = {{ $v.tls.reloadIntervalSecs }}
 {{- else }}
 enabled = false
@@ -262,9 +265,19 @@ volumes:
   - name: tls
     secret:
       secretName: {{ index $v.tls.identities .role }}
+  # Each key named, so a pod whose Secret lacks one does not start.
   - name: client-ca
     secret:
       secretName: {{ $v.tls.clientCASecret }}
+      items:
+        - key: public-ca.crt
+          path: public-ca.crt
+        - key: hot-ca.crt
+          path: hot-ca.crt
+        {{- if eq .role "ingester" }}
+        - key: ingest-ca.crt
+          path: ingest-ca.crt
+        {{- end }}
   {{- end }}
   {{- if include "fse.jwt" . }}
   - name: jwt

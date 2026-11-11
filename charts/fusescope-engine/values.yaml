@@ -68,9 +68,12 @@ bucket:
 
 tls:
   enabled: true
-  # Secret with public-ca.crt (the backend's client CAs, Flight SQL) and
-  # hot-ca.crt (the queriers' client CAs, the hot window): roots sharing no
-  # key. Shared by the roles; it holds no private key.
+  # Secret with three sets of client CAs, self-signed roots sharing no key:
+  # public-ca.crt (the backend's and the parity's, Flight SQL), hot-ca.crt
+  # (the queriers', the hot window) and ingest-ca.crt (the collectors', OTLP
+  # ingest, the ingesters alone). Each key is projected by name, so a
+  # missing one keeps the pod from starting. Shared by the roles; it holds no
+  # private key.
   clientCASecret: ""
   # Each role's identity, a Secret with tls.crt and tls.key. The ingester's
   # serves the hot window and names *.<release>-ingester-hot.<namespace>.svc;

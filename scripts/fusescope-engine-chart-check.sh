@@ -90,6 +90,28 @@ if len(set(v for k, v in accounts.items() if k != "migrator")) != 3:
 if identities["compactor"] is not None:
     fail("the compactor has a TLS identity")
 tls_on = "enabled = true" in config["querier.toml"]
+# The ingester alone verifies the collector's client certificates, against ingest-ca.crt; no other
+# role names it, and with TLS off no role does.
+ingest_ca = 'ingest_client_ca = "/etc/fusescope/ca/ingest-ca.crt"'
+for role in ("ingester", "querier", "compactor"):
+    has = "ingest_client_ca" in config[f"{role}.toml"]
+    if has != (tls_on and role == "ingester"):
+        fail(f"{role} names ingest_client_ca: {has}")
+if tls_on and ingest_ca not in config["ingester.toml"]:
+    fail("the ingester's ingest_client_ca is not /etc/fusescope/ca/ingest-ca.crt")
+want_items = {
+    "ingester": ["public-ca.crt", "hot-ca.crt", "ingest-ca.crt"],
+    "querier": ["public-ca.crt", "hot-ca.crt"],
+}
+for role, pod in pods.items():
+    cas = [v for v in pod["volumes"] if v["name"] == "client-ca"]
+    if not tls_on or role == "compactor":
+        if cas:
+            fail(f"{role} mounts client CAs without TLS")
+        continue
+    items = [i["key"] for i in cas[0]["secret"].get("items", [])]
+    if items != want_items[role] or any(i["key"] != i["path"] for i in cas[0]["secret"]["items"]):
+        fail(f"{role} projects client CAs {items}, not {want_items[role]}")
 if tls_on:
     cas = {v["secret"]["secretName"] for pod in pods.values() for v in pod["volumes"] if v["name"] == "client-ca"}
     named = [identities["ingester"], identities["querier"], *cas, *secrets.values()]

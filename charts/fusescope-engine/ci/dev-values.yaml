@@ -2,7 +2,7 @@
 # S3-compatible store over http.
 image:
   repository: registry.example.com/fusescope-engine
-  tag: "0.0.1"
+  tag: "0.0.3"
 secrets:
   ingester: fusescope-engine-ingester
   querier: fusescope-engine-querier
