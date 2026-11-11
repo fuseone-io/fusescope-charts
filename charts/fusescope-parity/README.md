@@ -76,6 +76,15 @@ namespace, and they must all differ:
 - `secrets.pushgateway`, `secrets.prometheus`, `secrets.audit`: `token`
   each.
 - `tenants.configMap`: the tenants file D1 maintains.
+- `secrets.bucket`, optional, for an S3-compatible store without workload
+  identity:
+  - `credentials`, an AWS shared credentials file;
+  - with `bucket.caBundle`, also `ca.crt`, the CA the store's certificate
+    chains to.
+
+  It is mounted for the rounds and the investigation only, never for the
+  cleanup. With it, `sts` is not a destination.
+  `bucket.endpoint` (`https://` only) and `bucket.region` name the store.
 
 ## Egress
 
@@ -97,6 +106,8 @@ destinations it uses:
 
   An empty peer, an empty selector or a selector without labels is
   refused, since each reaches more than it names.
+- **A store of its own:** with `bucket.endpoint`, `egress.bucket` names it,
+  ideally as a `/32`; `proxy.url` is refused beside it.
 - **Outside the cluster:** S3, STS and the IdP are reached through VPC
   endpoints, or through the fixed egress proxy `proxy.url`.
   - With the proxy, `egress.proxy` replaces `bucket`, `sts` and `idp`.

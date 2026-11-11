@@ -1,6 +1,7 @@
 {{- $v := .Values -}}
 {{- $base := dict "Values" $v "Release" .Release "Chart" .Chart -}}
 {{- $runVolumes := list "tenants" "engineClient" "clickhouse" "pushgateway" "prometheus" "reports" -}}
+{{- if $v.secrets.bucket }}{{ $runVolumes = append $runVolumes "bucket" }}{{ end -}}
 {{- $jobs := list
   (dict "name" "run-hourly" "class" "hourly" "schedule" (printf "%d %s * * *" (int $v.rounds.hourly.minute) (include "fsp.hourlyHours" .)) "spec" $v.rounds.hourly)
   (dict "name" "run-daily" "class" "daily" "schedule" (printf "%d %d * * *" (int $v.rounds.daily.minute) (int $v.rounds.daily.hour)) "spec" $v.rounds.daily)

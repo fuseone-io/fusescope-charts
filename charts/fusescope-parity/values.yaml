@@ -42,6 +42,11 @@ secrets:
   pushgateway: ""
   prometheus: ""
   audit: ""
+  # credentials: an AWS shared credentials file, for a store without
+  # workload identity; with bucket.caBundle, also ca.crt, the store's CA.
+  # Mounted for the rounds and the investigation only; with it, sts is not
+  # reached.
+  bucket: ""
 
 engine:
   # host:port of the engine's Flight SQL.
@@ -59,6 +64,13 @@ bucket:
   name: ""
   # The KMS key the requeue is written under.
   kmsKeyId: ""
+  # Empty for AWS S3; https://host:port of another S3-compatible store.
+  endpoint: ""
+  # Empty takes the region workload identity sets.
+  region: ""
+  # Whether secrets.bucket holds ca.crt, the CA the store's certificate
+  # chains to.
+  caBundle: false
 
 pushgateway:
   url: ""
@@ -136,6 +148,7 @@ serviceAccounts:
 #   run:         dns apiServer engine clickhouse bucket sts prometheus pushgateway
 #   cleanup:     dns apiServer
 #   investigate: dns engine clickhouse bucket sts prometheus audit idp
+# With secrets.bucket, sts is not reached.
 # With proxy.url set, bucket, sts and idp are reached through it and
 # proxy replaces them.
 egress:

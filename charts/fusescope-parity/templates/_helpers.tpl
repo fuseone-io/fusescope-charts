@@ -18,7 +18,8 @@ app.kubernetes.io/component: {{ .component }}
 {{/* The destinations each workload reaches. */}}
 {{- define "fsp.destinations" -}}
 {{- $direct := dict "run" (list "dns" "apiServer" "engine" "clickhouse" "prometheus" "pushgateway") "cleanup" (list "dns" "apiServer") "investigate" (list "dns" "engine" "clickhouse" "prometheus" "audit") -}}
-{{- $outside := dict "run" (list "bucket" "sts") "cleanup" (list) "investigate" (list "bucket" "sts" "idp") -}}
+{{- $sts := ternary (list) (list "sts") (not (empty .Values.secrets.bucket)) -}}
+{{- $outside := dict "run" (concat (list "bucket") $sts) "cleanup" (list) "investigate" (concat (list "bucket") $sts (list "idp")) -}}
 {{- $names := index $direct .component -}}
 {{- $far := index $outside .component -}}
 {{- if and .Values.proxy.url $far -}}
@@ -64,9 +65,15 @@ app.kubernetes.io/component: {{ .component }}
 {{- range $key := list "engineClient" "clickhouse" "pushgateway" "prometheus" "audit" -}}
 {{- $_ := required (printf "secrets.%s" $key) (index $v.secrets $key) -}}
 {{- end -}}
-{{- $names := values (pick $v.secrets "engineClient" "clickhouse" "pushgateway" "prometheus" "audit") -}}
+{{- $names := compact (values (pick $v.secrets "engineClient" "clickhouse" "pushgateway" "prometheus" "audit" "bucket")) -}}
 {{- if ne (len $names) (len (uniq $names)) -}}
 {{- fail (printf "every Secret must differ, since each workload mounts only some of them: %v" $names) -}}
+{{- end -}}
+{{- if and $v.bucket.caBundle (not $v.secrets.bucket) -}}
+{{- fail "bucket.caBundle: the store's CA comes in secrets.bucket" -}}
+{{- end -}}
+{{- if and $v.bucket.endpoint $v.proxy.url -}}
+{{- fail "bucket.endpoint: a store of its own is reached directly, not through proxy.url" -}}
 {{- end -}}
 {{- $_ := required "tenants.configMap: the tenants file D1 maintains" $v.tenants.configMap -}}
 {{- $_ := required "engine.endpoint" $v.engine.endpoint -}}
@@ -208,6 +215,24 @@ containers:
       - name: PARITY_ENGINE_VERSION
         value: {{ . | quote }}
       {{- end }}
+      {{- if ne .component "cleanup" }}
+      {{- with $v.bucket.endpoint }}
+      - name: AWS_ENDPOINT_URL_S3
+        value: {{ . | quote }}
+      {{- end }}
+      {{- with $v.bucket.region }}
+      - name: AWS_REGION
+        value: {{ . | quote }}
+      {{- end }}
+      {{- if $v.secrets.bucket }}
+      - name: AWS_SHARED_CREDENTIALS_FILE
+        value: /etc/parity/bucket/credentials
+      {{- end }}
+      {{- if $v.bucket.caBundle }}
+      - name: AWS_CA_BUNDLE
+        value: /etc/parity/bucket/ca.crt
+      {{- end }}
+      {{- end }}
       {{- if and $v.proxy.url (has "proxy" (splitList " " (include "fsp.destinations" .))) }}
       - name: HTTPS_PROXY
         value: {{ $v.proxy.url | quote }}
@@ -232,7 +257,7 @@ containers:
         mountPath: /etc/parity/tenants
         readOnly: true
       {{- end }}
-      {{- range $name := list "engineClient" "clickhouse" "pushgateway" "prometheus" "audit" }}
+      {{- range $name := list "engineClient" "clickhouse" "pushgateway" "prometheus" "audit" "bucket" }}
       {{- if has $name $.volumes }}
       - name: {{ $name | kebabcase }}
         mountPath: /etc/parity/{{ $name | replace "engineClient" "engine" }}
@@ -255,7 +280,7 @@ volumes:
         - key: {{ $v.tenants.key }}
           path: tenants.yaml
   {{- end }}
-  {{- range $name := list "engineClient" "clickhouse" "pushgateway" "prometheus" "audit" }}
+  {{- range $name := list "engineClient" "clickhouse" "pushgateway" "prometheus" "audit" "bucket" }}
   {{- if has $name $.volumes }}
   - name: {{ $name | kebabcase }}
     secret:

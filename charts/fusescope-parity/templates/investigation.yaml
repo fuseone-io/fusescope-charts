@@ -1,6 +1,7 @@
 {{- $v := .Values -}}
 {{- $base := dict "Values" $v "Release" .Release "Chart" .Chart -}}
 {{- $volumes := list "tenants" "engineClient" "clickhouse" "prometheus" "audit" -}}
+{{- if $v.secrets.bucket }}{{ $volumes = append $volumes "bucket" }}{{ end -}}
 # Held at zero replicas: on-call scales it to one, execs `parity investigate`
 # into <name>-investigate-0, and scales it back. A StatefulSet, so the pod's
 # name is fixed and RBAC can name it.

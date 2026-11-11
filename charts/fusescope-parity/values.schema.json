@@ -90,6 +90,9 @@
         },
         "audit": {
           "type": "string"
+        },
+        "bucket": {
+          "type": "string"
         }
       }
     },
@@ -129,6 +132,17 @@
         },
         "kmsKeyId": {
           "type": "string"
+        },
+        "endpoint": {
+          "type": "string",
+          "pattern": "^(https://.+)?$"
+        },
+        "region": {
+          "type": "string",
+          "pattern": "^([a-z0-9-]+)?$"
+        },
+        "caBundle": {
+          "type": "boolean"
         }
       }
     },
