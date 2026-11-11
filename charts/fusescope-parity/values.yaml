@@ -61,6 +61,14 @@ engine:
 clickhouse:
   cluster: ""
 
+# The CAs the parity's HTTPS clients trust (Prometheus, Pushgateway, audit,
+# the IdP, the S3 SDK, ClickHouse over TLS): a ConfigMap whose key
+# ca-bundle.crt becomes SSL_CERT_FILE for the rounds and the investigation.
+# It replaces the system's roots, so a public endpoint needs its roots in the
+# bundle too. Empty keeps the system's.
+trust:
+  caConfigMap: ""
+
 bucket:
   name: ""
   # The KMS key the requeue is written under.

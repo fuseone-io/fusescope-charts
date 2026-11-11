@@ -20,6 +20,8 @@ secrets:
 engine:
   endpoint: 192.0.2.20:8815
   serverName: fusescope-engine-flight
+trust:
+  caConfigMap: parity-trust
 bucket:
   name: parity-demo
   kmsKeyId: 00000000-0000-0000-0000-000000000000

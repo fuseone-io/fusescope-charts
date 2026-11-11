@@ -126,6 +126,17 @@
         }
       }
     },
+    "trust": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "caConfigMap": {
+          "type": "string",
+          "maxLength": 253,
+          "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?)?$"
+        }
+      }
+    },
     "bucket": {
       "type": "object",
       "additionalProperties": false,
@@ -145,7 +156,9 @@
           "pattern": "^([a-z0-9-]+)?$"
         },
         "caConfigMap": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 253,
+          "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?)?$"
         }
       }
     },

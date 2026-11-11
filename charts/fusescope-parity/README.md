@@ -90,6 +90,24 @@ namespace, and they must all differ:
   `bucket.caConfigMap`, a ConfigMap with `ca.crt`, holds the CA its
   certificate chains to; it is not a secret, so the two workloads share it.
 
+## Trust
+
+`trust.caConfigMap` names a ConfigMap whose `ca-bundle.crt` becomes
+`SSL_CERT_FILE` for the rounds and the investigation, never for the cleanup.
+
+- **Clients covered:** it is what the parity's HTTPS clients trust, for a
+  deployment whose endpoints chain to a CA of its own:
+  - Prometheus, the Pushgateway, the audit pipeline and the IdP;
+  - the S3 SDK;
+  - ClickHouse over TLS.
+
+  The engine is not one of them: it keeps `ca.crt` of `secrets.engineClient`.
+- **Replaces the system's roots:** a public endpoint needs its roots in the
+  bundle too.
+- **Checked:** only the ConfigMap's name. Helm cannot see whether the
+  ConfigMap exists or holds `ca-bundle.crt`. Without either, the pod does
+  not start.
+
 ## Store requirements
 
 A store other than AWS S3 is accepted only if it honours what the
