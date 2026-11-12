@@ -7,6 +7,6 @@ dependencies:
   version: 0.0.3
 - name: fusescope-engine
   repository: file://../fusescope-engine
-  version: 0.2.0
-digest: sha256:a310fd19dc87edd5910e0ee2ca4df1a0cb46c02c300696a831060826cd7b5f78
-generated: "2026-11-11T15:51:20.24123529-03:00"
+  version: 0.3.0
+digest: sha256:fb2d67afa3f2d1dc6cf90acd1c841bcbc720c3ec6ba8b024c141fc272bf7212e
+generated: "2026-11-12T00:57:10.685542951-03:00"

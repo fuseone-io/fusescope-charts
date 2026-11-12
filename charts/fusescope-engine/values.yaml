@@ -75,6 +75,14 @@ tls:
   # missing one keeps the pod from starting. Shared by the roles; it holds no
   # private key.
   clientCASecret: ""
+  # ConfigMap with ca-bundle.crt, the CA the ingesters' hot window
+  # certificates chain to, which the querier verifies them against.
+  # Mounted on the querier alone, as SSL_CERT_FILE: it replaces the system's
+  # roots for every TLS client of the querier (hot window, bucket, catalog),
+  # so the bundle must also hold the roots those need. Its one key is
+  # projected by name, so a ConfigMap without it keeps the querier from
+  # starting. Required with tls.enabled.
+  hotServerCAConfigMap: ""
   # Each role's identity, a Secret with tls.crt and tls.key. The ingester's
   # serves the hot window and names *.<release>-ingester-hot.<namespace>.svc;
   # it must not chain to hot-ca.crt, or an ingester could scan the others.
