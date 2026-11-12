@@ -5,7 +5,6 @@ templates:
   - templates/fusescope-collector/deployment.yaml
   - templates/fusescope-collector/service.yaml
   - templates/fusescope-collector/service-otlp-compat.yaml
-  - templates/fusescope-collector/ingress-otlp-compat.yaml
   - templates/fusescope-collector/serviceaccount.yaml
   - templates/fusescope-collector/ingress.yaml
   - templates/fusescope-collector/certificates.yaml
@@ -23,6 +22,9 @@ capabilities:
     - networking.k8s.io/v1
     - cert-manager.io/v1
     - autoscaling/v2
+
+values:
+  - ./values/otlp-insecure.yaml
 
 tests:
   # The earlier collector was removed in 0.165.0: its keys left in a release's values are
@@ -109,19 +111,19 @@ tests:
     asserts:
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "\\nreceivers:\\n  otlp:\\n    protocols:\\n      grpc:\\n        endpoint: 0.0.0.0:4317\\n      http:\\n        endpoint: 0.0.0.0:4318\\n"
+          pattern: "\\nreceivers:\\n(  #[^\\n]*\\n)*  otlp/insecure:\\n    protocols:\\n      grpc:\\n        endpoint: 0.0.0.0:4317\\n      http:\\n        endpoint: 0.0.0.0:4318\\n"
       - notMatchRegex:
           path: data["config.yaml"]
           pattern: "\\n  rum:\\n"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "    traces:\\n      receivers: \\[otlp\\]\\n      processors: \\[memory_limiter, signozspanmapper, signozllmpricing\\]\\n      exporters: \\[fusescope_clickhouse, fusescope_spanmetrics, fusescope_meter\\]\\n"
+          pattern: "    traces:\\n      receivers: \\[otlp/insecure\\]\\n      processors: \\[memory_limiter, signozspanmapper, signozllmpricing\\]\\n      exporters: \\[fusescope_clickhouse, fusescope_spanmetrics, fusescope_meter\\]\\n"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "    logs:\\n      receivers: \\[otlp\\]\\n      processors: \\[memory_limiter\\]\\n      exporters: \\[fusescope_clickhouse, fusescope_meter\\]\\n"
+          pattern: "    logs:\\n      receivers: \\[otlp/insecure\\]\\n      processors: \\[memory_limiter\\]\\n      exporters: \\[fusescope_clickhouse, fusescope_meter\\]\\n"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "    metrics:\\n      receivers: \\[otlp\\]\\n      processors: \\[memory_limiter\\]\\n      exporters: \\[fusescope_clickhouse, fusescope_meter\\]\\n"
+          pattern: "    metrics:\\n      receivers: \\[otlp/insecure\\]\\n      processors: \\[memory_limiter\\]\\n      exporters: \\[fusescope_clickhouse, fusescope_meter\\]\\n"
       # Span metrics are derived: their own pipeline, not metered.
       - matchRegex:
           path: data["config.yaml"]
@@ -217,18 +219,19 @@ tests:
             app.kubernetes.io/instance: fusescope
             app.kubernetes.io/component: fusescope-collector
 
-  - it: should keep the earlier collector's service ports, type and annotations on the compat Service
+  # NodePort and LoadBalancer are refused with otlp.insecure (collector ADR 0013,
+  # fusescope-collector-otlp-insecure_test.yaml).
+  - it: should keep the earlier collector's service ports and annotations on the compat Service
     template: templates/fusescope-collector/service-otlp-compat.yaml
     set:
       otelCollector.ports.otlp-http.servicePort: 14318
-      otelCollector.ports.otlp.nodePort: 30417
       otelCollector.service:
-        type: NodePort
+        type: ClusterIP
         annotations: {example.com/team: obs}
     asserts:
       - equal:
           path: spec.type
-          value: NodePort
+          value: ClusterIP
       - equal:
           path: metadata.annotations
           value: {example.com/team: obs}
@@ -239,23 +242,19 @@ tests:
               port: 4317
               targetPort: otlp
               protocol: TCP
-              nodePort: 30417
             - name: otlp-http
               port: 14318
               targetPort: otlp-http
               protocol: TCP
 
-  - it: should keep the earlier collector's OTLP ingress routing, to the compat Service
-    template: templates/fusescope-collector/ingress-otlp-compat.yaml
+  # The chart creates no external route to the plaintext receiver (collector ADR 0013).
+  - it: should refuse the earlier collector's OTLP ingress, which would route to the plaintext receiver
+    template: templates/fusescope-collector/service-otlp-compat.yaml
     set:
       otelCollector.ingress.enabled: true
     asserts:
-      - equal:
-          path: spec.rules[0].http.paths[0].backend.service
-          value:
-            name: fusescope-otel-collector
-            port:
-              number: 4318
+      - failedTemplate:
+          errorPattern: "otelCollector.ingress.enabled"
 
   - it: should serve RUM with the ingress role, the token and its certificate and ingress
     set:
@@ -284,15 +283,15 @@ tests:
         template: templates/fusescope-collector/configmap.yaml
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "    traces:\\n      receivers: \\[otlp, rum\\]\\n"
+          pattern: "    traces:\\n      receivers: \\[otlp/insecure, rum\\]\\n"
         template: templates/fusescope-collector/configmap.yaml
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "    logs:\\n      receivers: \\[otlp, rum\\]\\n"
+          pattern: "    logs:\\n      receivers: \\[otlp/insecure, rum\\]\\n"
         template: templates/fusescope-collector/configmap.yaml
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "    metrics:\\n      receivers: \\[otlp\\]\\n"
+          pattern: "    metrics:\\n      receivers: \\[otlp/insecure\\]\\n"
         template: templates/fusescope-collector/configmap.yaml
       # Span metrics are derived: their own pipeline, not metered.
       - matchRegex:
@@ -355,11 +354,11 @@ tests:
       signoz.ingestPolicy.tls.existingSecret: ingest-tls
       fusescopeCollector.rum.enabled: true
       fusescopeCollector.rum.tls.existingSecret: rum-tls
-      fusescopeCollector.otlp.enabled: false
+      fusescopeCollector.otlp.insecure: false
     asserts:
       - notMatchRegex:
           path: data["config.yaml"]
-          pattern: "\\n  otlp:\\n"
+          pattern: "\\n  otlp(/insecure)?:\\n"
       - matchRegex:
           path: data["config.yaml"]
           pattern: "    traces:\\n      receivers: \\[rum\\]\\n"

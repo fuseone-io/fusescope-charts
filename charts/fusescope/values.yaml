@@ -992,8 +992,9 @@ signoz:
     #    hosts:
     #      - signoz.domain.com
   # signoz.ingestionUrl -- (string) OTLP/HTTP URL FuseScope shows in onboarding for sending telemetry (`global.ingestion_url`).
-  # An admin can still override it from the UI.
-  # @default -- "The collector ingress (https when its host has TLS), else http://RELEASE-otel-collector.NAMESPACE.svc:4318"
+  # It only announces an endpoint, for example one with TLS and a key that you expose; the chart does
+  # not create it. An admin can still override it from the UI.
+  # @default -- "With `fusescopeCollector.otlp.insecure`, http://RELEASE-fusescope-otel-collector.NAMESPACE.svc:4318; otherwise none"
   # @section -- SigNoz Networking
   ingestionUrl: ""
   # OpAMP listener with TLS 1.3 for ingress collectors (`rum.ingest_policy`), on which FuseScope
@@ -1220,7 +1221,8 @@ otelCollector:
   # @default -- "otel-collector"
   # @section -- Otel Collector
   name: "otel-collector"
-  # otelCollector.service -- Service configuration for the Otel Collector.
+  # otelCollector.service -- The compatibility Service `RELEASE-fusescope-otel-collector`, rendered
+  # only with `fusescopeCollector.otlp.insecure` (collector ADR 0013).
   # @section -- Otel Collector Networking
   service:
     # otelCollector.service.annotations - Annotations for the Otel Collector service object.
@@ -1229,7 +1231,8 @@ otelCollector:
     # otelCollector.service.labels - Labels for the Otel Collector service object.
     # @default -- {}
     labels: {}
-    # otelCollector.service.type - The service type (`ClusterIP`, `NodePort`, `LoadBalancer`).
+    # otelCollector.service.type - The service type. `NodePort` and `LoadBalancer` are refused with
+    # the plaintext receiver (collector ADR 0013).
     # @default -- "ClusterIP"
     type: ClusterIP
     # otelCollector.service.loadBalancerSourceRanges - Allowed source ranges when service type is `LoadBalancer`.
@@ -1263,10 +1266,12 @@ otelCollector:
       # otelCollector.ports.otlp-http.nodePort - Node port for OTLP HTTP.
       # @default -- ""
       nodePort: ""
-  # otelCollector.ingress -- Ingress configuration for the Otel Collector.
+  # otelCollector.ingress -- Refused when enabled: it routed to the plaintext receiver, and the
+  # chart creates no external route to it (collector ADR 0013). For a public OTLP endpoint, use
+  # TLS and a key and set `signoz.ingestionUrl`.
   # @section -- Otel Collector Networking
   ingress:
-    # otelCollector.ingress.enabled - Enable ingress controller resource.
+    # otelCollector.ingress.enabled - Refused when true (collector ADR 0013).
     # @default -- false
     enabled: false
     # otelCollector.ingress.className - Ingress class name.
@@ -1451,9 +1456,11 @@ mcpServer:
 
 # @section -- FuseScope Collector
 fusescopeCollector:
-  # fusescopeCollector.enabled -- Install the FuseScope collector, the chart's OTLP collector: it
-  # receives OTLP (`otlp`), and Real User Monitoring when `rum.enabled`, and writes ClickHouse
-  # directly. FuseScope manages its log pipelines, span mapping and LLM pricing over OpAMP.
+  # fusescopeCollector.enabled -- Allow the FuseScope collector, the chart's OTLP collector, which
+  # writes ClickHouse directly; FuseScope manages its log pipelines, span mapping and LLM pricing
+  # over OpAMP. On its own it deploys nothing: the collector is deployed only when at least one
+  # receiving path is on, `agentListener.enabled` (the FuseScope agents, TLS and a token),
+  # `rum.enabled`, or `otlp.insecure` (plaintext, for a SigNoz migration; collector ADR 0013).
   # @section -- FuseScope Collector
   enabled: true
   # fusescopeCollector.replicaCount -- Number of replicas, unless `autoscaling.enabled`. Each
@@ -1475,12 +1482,24 @@ fusescopeCollector:
   # @section -- FuseScope Collector
   imagePullSecrets: []
   otlp:
-    # fusescopeCollector.otlp.enabled -- Receive OTLP over gRPC and HTTP, on this collector's
-    # Service and on a Service named and numbered like
-    # the earlier collector's (`RELEASE-fusescope-otel-collector`, ports `otlp` and `otlp-http` of
-    # `otelCollector.ports`), so agents, SDKs and `otelCollector.ingress` keep their endpoint.
+    # fusescopeCollector.otlp.insecure -- Receive OTLP over gRPC and HTTP **without TLS or a key**,
+    # inside the cluster, for a SigNoz migration (collector ADR 0013). It renders the receiver
+    # `otlp/insecure` on `grpcPort` and `httpPort`, those ports on this collector's Service, and a
+    # Service named and numbered like the earlier collector's (`RELEASE-fusescope-otel-collector`,
+    # ports `otlp` and `otlp-http` of `otelCollector.ports`), so existing agents and SDKs keep their
+    # endpoint. Any workload that reaches these ports can send, inject or forge telemetry: limit
+    # them with a NetworkPolicy and keep an inventory of the emitters. It needs
+    # `selfMetrics.enabled`, which counts the traffic still on plaintext
+    # (`otelcol_receiver_accepted_*{receiver="otlp/insecure"}`), and refuses a `NodePort` or
+    # `LoadBalancer` on `fusescopeCollector.service` or `otelCollector.service`, and
+    # `otelCollector.ingress.enabled`. Turn it off when those counters stay at zero through the
+    # migration guide's window and every client in the inventory uses TLS and a key.
     # @section -- FuseScope Collector
-    enabled: true
+    insecure: false
+    # fusescopeCollector.otlp.enabled -- Legacy. It no longer turns plaintext OTLP on: `true` is
+    # refused unless `insecure` is also `true`.
+    # @section -- FuseScope Collector
+    enabled: false
     # fusescopeCollector.otlp.grpcPort -- Port of the OTLP/gRPC receiver.
     # @section -- FuseScope Collector
     grpcPort: 4317
@@ -1577,8 +1596,8 @@ fusescopeCollector:
   agentListener:
     # fusescopeCollector.agentListener.enabled -- Receive OTLP/gRPC from the FuseScope agents
     # (`fusescopeAgent`) on a listener of its own: TLS 1.3, a client certificate the client CA
-    # signed, and the agents' token, all required. The OTLP ports above stay as they are, without
-    # TLS, for SDKs inside the cluster.
+    # signed, and the agents' token, all required. It does not open 4317 and 4318: those exist only
+    # with `otlp.insecure` (collector ADR 0013).
     # @section -- FuseScope Collector
     enabled: false
     # fusescopeCollector.agentListener.port -- Port of the agents' listener, on the pods and the

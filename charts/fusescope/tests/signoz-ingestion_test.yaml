@@ -8,16 +8,49 @@ release:
   namespace: platform
 
 tests:
-  - it: should point at the in-chart collector service when it has no ingress
+  # The chart renders no plaintext receiver by default (collector ADR 0013): it announces and
+  # checks no endpoint it did not create.
+  - it: should announce and check no in-cluster endpoint by default
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_GLOBAL_INGESTION__URL
+          any: true
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_ONBOARDING_COLLECTOR__ENDPOINT
+          any: true
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_COLLECTOR__ENDPOINT
+          any: true
+
+  - it: should point at the compatibility Service with otlp.insecure
+    set:
+      fusescopeCollector.otlp.insecure: true
     asserts:
       - contains:
           path: spec.template.spec.containers[0].env
           content:
             name: SIGNOZ_GLOBAL_INGESTION__URL
             value: http://fusescope-otel-collector.platform.svc:4318
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_ONBOARDING_COLLECTOR__ENDPOINT
+            value: http://fusescope-otel-collector:4318
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_RUM_COLLECTOR__ENDPOINT
+            value: http://fusescope-otel-collector:4318
 
-  - it: should follow the collector OTLP/HTTP service port
+  - it: should follow the compatibility Service's OTLP/HTTP port
     set:
+      fusescopeCollector.otlp.insecure: true
       otelCollector:
         ports:
           otlp-http:
@@ -28,57 +61,34 @@ tests:
           content:
             name: SIGNOZ_GLOBAL_INGESTION__URL
             value: http://fusescope-otel-collector.platform.svc:14318
-
-  - it: should use the collector ingress host over plain HTTP without TLS
-    set:
-      otelCollector:
-        ingress:
-          enabled: true
-          hosts:
-            - host: otlp.example.com
-              paths:
-                - path: /
-                  pathType: Prefix
-                  port: 4318
-    asserts:
       - contains:
           path: spec.template.spec.containers[0].env
           content:
-            name: SIGNOZ_GLOBAL_INGESTION__URL
-            value: http://otlp.example.com
+            name: SIGNOZ_ONBOARDING_COLLECTOR__ENDPOINT
+            value: http://fusescope-otel-collector:14318
 
-  - it: should use https and the OTLP/HTTP path when the ingress host has TLS
-    set:
-      otelCollector:
-        ingress:
-          enabled: true
-          hosts:
-            - host: otlp.example.com
-              paths:
-                - path: /grpc
-                  pathType: Prefix
-                  port: 4317
-                - path: /otlp/
-                  pathType: Prefix
-                  port: 4318
-          tls:
-            - secretName: otlp-tls
-              hosts:
-                - otlp.example.com
-    asserts:
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content:
-            name: SIGNOZ_GLOBAL_INGESTION__URL
-            value: https://otlp.example.com/otlp
-
-  - it: should prefer signoz.ingestionUrl over the ingress
+  # signoz.ingestionUrl only announces an external endpoint: the chart does not create it.
+  - it: should announce signoz.ingestionUrl without configuring an in-cluster check
     set:
       signoz:
         ingestionUrl: https://ingest.acme.io
-      otelCollector:
-        ingress:
-          enabled: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_GLOBAL_INGESTION__URL
+            value: https://ingest.acme.io
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_ONBOARDING_COLLECTOR__ENDPOINT
+          any: true
+
+  - it: should prefer signoz.ingestionUrl over the compatibility Service
+    set:
+      fusescopeCollector.otlp.insecure: true
+      signoz:
+        ingestionUrl: https://ingest.acme.io
     asserts:
       - contains:
           path: spec.template.spec.containers[0].env

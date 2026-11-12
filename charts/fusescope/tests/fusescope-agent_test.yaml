@@ -55,6 +55,8 @@ tests:
 
   - it: should serve the agents' listener on 4322 with TLS 1.3, the client CA and the token, in every pipeline
     template: templates/fusescope-collector/configmap.yaml
+    set:
+      fusescopeCollector.otlp.insecure: true
     asserts:
       - matchRegex:
           path: data["config.yaml"]
@@ -86,22 +88,22 @@ tests:
           path: data["config.yaml"]
           pattern: |-
             traces:
-                  receivers: \[otlp, otlp/agents\]
+                  receivers: \[otlp/insecure, otlp/agents\]
       - matchRegex:
           path: data["config.yaml"]
           pattern: |-
             logs:
-                  receivers: \[otlp, otlp/agents\]
+                  receivers: \[otlp/insecure, otlp/agents\]
       - matchRegex:
           path: data["config.yaml"]
           pattern: |-
             metrics:
-                  receivers: \[otlp, otlp/agents\]
-      # The SDKs' OTLP ports stay as they are, without TLS.
+                  receivers: \[otlp/insecure, otlp/agents\]
+      # The SDKs' plaintext receiver, with the opt-in (collector ADR 0013), stays without TLS.
       - matchRegex:
           path: data["config.yaml"]
           pattern: |-
-            otlp:
+            otlp/insecure:
                 protocols:
                   grpc:
                     endpoint: 0.0.0.0:4317
@@ -111,7 +113,7 @@ tests:
   - it: should give the agents' metrics a pipeline when the SDKs' OTLP is off
     template: templates/fusescope-collector/configmap.yaml
     set:
-      fusescopeCollector.otlp.enabled: false
+      fusescopeCollector.otlp.insecure: false
     asserts:
       - matchRegex:
           path: data["config.yaml"]
@@ -203,6 +205,8 @@ tests:
 
   - it: should let only this release's agents reach the agents' port, and anyone the other ports
     template: templates/fusescope-collector/networkpolicy.yaml
+    set:
+      fusescopeCollector.otlp.insecure: true
     asserts:
       - isKind:
           of: NetworkPolicy
@@ -305,6 +309,7 @@ tests:
   - it: should refuse an agents' port the SDKs' OTLP uses
     template: templates/fusescope-collector/deployment.yaml
     set:
+      fusescopeCollector.otlp.insecure: true
       fusescopeCollector.agentListener.port: 4317
     asserts:
       - failedTemplate:
@@ -315,6 +320,7 @@ tests:
     values:
       - ./values/fusescope-agent.yaml
       - ./values/fusescope-collector.yaml
+      - ./values/otlp-insecure.yaml
     set:
       fusescopeCollector.agentListener.port: 4319
     asserts:

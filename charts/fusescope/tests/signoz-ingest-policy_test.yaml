@@ -259,8 +259,9 @@ tests:
             name: SIGNOZ_DASHBOARD_PUBLIC_RATELIMIT_TRUST__FORWARDED__FOR
             value: "false"
 
-  - it: should point the onboarding check at the in-chart collector, also for older releases
+  - it: should point the onboarding check at the in-chart plaintext receiver, also for older releases
     set:
+      fusescopeCollector.otlp.insecure: true
       otelCollector.ports.otlp-http.servicePort: 14318
     template: templates/signoz/statefulset.yaml
     asserts:

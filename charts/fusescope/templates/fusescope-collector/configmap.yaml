@@ -22,11 +22,11 @@
 {{- end -}}
 {{- end -}}
 {{- $receivers := list -}}
-{{- if $otlp }}{{ $receivers = append $receivers "otlp" }}{{ end -}}
+{{- if $otlp }}{{ $receivers = append $receivers "otlp/insecure" }}{{ end -}}
 {{- if $rum }}{{ $receivers = append $receivers "rum" }}{{ end -}}
 {{- if $agents }}{{ $receivers = append $receivers "otlp/agents" }}{{ end -}}
 {{- $metricReceivers := list -}}
-{{- if $otlp }}{{ $metricReceivers = append $metricReceivers "otlp" }}{{ end -}}
+{{- if $otlp }}{{ $metricReceivers = append $metricReceivers "otlp/insecure" }}{{ end -}}
 {{- if $agents }}{{ $metricReceivers = append $metricReceivers "otlp/agents" }}{{ end -}}
 apiVersion: v1
 kind: ConfigMap
@@ -69,7 +69,10 @@ data:
 
     receivers:
       {{- if $otlp }}
-      otlp:
+      # Plaintext and keyless, inside the cluster only, by the explicit
+      # fusescopeCollector.otlp.insecure (collector ADR 0013). Its own id, so
+      # otelcol_receiver_accepted_*{receiver="otlp/insecure"} counts what is left.
+      otlp/insecure:
         protocols:
           grpc:
             endpoint: 0.0.0.0:{{ $c.otlp.grpcPort }}

@@ -17,6 +17,9 @@ capabilities:
   majorVersion: 1
   minorVersion: 30
 
+values:
+  - ./values/otlp-insecure.yaml
+
 tests:
   # The Job runs only migrate, the init container only check --wait, both
   # from the one test image pinned by digest.
