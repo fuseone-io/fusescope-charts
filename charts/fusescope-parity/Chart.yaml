@@ -1,6 +1,6 @@
 apiVersion: v2
 name: fusescope-parity
-version: 0.3.0
+version: 0.4.0
 appVersion: "0.0.0"
 description: FuseScope parity (D5), the trace views compared between ClickHouse and fusescope-engine in staging. Staging only; never part of a production release.
 type: application

@@ -26,6 +26,7 @@ bucket:
   name: parity-demo
   kmsKeyId: 00000000-0000-0000-0000-000000000000
   endpoint: https://192.0.2.10:9000
+  pathStyle: true
   region: us-east-1
   caConfigMap: parity-bucket-ca
 pushgateway:

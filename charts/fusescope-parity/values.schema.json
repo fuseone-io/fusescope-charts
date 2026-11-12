@@ -138,6 +138,7 @@
     "bucket": {
       "type": "object",
       "additionalProperties": false,
+      "required": ["pathStyle"],
       "properties": {
         "name": {
           "type": "string"
@@ -148,6 +149,9 @@
         "endpoint": {
           "type": "string",
           "pattern": "^(https://.+)?$"
+        },
+        "pathStyle": {
+          "type": "boolean"
         },
         "region": {
           "type": "string",

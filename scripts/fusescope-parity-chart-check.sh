@@ -194,6 +194,8 @@ for key in ("hourly.yaml", "daily.yaml", "investigate.yaml"):
         fail(f"{key} reads the DSN from {s['clickhouse']}")
     if s["secret"]["namespace"] != keys:
         fail(f"{key} writes run keys to {s['secret']['namespace']}")
+    if s["bucket"].get("path_style") is not bucket["pathStyle"]:
+        fail(f"{key} addresses the bucket with path_style {s['bucket'].get('path_style')!r}, not {bucket['pathStyle']!r}")
 planning = values["round"]
 for key in ("hourly", "daily"):
     rnd = dict(yaml.safe_load(settings[f"{key}.yaml"])["round"])
@@ -295,6 +297,8 @@ refuse -f "$staging" --set proxy.url=https://egress-proxy.example.com:3128
 refuse -f "$staging" --set unknown=1
 store="$chart/ci/s3-compatible-values.yaml"
 refuse -f "$store" --set bucket.endpoint=http://192.0.2.10:9000
+refuse -f "$store" --set-string bucket.pathStyle=true
+refuse -f "$store" --set bucket.pathStyle=null
 refuse -f "$store" --set secrets.bucketRun=
 refuse -f "$store" --set secrets.bucketInvestigate=
 refuse -f "$store" --set secrets.bucketInvestigate=parity-bucket-run
@@ -373,4 +377,4 @@ refuse_egress bucket '[{to: [{ipBlock: {cidr: not-a-cidr}}], ports: [{port: 443}
 refuse_egress idp '[{to: [{ipBlock: {cidr: "2001:db8::/16"}}], ports: [{port: 443}]}]'
 refuse_egress bucket '[{to: [{ipBlock: {cidr: host.example/28}}], ports: [{port: 443}]}]'
 helm template check "$chart" --namespace parity -f "$staging" --set rounds.hourly.activeDeadlineSeconds=1500 >/dev/null
-echo "chart refuses a release without its image digest, with a tag, a malformed digest or no repository; Secrets missing or alike; no tenants or on-call group; run keys in the release's namespace; a deadline inside its budget plus margin; a budget set twice; a daily round that leaves no hour; an egress rule without peers or ports, to every address, or missing for a workload; an unknown value, a time out of range, a plain-HTTP endpoint or a malformed namespace; a trust bundle under a name no ConfigMap can have, a store CA or one bucket credential without the other, the investigation given the rounds' credential, a store endpoint behind the proxy, or a bucket Secret shared; a report without its backend commit and engine version; a zero run key expiry; a health source the backend refuses; an unknown, budget or out-of-range planning setting; and an egress peer or port that reaches more than it names"
+echo "chart refuses a release without its image digest, with a tag, a malformed digest or no repository; Secrets missing or alike; no tenants or on-call group; run keys in the release's namespace; a deadline inside its budget plus margin; a budget set twice; a daily round that leaves no hour; an egress rule without peers or ports, to every address, or missing for a workload; an unknown value, a time out of range, a plain-HTTP endpoint, a path style that is not a boolean or a malformed namespace; a trust bundle under a name no ConfigMap can have, a store CA or one bucket credential without the other, the investigation given the rounds' credential, a store endpoint behind the proxy, or a bucket Secret shared; a report without its backend commit and engine version; a zero run key expiry; a health source the backend refuses; an unknown, budget or out-of-range planning setting; and an egress peer or port that reaches more than it names"
