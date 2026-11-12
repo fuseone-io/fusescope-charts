@@ -1456,9 +1456,11 @@ mcpServer:
 
 # @section -- FuseScope Collector
 fusescopeCollector:
-  # fusescopeCollector.enabled -- Install the FuseScope collector, the chart's OTLP collector: it
-  # receives OTLP (`otlp`), and Real User Monitoring when `rum.enabled`, and writes ClickHouse
-  # directly. FuseScope manages its log pipelines, span mapping and LLM pricing over OpAMP.
+  # fusescopeCollector.enabled -- Allow the FuseScope collector, the chart's OTLP collector, which
+  # writes ClickHouse directly; FuseScope manages its log pipelines, span mapping and LLM pricing
+  # over OpAMP. On its own it deploys nothing: the collector is deployed only when at least one
+  # receiving path is on, `agentListener.enabled` (the FuseScope agents, TLS and a token),
+  # `rum.enabled`, or `otlp.insecure` (plaintext, for a SigNoz migration; collector ADR 0013).
   # @section -- FuseScope Collector
   enabled: true
   # fusescopeCollector.replicaCount -- Number of replicas, unless `autoscaling.enabled`. Each
@@ -1594,8 +1596,8 @@ fusescopeCollector:
   agentListener:
     # fusescopeCollector.agentListener.enabled -- Receive OTLP/gRPC from the FuseScope agents
     # (`fusescopeAgent`) on a listener of its own: TLS 1.3, a client certificate the client CA
-    # signed, and the agents' token, all required. The OTLP ports above stay as they are, without
-    # TLS, for SDKs inside the cluster.
+    # signed, and the agents' token, all required. It does not open 4317 and 4318: those exist only
+    # with `otlp.insecure` (collector ADR 0013).
     # @section -- FuseScope Collector
     enabled: false
     # fusescopeCollector.agentListener.port -- Port of the agents' listener, on the pods and the
