@@ -72,7 +72,11 @@ namespace, and they must all differ:
   - `tls.crt` and `tls.key`, the parity's client identity on the engine;
   - `ca.crt`, the engine's CA;
   - `jwt.pem`, the key the parity signs tenant tokens with.
-- `secrets.clickhouse`: `dsn`, the DSN of a `readonly = 1` user.
+- `secrets.clickhouse`: `dsn`, the DSN of a `readonly = 2` user granted
+  `SELECT` only. `readonly = 2` refuses writes, DDL and `SET readonly`, but
+  lets a query carry its own settings: the backend sends `log_comment`, and
+  `max_execution_time` when one is configured, with every query, and
+  `readonly = 1` refuses them all.
 - `secrets.pushgateway`, `secrets.prometheus`, `secrets.audit`: `token`
   each.
 - `tenants.configMap`: the tenants file D1 maintains.

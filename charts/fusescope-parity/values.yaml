@@ -36,7 +36,8 @@ secrets:
   # ca.crt (the engine's CA) and jwt.pem (the key the parity signs tenant
   # tokens with, under its own kid).
   engineClient: ""
-  # dsn: the ClickHouse DSN of a readonly = 1 user.
+  # dsn: the ClickHouse DSN of a readonly = 2 user granted SELECT only;
+  # readonly = 1 refuses the settings the backend sends with every query.
   clickhouse: ""
   # token, each.
   pushgateway: ""
