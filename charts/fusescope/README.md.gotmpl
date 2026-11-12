@@ -63,9 +63,23 @@ kubectl delete namespace platform
 
 ### OTLP collector
 
-The FuseScope collector (`fusescopeCollector`, [fusescope-collector-server](https://github.com/fuseone-io/fusescope-collector-server)) is the chart's OTLP collector: it receives OTLP over gRPC (4317) and HTTP (4318) and writes traces, logs and metrics, plus the span metrics it derives from traces, to ClickHouse directly. FuseScope manages its log pipelines, span attribute mapping and LLM pricing over OpAMP; it cannot change what the collector receives or where it writes.
+The FuseScope collector (`fusescopeCollector`, [fusescope-collector-server](https://github.com/fuseone-io/fusescope-collector-server)) is the chart's OTLP collector. It writes traces, logs and metrics, plus the span metrics it derives from traces, to ClickHouse directly. FuseScope manages its log pipelines, span attribute mapping and LLM pricing over OpAMP; it cannot change what the collector receives or where it writes.
 
-- **Compat Service.** The chart renders a Service with the earlier collector's name, `RELEASE-fusescope-otel-collector`, selecting the FuseScope collector's pods. Its `otlp` and `otlp-http` ports take their service ports, node ports and the Service type and annotations from `otelCollector.ports` and `otelCollector.service`. Agents, SDKs, the ingestion URL shown in FuseScope (`signoz.ingestionUrl`), the onboarding check and `otelCollector.ingress` keep that endpoint; `otelCollector.ingress` stays gated by its own `enabled` and now routes to this Service, so its paths must target the OTLP service ports. The collector's own Service, `RELEASE-fusescope-collector`, exposes the same ports.
+- **What it receives.** It takes telemetry only on the paths you turn on:
+  - the FuseScope agents (`fusescopeAgent` with `fusescopeCollector.agentListener`), over TLS 1.3 with a client certificate and a token;
+  - RUM (`fusescopeCollector.rum`), over TLS with RUM keys;
+  - for a SigNoz migration, the plaintext receiver below.
+
+  With none of them on, the collector is not deployed and the release receives no telemetry; `NOTES.txt` says so.
+- **Plaintext OTLP, by explicit opt-in** ([collector ADR 0013](https://github.com/fuseone-io/fusescope-collector-server/blob/main/docs/adr/0013-otlp-plaintext-for-migration.md)). `fusescopeCollector.otlp.insecure: true` renders the receiver `otlp/insecure` on gRPC (4317) and HTTP (4318), without TLS or a key. It is for a SigNoz migration whose agents and SDKs cannot do TLS yet.
+  - **Where it is reachable.** The ports are on the collector's Service (`RELEASE-fusescope-collector`) and on a compatibility Service with the earlier collector's name (`RELEASE-fusescope-otel-collector`), so existing clients keep their endpoint. The compatibility Service takes its ports and type from `otelCollector.ports` and `otelCollector.service`.
+  - **No external route.** The chart refuses `NodePort` and `LoadBalancer` on both Services and refuses `otelCollector.ingress.enabled`, which it no longer renders. Routes created outside the chart are the operator's responsibility.
+  - **It must be measured.** It needs `fusescopeCollector.selfMetrics.enabled`, so that `otelcol_receiver_accepted_*{receiver="otlp/insecure"}` counts what is left on plaintext. Turn the receiver off when those counters stay at zero through the migration guide's window and the inventory of emitters shows every client on TLS and a key.
+  - **Exposure while it is on.** Any workload that reaches the ports can send, inject or forge telemetry: limit them with a NetworkPolicy.
+- **Ingestion URL.**
+  - With the plaintext receiver on, FuseScope's onboarding shows and checks the compatibility Service.
+  - Without it, onboarding shows `signoz.ingestionUrl`, or nothing, and checks no in-cluster endpoint.
+  - `signoz.ingestionUrl` only announces an endpoint; the chart does not create it.
 - **Only OTLP.** The earlier collector's other receivers are not served: Jaeger gRPC (14250), Jaeger Thrift over HTTP (14268), Heroku logs (8081) and JSON logs (8082). Send that telemetry as OTLP.
 - **Up to about 10 s before data shows.** The FuseScope collector batches each ClickHouse write for up to 10 s, where the earlier collector flushed every second: the service map joins a parent and a child span only within one insert, so longer batches keep it complete (collector-server `docs/spec/clickhouse-traces.md`). New telemetry can take about 10 s to appear.
 - **OpAMP.** Without RUM the collector connects as a `writer` to FuseScope's in-cluster OpAMP listener (`ws://RELEASE-fusescope:4320/v1/opamp`), in plaintext by an explicit `tls.insecure`, the only transport FuseScope serves there until it adds TLS (fuseone-io/fusescope#261). It presents no token and needs no certificate. With `rum.enabled` it connects as `ingress` over TLS 1.3 to port 4321 (below).

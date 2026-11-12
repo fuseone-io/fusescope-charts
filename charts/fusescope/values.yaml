@@ -992,8 +992,9 @@ signoz:
     #    hosts:
     #      - signoz.domain.com
   # signoz.ingestionUrl -- (string) OTLP/HTTP URL FuseScope shows in onboarding for sending telemetry (`global.ingestion_url`).
-  # An admin can still override it from the UI.
-  # @default -- "The collector ingress (https when its host has TLS), else http://RELEASE-otel-collector.NAMESPACE.svc:4318"
+  # It only announces an endpoint, for example one with TLS and a key that you expose; the chart does
+  # not create it. An admin can still override it from the UI.
+  # @default -- "With `fusescopeCollector.otlp.insecure`, http://RELEASE-fusescope-otel-collector.NAMESPACE.svc:4318; otherwise none"
   # @section -- SigNoz Networking
   ingestionUrl: ""
   # OpAMP listener with TLS 1.3 for ingress collectors (`rum.ingest_policy`), on which FuseScope
@@ -1220,7 +1221,8 @@ otelCollector:
   # @default -- "otel-collector"
   # @section -- Otel Collector
   name: "otel-collector"
-  # otelCollector.service -- Service configuration for the Otel Collector.
+  # otelCollector.service -- The compatibility Service `RELEASE-fusescope-otel-collector`, rendered
+  # only with `fusescopeCollector.otlp.insecure` (collector ADR 0013).
   # @section -- Otel Collector Networking
   service:
     # otelCollector.service.annotations - Annotations for the Otel Collector service object.
@@ -1229,7 +1231,8 @@ otelCollector:
     # otelCollector.service.labels - Labels for the Otel Collector service object.
     # @default -- {}
     labels: {}
-    # otelCollector.service.type - The service type (`ClusterIP`, `NodePort`, `LoadBalancer`).
+    # otelCollector.service.type - The service type. `NodePort` and `LoadBalancer` are refused with
+    # the plaintext receiver (collector ADR 0013).
     # @default -- "ClusterIP"
     type: ClusterIP
     # otelCollector.service.loadBalancerSourceRanges - Allowed source ranges when service type is `LoadBalancer`.

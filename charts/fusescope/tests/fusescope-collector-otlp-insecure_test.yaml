@@ -193,6 +193,21 @@ tests:
       - failedTemplate:
           errorPattern: "otlp.insecure.*otelCollector.ingress.enabled"
 
+  # With the default values the collector is not deployed: the refusal still runs.
+  - it: should refuse the OTLP Ingress without the opt-in, the collector off
+    template: templates/fusescope-collector/service-otlp-compat.yaml
+    set:
+      otelCollector.ingress.enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "otelCollector.ingress.enabled routes to the compatibility Service, which exists only with fusescopeCollector.otlp.insecure"
+
+  - it: should deploy no collector with the default values
+    template: templates/fusescope-collector/deployment.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+
   - it: should allow a LoadBalancer collector Service when no plaintext receiver is on
     template: templates/fusescope-collector/service.yaml
     values:

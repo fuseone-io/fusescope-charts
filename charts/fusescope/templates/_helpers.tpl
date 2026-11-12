@@ -317,7 +317,7 @@ Create Env
 
 {{- $defaultEnv = merge $defaultEnv (include "signoz.ingestPolicyEnv" . | fromYaml) -}}
 {{- $defaultEnv = merge $defaultEnv (include "signoz.proxyEnv" . | fromYaml) -}}
-{{- $_ := set $defaultEnv "signoz_global_ingestion__url" (include "signoz.ingestionUrl" .) -}}
+{{- with include "signoz.ingestionUrl" . }}{{ $_ := set $defaultEnv "signoz_global_ingestion__url" . }}{{ end -}}
 {{- $defaultEnv = merge $defaultEnv (include "signoz.retentionEnv" . | fromYaml) -}}
 
 {{/*
@@ -366,14 +366,14 @@ Keep it seprate from sqlStorePostgresEnv to maintain the order of env variables
 {{- end -}}
 
 {{/*
-OTLP/HTTP URL FuseScope shows for sending telemetry: signoz.ingestionUrl, else the in-cluster
-compatibility Service of the plaintext receiver (fusescopeCollector.otlp.insecure). The chart
-renders no OTLP Ingress (collector ADR 0013), so a public URL comes from signoz.ingestionUrl.
+OTLP/HTTP URL FuseScope shows for sending telemetry: signoz.ingestionUrl, which only announces an
+endpoint the chart does not create, else the compatibility Service when the plaintext receiver is
+on (fusescopeCollector.otlp.insecure, collector ADR 0013), else nothing.
 */}}
 {{- define "signoz.ingestionUrl" -}}
 {{- if .Values.signoz.ingestionUrl -}}
 {{- .Values.signoz.ingestionUrl -}}
-{{- else -}}
+{{- else if include "fusescopeCollector.compatService" . -}}
 {{- printf "http://%s.%s.svc:%v" (include "otelCollector.fullname" .) .Release.Namespace (index .Values.otelCollector.ports "otlp-http" "servicePort") -}}
 {{- end -}}
 {{- end -}}
@@ -401,11 +401,14 @@ OTLP/HTTP receiver. Each is set under its own key and, for releases before the g
 removal, under the rum key it used to read; later releases ignore the rum keys.
 */}}
 {{- define "signoz.proxyEnv" -}}
-{{- $collector := printf "http://%s:%v" (include "otelCollector.fullname" .) (index .Values.otelCollector.ports "otlp-http" "servicePort") }}
 signoz_dashboard_public_ratelimit_trust__forwarded__for: {{ .Values.signoz.ingress.enabled | quote }}
 signoz_rum_ratelimit_trust__forwarded__for: {{ .Values.signoz.ingress.enabled | quote }}
+{{- if include "fusescopeCollector.compatService" . }}
+{{- /* The onboarding check reaches the plaintext receiver only where the chart created it. */}}
+{{- $collector := printf "http://%s:%v" (include "otelCollector.fullname" .) (index .Values.otelCollector.ports "otlp-http" "servicePort") }}
 signoz_onboarding_collector__endpoint: {{ $collector | quote }}
 signoz_rum_collector__endpoint: {{ $collector | quote }}
+{{- end }}
 {{- end -}}
 
 {{/*
