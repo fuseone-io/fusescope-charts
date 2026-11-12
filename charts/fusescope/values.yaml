@@ -1488,12 +1488,12 @@ fusescopeCollector:
     # Service named and numbered like the earlier collector's (`RELEASE-fusescope-otel-collector`,
     # ports `otlp` and `otlp-http` of `otelCollector.ports`), so existing agents and SDKs keep their
     # endpoint. Any workload that reaches these ports can send, inject or forge telemetry: limit
-    # them with a NetworkPolicy and keep an inventory of the emitters. It needs
+    # them with `networkPolicy.ingressFrom` and keep an inventory of the emitters. It needs
     # `selfMetrics.enabled`, which counts the traffic still on plaintext
-    # (`otelcol_receiver_accepted_*{receiver="otlp/insecure"}`), and refuses a `NodePort` or
-    # `LoadBalancer` on `fusescopeCollector.service` or `otelCollector.service`, and
-    # `otelCollector.ingress.enabled`. Turn it off when those counters stay at zero through the
-    # migration guide's window and every client in the inventory uses TLS and a key.
+    # (`otelcol_receiver_{accepted,refused,failed}_*{receiver="otlp/insecure"}`), and refuses a
+    # `NodePort` or `LoadBalancer` on `fusescopeCollector.service` or `otelCollector.service`, and
+    # `otelCollector.ingress.enabled`. Turn it off only when those counters show no increase through
+    # the migration guide's window and every client in the inventory is moved and verified.
     # @section -- FuseScope Collector
     insecure: false
     # fusescopeCollector.otlp.enabled -- Legacy. It no longer turns plaintext OTLP on: `true` is
