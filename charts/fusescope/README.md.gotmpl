@@ -75,7 +75,9 @@ The FuseScope collector (`fusescopeCollector`, [fusescope-collector-server](http
   - **Where it is reachable.** The ports are on the collector's Service (`RELEASE-fusescope-collector`) and on a compatibility Service with the earlier collector's name (`RELEASE-fusescope-otel-collector`), so existing clients keep their endpoint. The compatibility Service takes its ports and type from `otelCollector.ports` and `otelCollector.service`.
   - **No external route.** The chart refuses `NodePort` and `LoadBalancer` on both Services and refuses `otelCollector.ingress.enabled`, which it no longer renders. Routes created outside the chart are the operator's responsibility.
   - **It must be measured.** It needs `fusescopeCollector.selfMetrics.enabled`, so that `otelcol_receiver_accepted_*{receiver="otlp/insecure"}` counts what is left on plaintext. Turn the receiver off when those counters stay at zero through the migration guide's window and the inventory of emitters shows every client on TLS and a key.
-  - **Exposure while it is on.** Any workload that reaches the ports can send, inject or forge telemetry: limit them with a NetworkPolicy.
+  - **Exposure while it is on.** Any workload that reaches the ports can send, inject or forge telemetry.
+    - **Restrict the senders.** Set `fusescopeCollector.otlp.networkPolicy.ingressFrom` to the peers of your inventory. The collector's NetworkPolicy then admits only them on 4317 and 4318.
+    - **With the agents' listener and its NetworkPolicy** (`agentListener.networkPolicy.enabled`, the default), that list is required. Since 0.168.1, no rule of the policy opens those ports to any source.
 - **Ingestion URL.**
   - With the plaintext receiver on, FuseScope's onboarding shows and checks the compatibility Service.
   - Without it, onboarding shows `signoz.ingestionUrl`, or nothing, and checks no in-cluster endpoint.
@@ -207,6 +209,14 @@ The chart renders a disk for the bucket, a filesystem cache disk in front of it 
 
 > [!WARNING]
 > ### Breaking Changes
+> #### Version 0.168.1
+> **Security fix.** In 0.168.0, with `fusescopeCollector.otlp.insecure` and the agents' listener NetworkPolicy (`agentListener.networkPolicy.enabled`, on by default) both on, the chart's NetworkPolicy admitted any source on 4317 and 4318. NetworkPolicies add up, so a policy of yours could not narrow that.
+>
+> - **The fix.** `fusescopeCollector.otlp.networkPolicy.ingressFrom` lists the only peers admitted on those ports, and no other rule names them.
+> - **It is required in that combination.** The chart refuses `otlp.insecure` with the agents' policy and no peers. Set the peers, or set `agentListener.networkPolicy.enabled: false` and apply a complete policy of your own.
+> - **Without the agents,** setting the peers renders a policy for 4317 and 4318 alone. Leaving them empty renders none, as before.
+> - **The agents' port 4322** keeps its own restriction.
+>
 > #### Version 0.168.0
 > **No plaintext OTLP by default** ([collector ADR 0013](https://github.com/fuseone-io/fusescope-collector-server/blob/main/docs/adr/0013-otlp-plaintext-for-migration.md)). The OTLP receiver on 4317 and 4318, which took telemetry without TLS or a key, is now an explicit opt-in for SigNoz migrations: `fusescopeCollector.otlp.insecure: true`.
 >

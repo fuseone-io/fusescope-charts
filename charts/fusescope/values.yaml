@@ -1500,6 +1500,16 @@ fusescopeCollector:
     # refused unless `insecure` is also `true`.
     # @section -- FuseScope Collector
     enabled: false
+    networkPolicy:
+      # fusescopeCollector.otlp.networkPolicy.ingressFrom -- (list) The only NetworkPolicy peers
+      # admitted on 4317 and 4318 while `insecure` is on, e.g. the namespaces of your inventory.
+      # Set, the collector's NetworkPolicy admits them alone on those ports; no other rule opens
+      # them. Required with `insecure` when the agents' listener has its NetworkPolicy
+      # (`agentListener.networkPolicy.enabled`). Empty without the agents, the chart renders no
+      # policy for these ports and they accept any source in the cluster. Needs a CNI that enforces
+      # NetworkPolicy.
+      # @section -- FuseScope Collector
+      ingressFrom: []
     # fusescopeCollector.otlp.grpcPort -- Port of the OTLP/gRPC receiver.
     # @section -- FuseScope Collector
     grpcPort: 4317
@@ -1644,8 +1654,10 @@ fusescopeCollector:
       secretKey: token
     networkPolicy:
       # fusescopeCollector.agentListener.networkPolicy.enabled -- A NetworkPolicy on the collector
-      # pods: the agents' port accepts only the agent pods of this release; the other ports keep
-      # accepting from anywhere, as without it. Needs a CNI that enforces NetworkPolicy.
+      # pods: the agents' port accepts only the agent pods of this release. With `otlp.insecure`,
+      # 4317 and 4318 accept only `otlp.networkPolicy.ingressFrom`, which is then required. The
+      # other ports keep accepting from anywhere, as without it. Needs a CNI that enforces
+      # NetworkPolicy.
       # @section -- FuseScope Collector
       enabled: true
       # fusescopeCollector.agentListener.networkPolicy.ingressFrom -- (list) NetworkPolicy peers

@@ -1,10 +1,19 @@
-{{- if and (include "fusescopeCollector.agentListenerEnabled" .) .Values.fusescopeCollector.agentListener.networkPolicy.enabled }}
+{{- $c := .Values.fusescopeCollector -}}
+{{- $agents := include "fusescopeCollector.agentListenerEnabled" . -}}
+{{- $agentsPolicy := and $agents $c.agentListener.networkPolicy.enabled -}}
+{{- $otlp := include "fusescopeCollector.otlpEnabled" . -}}
+{{- $otlpPeers := $c.otlp.networkPolicy.ingressFrom -}}
+{{- if and $agentsPolicy $otlp (not $otlpPeers) -}}
+{{- fail "fusescopeCollector.otlp.insecure with the agents' NetworkPolicy needs fusescopeCollector.otlp.networkPolicy.ingressFrom, the only peers admitted on 4317/4318: the policy no longer opens them to any source (collector ADR 0013). Or set fusescopeCollector.agentListener.networkPolicy.enabled: false and apply a complete policy of your own." -}}
+{{- end -}}
+{{- if or $agentsPolicy (and $otlp $otlpPeers) }}
 {{- $open := list -}}
-{{- if include "fusescopeCollector.otlpEnabled" . }}{{ $open = concat $open (list "otlp" "otlp-http") }}{{ end -}}
+{{- if and $agents (not $agentsPolicy) }}{{ $open = append $open "otlp-agents" }}{{ end -}}
 {{- if include "fusescopeCollector.rumEnabled" . }}{{ $open = append $open "rum" }}{{ end -}}
 {{- $open = append $open "health" }}
-# The agents' port accepts only the agent pods (this release's, or ingressFrom). Every other port of
-# the collector keeps accepting from anywhere, as without this policy.
+# The agents' port accepts only the agent pods (this release's, or ingressFrom), and the plaintext
+# receiver's ports only otlp.networkPolicy.ingressFrom (collector ADR 0013). No rule without a
+# source names either. The other ports keep accepting from anywhere, as without this policy.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -18,8 +27,9 @@ spec:
   policyTypes:
     - Ingress
   ingress:
+    {{- if $agentsPolicy }}
     - from:
-        {{- with .Values.fusescopeCollector.agentListener.networkPolicy.ingressFrom }}
+        {{- with $c.agentListener.networkPolicy.ingressFrom }}
         {{- toYaml . | nindent 8 }}
         {{- else }}
         # This release's agents, in its namespace: a podSelector alone selects there.
@@ -30,6 +40,16 @@ spec:
       ports:
         - port: otlp-agents
           protocol: TCP
+    {{- end }}
+    {{- if $otlp }}
+    - from:
+        {{- toYaml $otlpPeers | nindent 8 }}
+      ports:
+        - port: otlp
+          protocol: TCP
+        - port: otlp-http
+          protocol: TCP
+    {{- end }}
     - ports:
         {{- range $open }}
         - port: {{ . }}

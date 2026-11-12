@@ -1,0 +1,129 @@
+suite: The collector's NetworkPolicy, with the agents' listener and the plaintext receiver
+
+templates:
+  - templates/fusescope-collector/networkpolicy.yaml
+
+release:
+  name: fusescope
+  namespace: platform
+
+capabilities:
+  majorVersion: 1
+  minorVersion: 30
+  apiVersions:
+    - networking.k8s.io/v1
+    - cert-manager.io/v1
+
+values:
+  - ./values/fusescope-agent.yaml
+
+tests:
+  - it: should restrict only the agents' port with the agents alone
+    asserts:
+      - isKind:
+          of: NetworkPolicy
+      - equal:
+          path: spec.ingress
+          value:
+            - from:
+                - podSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: fusescope
+                      app.kubernetes.io/instance: fusescope
+                      app.kubernetes.io/component: fusescope-agent
+              ports:
+                - {port: otlp-agents, protocol: TCP}
+            - ports:
+                - {port: health, protocol: TCP}
+
+  # With the agents and the plaintext receiver, 4317/4318 accept only the configured peers: no
+  # rule without a source names them (collector ADR 0013).
+  - it: should admit only the configured peers on 4317/4318, next to the agents' port
+    set:
+      fusescopeCollector.otlp.insecure: true
+      fusescopeCollector.otlp.networkPolicy.ingressFrom:
+        - namespaceSelector:
+            matchLabels: {fusescope.io/otlp-plaintext: allowed}
+    asserts:
+      - equal:
+          path: spec.ingress
+          value:
+            - from:
+                - podSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: fusescope
+                      app.kubernetes.io/instance: fusescope
+                      app.kubernetes.io/component: fusescope-agent
+              ports:
+                - {port: otlp-agents, protocol: TCP}
+            - from:
+                - namespaceSelector:
+                    matchLabels: {fusescope.io/otlp-plaintext: allowed}
+              ports:
+                - {port: otlp, protocol: TCP}
+                - {port: otlp-http, protocol: TCP}
+            - ports:
+                - {port: health, protocol: TCP}
+
+  - it: should refuse the agents' policy with the plaintext receiver and no peers
+    set:
+      fusescopeCollector.otlp.insecure: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "fusescopeCollector.otlp.networkPolicy.ingressFrom"
+
+  - it: should restrict 4317/4318 to the peers without the agents too
+    set:
+      fusescopeCollector.agentListener.enabled: false
+      fusescopeCollector.otlp.insecure: true
+      fusescopeCollector.otlp.networkPolicy.ingressFrom:
+        - podSelector:
+            matchLabels: {app: checkout}
+    asserts:
+      - equal:
+          path: spec.ingress
+          value:
+            - from:
+                - podSelector:
+                    matchLabels: {app: checkout}
+              ports:
+                - {port: otlp, protocol: TCP}
+                - {port: otlp-http, protocol: TCP}
+            - ports:
+                - {port: health, protocol: TCP}
+
+  - it: should render no policy for the plaintext receiver without peers and without the agents
+    set:
+      fusescopeCollector.agentListener.enabled: false
+      fusescopeCollector.otlp.insecure: true
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: should keep the agents' port open when its own policy is off, the plaintext one restricted
+    set:
+      fusescopeCollector.agentListener.networkPolicy.enabled: false
+      fusescopeCollector.otlp.insecure: true
+      fusescopeCollector.otlp.networkPolicy.ingressFrom:
+        - podSelector:
+            matchLabels: {app: checkout}
+    asserts:
+      - equal:
+          path: spec.ingress
+          value:
+            - from:
+                - podSelector:
+                    matchLabels: {app: checkout}
+              ports:
+                - {port: otlp, protocol: TCP}
+                - {port: otlp-http, protocol: TCP}
+            - ports:
+                - {port: otlp-agents, protocol: TCP}
+                - {port: health, protocol: TCP}
+
+  - it: should render no policy when neither the agents' nor the plaintext one is asked for
+    set:
+      fusescopeCollector.agentListener.networkPolicy.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
