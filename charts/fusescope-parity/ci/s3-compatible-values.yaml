@@ -33,7 +33,7 @@ pushgateway:
   url: https://192.0.2.30:9091
 health:
   url: https://192.0.2.30:9090
-  exporters: [fusescope_clickhouse, otlp/engine]
+  exporters: [fusescope_clickhouse, otlp_grpc/engine]
 investigate:
   issuer: https://192.0.2.40:5556/dex
   group: parity-oncall

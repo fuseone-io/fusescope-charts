@@ -93,6 +93,10 @@ health:
   # The staging Prometheus the dual-write health is read from.
   url: ""
   instanceLabel: pod
+  # The collector's two dual-write exporters, by the component id its
+  # metrics carry in their exporter label, such as fusescope_clickhouse and
+  # otlp_grpc/engine (the OTLP gRPC exporter's id since otlp became
+  # otlp_grpc).
   exporters: []
 
 investigate:
