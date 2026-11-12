@@ -193,6 +193,12 @@ The chart renders a disk for the bucket, a filesystem cache disk in front of it 
 
 > [!WARNING]
 > ### Breaking Changes
+> #### Version 0.167.0
+> FuseScope moves from 0.161.0 to 0.163.0 (`signoz.image.tag`).
+>
+> - **What changes for logs:** the logs pipeline preview runs on the collector's `logspipeline` library, the one the chart's collector 0.6.1 runs, so the preview and the collector process records the same way. The errors the preview reports for a record now use the collector's wording.
+> - **No configuration change.** 0.163.0 adds the `flight` telemetry store provider for fusescope-engine, which is opt-in; the default stays `clickhouse`. The chart does not configure it.
+>
 > #### Version 0.166.1
 > The FuseScope collector moves from 0.3.1 to 0.6.1, pinned by its signed multi-arch digest (`sha256:bca9dd69…53baf`). This is also the image of the agents' DaemonSet.
 >
