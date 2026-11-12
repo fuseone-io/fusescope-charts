@@ -151,7 +151,7 @@ app.kubernetes.io/component: {{ .component }}
   "clickhouse" (dict "provider" "clickhouse" "clickhouse" $clickhouse)
   "credentials" (dict "clickhouse_dsn_file" "/etc/parity/clickhouse/dsn")
   "pushgateway" (dict "url" $v.pushgateway.url "token_file" "/etc/parity/pushgateway/token")
-  "bucket" (dict "name" $v.bucket.name "kms_key_id" $v.bucket.kmsKeyId)
+  "bucket" (dict "name" $v.bucket.name "kms_key_id" $v.bucket.kmsKeyId "path_style" $v.bucket.pathStyle)
   "secret" (dict "namespace" $v.runKeys.namespace "expiry" $v.runKeys.expiry)
   "health" (dict "url" $v.health.url "token_file" "/etc/parity/prometheus/token" "instance_label" $v.health.instanceLabel "exporters" $v.health.exporters)
   "investigate" (dict "issuer" $v.investigate.issuer "audience" $v.investigate.audience "group" $v.investigate.group "audit_endpoint" $v.investigate.auditEndpoint "audit_token_file" "/etc/parity/audit/token")

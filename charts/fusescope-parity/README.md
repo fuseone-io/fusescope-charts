@@ -87,6 +87,14 @@ namespace, and they must all differ:
   workload, never for the cleanup. With them, `sts` is not a destination.
 - `bucket.endpoint` (`https://` only) and `bucket.region` name the store,
   which must meet the store requirements below.
+- `bucket.pathStyle` (default `false`) puts the bucket in the request path
+  instead of the host name. It is never inferred from the endpoint. A store
+  reached by a host name with no name per bucket, such as RustFS behind a
+  Service, needs `true`; otherwise every request goes to
+  `<bucket>.<host>`, which does not resolve, and the round ends with
+  `parity_bucket`. AWS S3 keeps `false`. It needs an image built with
+  `bucket.path_style` (`fuseone-io/fusescope#382` or later): an older one
+  ignores it without a word.
   `bucket.caConfigMap`, a ConfigMap with `ca.crt`, holds the CA its
   certificate chains to; it is not a secret, so the two workloads share it.
 
@@ -130,8 +138,8 @@ lost, and the requeue is left unencrypted, all in silence.
 | Store | Status |
 |---|---|
 | AWS S3 | the reference |
-| RustFS 1.0.3, with its local KMS (`RUSTFS_KMS_ENABLE`, backend `local`) | validated: each requirement above checked with the parity's own client |
-| Google Cloud Storage, XML API (S3 interoperability) | **incompatible**: it accepts `If-None-Match`, `If-Match` and `aws:kms` and ignores all three. Its signing and checksum differences are not the obstacle. GCS support is wanted, through a port of its own in the parity: generation preconditions and the bucket's CMEK. That is separate work. |
+| RustFS 1.0.3, with its local KMS (`RUSTFS_KMS_ENABLE`, backend `local`) | validated: each requirement above checked with the parity's own client. **Requires `bucket.pathStyle: true`** |
+| Google Cloud Storage, XML API (S3 interoperability) | **incompatible**, whatever `bucket.pathStyle` says: it accepts `If-None-Match`, `If-Match` and `aws:kms` and ignores all three. Its signing and checksum differences are not the obstacle. GCS support is wanted, through a port of its own in the parity: generation preconditions and the bucket's CMEK. That is separate work. |
 
 Any other store must pass the same checks before a release points at it.
 The demo rehearsal in `fusescope-infra` runs them as a preflight, on a

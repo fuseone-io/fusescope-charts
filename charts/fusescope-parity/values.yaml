@@ -76,6 +76,10 @@ bucket:
   # Empty for AWS S3; https://host:port of another store that meets the
   # store requirements of the README (GCS's XML API does not).
   endpoint: ""
+  # true puts the bucket in the request path, not the host name: a store
+  # without a host name per bucket, as RustFS behind a Service, needs it.
+  # AWS S3 keeps false. Never inferred from the endpoint.
+  pathStyle: false
   # Empty takes the region workload identity sets.
   region: ""
   # A ConfigMap with ca.crt, the CA the store's certificate chains to.
