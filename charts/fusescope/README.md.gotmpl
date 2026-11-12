@@ -193,6 +193,14 @@ The chart renders a disk for the bucket, a filesystem cache disk in front of it 
 
 > [!WARNING]
 > ### Breaking Changes
+> #### Version 0.168.0
+> **No plaintext OTLP by default** ([collector ADR 0013](https://github.com/fuseone-io/fusescope-collector-server/blob/main/docs/adr/0013-otlp-plaintext-for-migration.md)). The OTLP receiver on 4317 and 4318, which took telemetry without TLS or a key, is now an explicit opt-in for SigNoz migrations: `fusescopeCollector.otlp.insecure: true`.
+>
+> - **Default:** no plaintext receiver, no OTLP ports on the collector, and no `RELEASE-fusescope-otel-collector` Service. If neither `fusescopeAgent` with `fusescopeCollector.agentListener` (TLS and a token) nor `fusescopeCollector.rum` is on, the collector is not deployed and the release receives no telemetry. `NOTES.txt` says so.
+> - **The opt-in** renders the receiver `otlp/insecure`, its ports, and the compatibility Service. It needs `fusescopeCollector.selfMetrics.enabled`, which counts the traffic still on plaintext as `otelcol_receiver_accepted_*{receiver="otlp/insecure"}`. It refuses `NodePort` and `LoadBalancer` on `fusescopeCollector.service` and `otelCollector.service`.
+> - **Refused:** `fusescopeCollector.otlp.enabled: true` without `insecure`, because it no longer turns plaintext on. `otelCollector.ingress.enabled`, because the chart creates no external route to the plaintext receiver; its template is removed. For a public OTLP endpoint, use TLS and a key and set `signoz.ingestionUrl`.
+> - **To keep today's behaviour,** replace `fusescopeCollector.otlp.enabled: true` (it was the default) with `fusescopeCollector.otlp.insecure: true`. Any workload that reaches those ports can then send, inject or forge telemetry: limit them with a NetworkPolicy and keep an inventory of the emitters.
+>
 > #### Version 0.167.0
 > FuseScope moves from 0.161.0 to 0.163.0 (`signoz.image.tag`).
 >

@@ -22,6 +22,7 @@ capabilities:
 
 values:
   - ./values/fusescope-collector.yaml
+  - ./values/otlp-insecure.yaml
 
 tests:
   - it: should render nothing when disabled
@@ -207,10 +208,10 @@ tests:
           pattern: "include_recoverable_errors: true\\n      recovery_duration: 0s"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "traces:\\n      receivers: \\[otlp, rum\\]\\n      processors: \\[memory_limiter, signozspanmapper, signozllmpricing\\]\\n      exporters: \\[fusescope_clickhouse, fusescope_spanmetrics, fusescope_meter\\]"
+          pattern: "traces:\\n      receivers: \\[otlp/insecure, rum\\]\\n      processors: \\[memory_limiter, signozspanmapper, signozllmpricing\\]\\n      exporters: \\[fusescope_clickhouse, fusescope_spanmetrics, fusescope_meter\\]"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "logs:\\n      receivers: \\[otlp, rum\\]"
+          pattern: "logs:\\n      receivers: \\[otlp/insecure, rum\\]"
 
   - it: should meter ingested traces and logs into signoz_meter through its own exporter
     template: templates/fusescope-collector/configmap.yaml
@@ -223,10 +224,10 @@ tests:
           pattern: "  fusescope_clickhouse/meter:\n    mode: meter\n    endpoint: fusescope-clickhouse:9000\n    username: \"admin\"\n    password_file: /etc/fusescope-collector/clickhouse/password\n    tls:\n      insecure: true\n"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "traces:\n      receivers: \\[otlp, rum\\]\n      processors: \\[memory_limiter, signozspanmapper, signozllmpricing\\]\n      exporters: \\[fusescope_clickhouse, fusescope_spanmetrics, fusescope_meter\\]"
+          pattern: "traces:\n      receivers: \\[otlp/insecure, rum\\]\n      processors: \\[memory_limiter, signozspanmapper, signozllmpricing\\]\n      exporters: \\[fusescope_clickhouse, fusescope_spanmetrics, fusescope_meter\\]"
       - matchRegex:
           path: data["config.yaml"]
-          pattern: "logs:\n      receivers: \\[otlp, rum\\]\n      processors: \\[memory_limiter\\]\n      exporters: \\[fusescope_clickhouse, fusescope_meter\\]"
+          pattern: "logs:\n      receivers: \\[otlp/insecure, rum\\]\n      processors: \\[memory_limiter\\]\n      exporters: \\[fusescope_clickhouse, fusescope_meter\\]"
       - matchRegex:
           path: data["config.yaml"]
           pattern: "    metrics/meter:\n      receivers: \\[fusescope_meter\\]\n      exporters: \\[fusescope_clickhouse/meter\\]\n"
@@ -241,7 +242,7 @@ tests:
   - it: should run only the span-metrics pipeline for metrics without OTLP
     template: templates/fusescope-collector/configmap.yaml
     set:
-      fusescopeCollector.otlp.enabled: false
+      fusescopeCollector.otlp.insecure: false
     asserts:
       - notMatchRegex:
           path: data["config.yaml"]

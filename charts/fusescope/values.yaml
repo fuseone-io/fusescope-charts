@@ -1263,10 +1263,12 @@ otelCollector:
       # otelCollector.ports.otlp-http.nodePort - Node port for OTLP HTTP.
       # @default -- ""
       nodePort: ""
-  # otelCollector.ingress -- Ingress configuration for the Otel Collector.
+  # otelCollector.ingress -- Refused when enabled: it routed to the plaintext receiver, and the
+  # chart creates no external route to it (collector ADR 0013). For a public OTLP endpoint, use
+  # TLS and a key and set `signoz.ingestionUrl`.
   # @section -- Otel Collector Networking
   ingress:
-    # otelCollector.ingress.enabled - Enable ingress controller resource.
+    # otelCollector.ingress.enabled - Refused when true (collector ADR 0013).
     # @default -- false
     enabled: false
     # otelCollector.ingress.className - Ingress class name.
@@ -1475,12 +1477,24 @@ fusescopeCollector:
   # @section -- FuseScope Collector
   imagePullSecrets: []
   otlp:
-    # fusescopeCollector.otlp.enabled -- Receive OTLP over gRPC and HTTP, on this collector's
-    # Service and on a Service named and numbered like
-    # the earlier collector's (`RELEASE-fusescope-otel-collector`, ports `otlp` and `otlp-http` of
-    # `otelCollector.ports`), so agents, SDKs and `otelCollector.ingress` keep their endpoint.
+    # fusescopeCollector.otlp.insecure -- Receive OTLP over gRPC and HTTP **without TLS or a key**,
+    # inside the cluster, for a SigNoz migration (collector ADR 0013). It renders the receiver
+    # `otlp/insecure` on `grpcPort` and `httpPort`, those ports on this collector's Service, and a
+    # Service named and numbered like the earlier collector's (`RELEASE-fusescope-otel-collector`,
+    # ports `otlp` and `otlp-http` of `otelCollector.ports`), so existing agents and SDKs keep their
+    # endpoint. Any workload that reaches these ports can send, inject or forge telemetry: limit
+    # them with a NetworkPolicy and keep an inventory of the emitters. It needs
+    # `selfMetrics.enabled`, which counts the traffic still on plaintext
+    # (`otelcol_receiver_accepted_*{receiver="otlp/insecure"}`), and refuses a `NodePort` or
+    # `LoadBalancer` on `fusescopeCollector.service` or `otelCollector.service`, and
+    # `otelCollector.ingress.enabled`. Turn it off when those counters stay at zero through the
+    # migration guide's window and every client in the inventory uses TLS and a key.
     # @section -- FuseScope Collector
-    enabled: true
+    insecure: false
+    # fusescopeCollector.otlp.enabled -- Legacy. It no longer turns plaintext OTLP on: `true` is
+    # refused unless `insecure` is also `true`.
+    # @section -- FuseScope Collector
+    enabled: false
     # fusescopeCollector.otlp.grpcPort -- Port of the OTLP/gRPC receiver.
     # @section -- FuseScope Collector
     grpcPort: 4317

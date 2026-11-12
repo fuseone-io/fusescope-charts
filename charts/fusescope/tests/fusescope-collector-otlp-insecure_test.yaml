@@ -1,0 +1,220 @@
+suite: Plaintext OTLP inside the cluster, by explicit opt-in (collector ADR 0013)
+
+templates:
+  - templates/fusescope-collector/configmap.yaml
+  - templates/fusescope-collector/deployment.yaml
+  - templates/fusescope-collector/service.yaml
+  - templates/fusescope-collector/service-otlp-compat.yaml
+  - templates/NOTES.txt
+
+release:
+  name: fusescope
+  namespace: platform
+
+capabilities:
+  majorVersion: 1
+  minorVersion: 30
+  apiVersions:
+    - networking.k8s.io/v1
+
+tests:
+  # The secure default: no plaintext receiver, no OTLP ports, no compatibility Service.
+  - it: should render no plaintext OTLP receiver by default
+    template: templates/fusescope-collector/configmap.yaml
+    asserts:
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "\\n  otlp(/insecure)?:\\n"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "receivers: \\[[^\\]]*\\botlp(/insecure)?\\b(?!/agents)"
+
+  - it: should open no OTLP port on the collector by default
+    template: templates/fusescope-collector/deployment.yaml
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].ports
+          content: {name: otlp, containerPort: 4317, protocol: TCP}
+      - notContains:
+          path: spec.template.spec.containers[0].ports
+          content: {name: otlp-http, containerPort: 4318, protocol: TCP}
+
+  - it: should expose no OTLP port on the collector's Service by default
+    template: templates/fusescope-collector/service.yaml
+    values:
+      - ./values/fusescope-agent.yaml
+    asserts:
+      - notContains:
+          path: spec.ports
+          content: {name: otlp, port: 4317, targetPort: otlp, protocol: TCP}
+      - notContains:
+          path: spec.ports
+          content: {name: otlp-http, port: 4318, targetPort: otlp-http, protocol: TCP}
+
+  - it: should render no compatibility Service by default
+    template: templates/fusescope-collector/service-otlp-compat.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  # The opt-in.
+  - it: should render otlp/insecure on 4317 and 4318 with the opt-in
+    template: templates/fusescope-collector/configmap.yaml
+    set:
+      fusescopeCollector.otlp.insecure: true
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "\\nreceivers:\\n(  #[^\\n]*\\n)*  otlp/insecure:\\n    protocols:\\n      grpc:\\n        endpoint: 0.0.0.0:4317\\n      http:\\n        endpoint: 0.0.0.0:4318\\n"
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: "\\n  otlp:\\n"
+
+  - it: should feed otlp/insecure into the traces, logs and metrics pipelines
+    template: templates/fusescope-collector/configmap.yaml
+    set:
+      fusescopeCollector.otlp.insecure: true
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "    traces:\\n      receivers: \\[otlp/insecure\\]\\n"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "    logs:\\n      receivers: \\[otlp/insecure\\]\\n"
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "    metrics:\\n      receivers: \\[otlp/insecure\\]\\n"
+
+  - it: should open the OTLP ports and the compatibility Service with the opt-in
+    set:
+      fusescopeCollector.otlp.insecure: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].ports
+          content: {name: otlp, containerPort: 4317, protocol: TCP}
+        template: templates/fusescope-collector/deployment.yaml
+      - contains:
+          path: spec.template.spec.containers[0].ports
+          content: {name: otlp-http, containerPort: 4318, protocol: TCP}
+        template: templates/fusescope-collector/deployment.yaml
+      - contains:
+          path: spec.ports
+          content: {name: otlp, port: 4317, targetPort: otlp, protocol: TCP}
+        template: templates/fusescope-collector/service.yaml
+      - isKind:
+          of: Service
+        template: templates/fusescope-collector/service-otlp-compat.yaml
+      - equal:
+          path: spec.type
+          value: ClusterIP
+        template: templates/fusescope-collector/service-otlp-compat.yaml
+
+  - it: should keep the agents' receiver next to otlp/insecure
+    template: templates/fusescope-collector/configmap.yaml
+    values:
+      - ./values/fusescope-agent.yaml
+    set:
+      fusescopeCollector.otlp.insecure: true
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "    traces:\\n      receivers: \\[otlp/insecure, otlp/agents\\]\\n"
+
+  # Refusals.
+  - it: should refuse the legacy otlp.enabled without the explicit opt-in
+    template: templates/fusescope-collector/service-otlp-compat.yaml
+    set:
+      fusescopeCollector.otlp.enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "fusescopeCollector.otlp.enabled no longer turns plaintext OTLP on.*otlp.insecure"
+
+  - it: should accept the legacy otlp.enabled next to the opt-in
+    template: templates/fusescope-collector/configmap.yaml
+    set:
+      fusescopeCollector.otlp.enabled: true
+      fusescopeCollector.otlp.insecure: true
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "\\n  otlp/insecure:\\n"
+
+  - it: should refuse otlp.insecure without the collector's self-metrics
+    template: templates/fusescope-collector/service-otlp-compat.yaml
+    set:
+      fusescopeCollector.otlp.insecure: true
+      fusescopeCollector.selfMetrics.enabled: false
+    asserts:
+      - failedTemplate:
+          errorPattern: "otlp.insecure needs fusescopeCollector.selfMetrics.enabled"
+
+  - it: should refuse otlp.insecure on a NodePort collector Service
+    template: templates/fusescope-collector/service-otlp-compat.yaml
+    set:
+      fusescopeCollector.otlp.insecure: true
+      fusescopeCollector.service.type: NodePort
+    asserts:
+      - failedTemplate:
+          errorPattern: "otlp.insecure.*fusescopeCollector.service.type NodePort"
+
+  - it: should refuse otlp.insecure on a LoadBalancer collector Service
+    template: templates/fusescope-collector/service-otlp-compat.yaml
+    set:
+      fusescopeCollector.otlp.insecure: true
+      fusescopeCollector.service.type: LoadBalancer
+    asserts:
+      - failedTemplate:
+          errorPattern: "otlp.insecure.*fusescopeCollector.service.type LoadBalancer"
+
+  - it: should refuse otlp.insecure on a NodePort compatibility Service
+    template: templates/fusescope-collector/service-otlp-compat.yaml
+    set:
+      fusescopeCollector.otlp.insecure: true
+      otelCollector.service.type: NodePort
+    asserts:
+      - failedTemplate:
+          errorPattern: "otlp.insecure.*otelCollector.service.type NodePort"
+
+  - it: should refuse otlp.insecure on a LoadBalancer compatibility Service
+    template: templates/fusescope-collector/service-otlp-compat.yaml
+    set:
+      fusescopeCollector.otlp.insecure: true
+      otelCollector.service.type: LoadBalancer
+    asserts:
+      - failedTemplate:
+          errorPattern: "otlp.insecure.*otelCollector.service.type LoadBalancer"
+
+  - it: should refuse otlp.insecure behind the OTLP Ingress
+    template: templates/fusescope-collector/service-otlp-compat.yaml
+    set:
+      fusescopeCollector.otlp.insecure: true
+      otelCollector.ingress.enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "otlp.insecure.*otelCollector.ingress.enabled"
+
+  - it: should allow a LoadBalancer collector Service when no plaintext receiver is on
+    template: templates/fusescope-collector/service.yaml
+    values:
+      - ./values/fusescope-agent.yaml
+    set:
+      fusescopeCollector.service.type: LoadBalancer
+    asserts:
+      - equal:
+          path: spec.type
+          value: LoadBalancer
+
+  # The warning.
+  - it: should warn in NOTES.txt with the opt-in, naming the receiver and its ports
+    template: templates/NOTES.txt
+    set:
+      fusescopeCollector.otlp.insecure: true
+    asserts:
+      - matchRegexRaw:
+          pattern: "(?s)WARNING: fusescopeCollector.otlp.insecure is on.*otlp/insecure.*4317.*4318.*without TLS or a key"
+
+  - it: should not warn about plaintext OTLP by default
+    template: templates/NOTES.txt
+    asserts:
+      - notMatchRegexRaw:
+          pattern: "otlp.insecure is on"

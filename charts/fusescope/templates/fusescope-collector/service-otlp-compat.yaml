@@ -1,3 +1,5 @@
+{{- /* Collector ADR 0013's refusals, checked on every render, the collector on or off. */ -}}
+{{- include "fusescopeCollector.otlpChecks" . -}}
 {{- if include "fusescopeCollector.compatService" . }}
 {{- $svc := .Values.otelCollector.service -}}
 # The earlier collector's Service name and OTLP ports, on the FuseScope

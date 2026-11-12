@@ -29,56 +29,10 @@ tests:
             name: SIGNOZ_GLOBAL_INGESTION__URL
             value: http://fusescope-otel-collector.platform.svc:14318
 
-  - it: should use the collector ingress host over plain HTTP without TLS
-    set:
-      otelCollector:
-        ingress:
-          enabled: true
-          hosts:
-            - host: otlp.example.com
-              paths:
-                - path: /
-                  pathType: Prefix
-                  port: 4318
-    asserts:
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content:
-            name: SIGNOZ_GLOBAL_INGESTION__URL
-            value: http://otlp.example.com
-
-  - it: should use https and the OTLP/HTTP path when the ingress host has TLS
-    set:
-      otelCollector:
-        ingress:
-          enabled: true
-          hosts:
-            - host: otlp.example.com
-              paths:
-                - path: /grpc
-                  pathType: Prefix
-                  port: 4317
-                - path: /otlp/
-                  pathType: Prefix
-                  port: 4318
-          tls:
-            - secretName: otlp-tls
-              hosts:
-                - otlp.example.com
-    asserts:
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content:
-            name: SIGNOZ_GLOBAL_INGESTION__URL
-            value: https://otlp.example.com/otlp
-
-  - it: should prefer signoz.ingestionUrl over the ingress
+  - it: should prefer signoz.ingestionUrl over the in-cluster Service
     set:
       signoz:
         ingestionUrl: https://ingest.acme.io
-      otelCollector:
-        ingress:
-          enabled: true
     asserts:
       - contains:
           path: spec.template.spec.containers[0].env

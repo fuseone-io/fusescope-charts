@@ -1,0 +1,5 @@
+# The plaintext OTLP receiver otlp/insecure (collector ADR 0013), which these suites test
+# next to what they cover.
+fusescopeCollector:
+  otlp:
+    insecure: true

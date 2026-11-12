@@ -366,31 +366,15 @@ Keep it seprate from sqlStorePostgresEnv to maintain the order of env variables
 {{- end -}}
 
 {{/*
-OTLP/HTTP URL FuseScope shows for sending telemetry: signoz.ingestionUrl, else the
-collector ingress (https when its host has TLS, on the path routed to the OTLP/HTTP
-port), else the collector's in-cluster service.
+OTLP/HTTP URL FuseScope shows for sending telemetry: signoz.ingestionUrl, else the in-cluster
+compatibility Service of the plaintext receiver (fusescopeCollector.otlp.insecure). The chart
+renders no OTLP Ingress (collector ADR 0013), so a public URL comes from signoz.ingestionUrl.
 */}}
 {{- define "signoz.ingestionUrl" -}}
-{{- $collector := .Values.otelCollector -}}
-{{- $httpPort := index $collector.ports "otlp-http" "servicePort" -}}
 {{- if .Values.signoz.ingestionUrl -}}
 {{- .Values.signoz.ingestionUrl -}}
-{{- else if and $collector.ingress.enabled $collector.ingress.hosts -}}
-{{- $rule := first $collector.ingress.hosts -}}
-{{- $scheme := "http" -}}
-{{- range $collector.ingress.tls -}}
-{{- if has $rule.host .hosts }}{{ $scheme = "https" }}{{ end -}}
-{{- end -}}
-{{- $path := "" -}}
-{{- with $rule.paths -}}
-{{- $path = (first .).path -}}
-{{- range . -}}
-{{- if eq (toString .port) (toString $httpPort) }}{{ $path = .path }}{{ break }}{{ end -}}
-{{- end -}}
-{{- end -}}
-{{- printf "%s://%s%s" $scheme $rule.host (trimSuffix "/" ($path | default "")) -}}
 {{- else -}}
-{{- printf "http://%s.%s.svc:%v" (include "otelCollector.fullname" .) .Release.Namespace $httpPort -}}
+{{- printf "http://%s.%s.svc:%v" (include "otelCollector.fullname" .) .Release.Namespace (index .Values.otelCollector.ports "otlp-http" "servicePort") -}}
 {{- end -}}
 {{- end -}}
 
@@ -653,7 +637,7 @@ True when the FuseScope collector runs: enabled, with OTLP, RUM or the agents' l
 */}}
 {{- define "fusescopeCollector.active" -}}
 {{- $c := .Values.fusescopeCollector -}}
-{{- if and $c.enabled (or $c.otlp.enabled $c.rum.enabled $c.agentListener.enabled) -}}
+{{- if and $c.enabled (or $c.otlp.insecure $c.rum.enabled $c.agentListener.enabled) -}}
 true
 {{- end -}}
 {{- end -}}
@@ -858,8 +842,36 @@ true
 True when the FuseScope collector receives OTLP.
 */}}
 {{- define "fusescopeCollector.otlpEnabled" -}}
-{{- if and .Values.fusescopeCollector.enabled .Values.fusescopeCollector.otlp.enabled -}}
+{{- if and .Values.fusescopeCollector.enabled .Values.fusescopeCollector.otlp.insecure -}}
 true
+{{- end -}}
+{{- end -}}
+
+{{/*
+Refusals of collector ADR 0013 for the plaintext receiver otlp/insecure: the legacy otlp.enabled
+cannot turn it on, it must be measurable, and the chart creates no external route to it.
+*/}}
+{{- define "fusescopeCollector.otlpChecks" -}}
+{{- $c := .Values.fusescopeCollector -}}
+{{- if and $c.otlp.enabled (not $c.otlp.insecure) -}}
+{{- fail "fusescopeCollector.otlp.enabled no longer turns plaintext OTLP on (collector ADR 0013): set fusescopeCollector.otlp.insecure: true to receive OTLP without TLS or a key inside the cluster, or remove otlp.enabled" -}}
+{{- end -}}
+{{- if $c.otlp.insecure -}}
+{{- if not $c.selfMetrics.enabled -}}
+{{- fail "fusescopeCollector.otlp.insecure needs fusescopeCollector.selfMetrics.enabled: the plaintext traffic must be counted (collector ADR 0013)" -}}
+{{- end -}}
+{{- range $where, $type := dict "fusescopeCollector.service.type" $c.service.type "otelCollector.service.type" $.Values.otelCollector.service.type -}}
+{{- if has $type (list "NodePort" "LoadBalancer") -}}
+{{- fail (printf "fusescopeCollector.otlp.insecure refuses %s %s: the chart creates no external route to the plaintext receiver (collector ADR 0013)" $where $type) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if .Values.otelCollector.ingress.enabled -}}
+{{- if $c.otlp.insecure -}}
+{{- fail "fusescopeCollector.otlp.insecure refuses otelCollector.ingress.enabled: the chart creates no external route to the plaintext receiver (collector ADR 0013)" -}}
+{{- else -}}
+{{- fail "otelCollector.ingress.enabled routes to the compatibility Service, which exists only with fusescopeCollector.otlp.insecure, and that refuses an Ingress (collector ADR 0013): remove otelCollector.ingress.enabled" -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 
