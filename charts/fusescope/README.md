@@ -1,7 +1,7 @@
 
 # FuseScope
 
-![Version: 0.166.3](https://img.shields.io/badge/Version-0.166.3-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.161.0](https://img.shields.io/badge/AppVersion-0.161.0-informational?style=flat-square)
+![Version: 0.167.0](https://img.shields.io/badge/Version-0.167.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.163.0](https://img.shields.io/badge/AppVersion-0.163.0-informational?style=flat-square)
 
 FuseScope is an open-source observability platform native to OpenTelemetry, with logs, traces and metrics in a single application. It is a hard fork of [SigNoz](https://github.com/SigNoz/signoz) maintained by FuseOne.
 
@@ -193,6 +193,12 @@ The chart renders a disk for the bucket, a filesystem cache disk in front of it 
 
 > [!WARNING]
 > ### Breaking Changes
+> #### Version 0.167.0
+> FuseScope moves from 0.161.0 to 0.163.0 (`signoz.image.tag`).
+>
+> - **What changes for logs:** the logs pipeline preview runs on the collector's `logspipeline` library, the one the chart's collector 0.6.1 runs, so the preview and the collector process records the same way. The errors the preview reports for a record now use the collector's wording.
+> - **No configuration change.** 0.163.0 adds the `flight` telemetry store provider for fusescope-engine, which is opt-in; the default stays `clickhouse`. The chart does not configure it.
+>
 > #### Version 0.166.1
 > The FuseScope collector moves from 0.3.1 to 0.6.1, pinned by its signed multi-arch digest (`sha256:bca9dd69…53baf`). This is also the image of the agents' DaemonSet.
 >
@@ -558,7 +564,7 @@ verify: false</pre>
                 <div style="max-width: 300px;"><pre lang="yaml">pullPolicy: IfNotPresent
 registry: ghcr.io
 repository: fuseone-io/fusescope
-tag: 0.161.0</pre>
+tag: 0.163.0</pre>
 </div>
             </td>
             <td>Image configuration for SigNoz.</td>

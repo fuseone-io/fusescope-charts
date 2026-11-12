@@ -1,0 +1,25 @@
+suite: signoz image
+templates:
+  - templates/signoz/statefulset.yaml
+tests:
+  - it: should run the chart's FuseScope release by default
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/fuseone-io/fusescope:0.163.0
+
+  - it: should fall back to the chart's appVersion without a tag
+    set:
+      signoz.image.tag: ""
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/fuseone-io/fusescope:0.163.0
+
+  - it: should take the global image registry
+    set:
+      global.imageRegistry: registry.example.com
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: registry.example.com/fuseone-io/fusescope:0.163.0
