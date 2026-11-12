@@ -61,6 +61,20 @@ any two of them alike:
   - the querier's names `<release>-flight` and is the one identity issued
     under `hot-ca.crt`. A Flight SQL client trusts that CA;
   - the compactor gets none.
+- Also with `tls.enabled`, `tls.hotServerCAConfigMap` names a ConfigMap
+  whose `ca-bundle.crt` holds the CA that issued the ingester's identity.
+  The querier verifies the hot window against it; without it every hot scan
+  fails and queries answer from flushed files alone.
+  - **Querier only:** the bundle is mounted on the querier, at
+    `/etc/fusescope/hot-server-ca/ca-bundle.crt`, as `SSL_CERT_FILE`. The
+    ingester and the compactor get neither.
+  - **Replaces the system's roots:** `SSL_CERT_FILE` is every TLS client of
+    the querier's trust store, the bucket and the catalog included. The
+    bundle must hold every root they need, such as a public store's.
+  - **Not `hot-ca.crt`:** that CA authenticates the querier as a client. The
+    ingester's identity never chains to it.
+  - **Checked by name:** the key is projected by name, so a ConfigMap
+    without `ca-bundle.crt` keeps the querier from starting.
 - **Engine version:** this chart needs engine 0.0.2 or later.
   - From 0.0.2, an ingester with TLS does not start without
     `ingest_client_ca`.

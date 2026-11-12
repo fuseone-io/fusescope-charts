@@ -43,6 +43,7 @@ app.kubernetes.io/component: {{ .role }}
 {{- $_ := required "bucket.name" $v.bucket.name -}}
 {{- if $v.tls.enabled -}}
 {{- $_ := required "tls.clientCASecret: the Secret with public-ca.crt, hot-ca.crt and ingest-ca.crt" $v.tls.clientCASecret -}}
+{{- $_ := required "tls.hotServerCAConfigMap: the ConfigMap with ca-bundle.crt, the CA of the ingesters' hot window certificates" $v.tls.hotServerCAConfigMap -}}
 {{- $_ := required "tls.identities.ingester: the ingester's Secret with tls.crt and tls.key" $v.tls.identities.ingester -}}
 {{- $_ := required "tls.identities.querier: the querier's Secret with tls.crt and tls.key" $v.tls.identities.querier -}}
 {{- end -}}
@@ -182,6 +183,10 @@ containers:
       - name: FS_INGEST_HOT_ADVERTISE
         value: "$(POD_NAME).{{ include "fse.name" . }}-ingester-hot.{{ .Release.Namespace }}.svc:8816"
       {{- end }}
+      {{- if and (include "fse.tls" .) (eq .role "querier") }}
+      - name: SSL_CERT_FILE
+        value: /etc/fusescope/hot-server-ca/ca-bundle.crt
+      {{- end }}
     envFrom:
       - secretRef:
           name: {{ index $v.secrets .role }}
@@ -244,6 +249,11 @@ containers:
       - name: client-ca
         mountPath: /etc/fusescope/ca
         readOnly: true
+      {{- if eq .role "querier" }}
+      - name: hot-server-ca
+        mountPath: /etc/fusescope/hot-server-ca
+        readOnly: true
+      {{- end }}
       {{- end }}
       {{- if include "fse.jwt" . }}
       - name: jwt
@@ -278,6 +288,14 @@ volumes:
         - key: ingest-ca.crt
           path: ingest-ca.crt
         {{- end }}
+  {{- if eq .role "querier" }}
+  - name: hot-server-ca
+    configMap:
+      name: {{ $v.tls.hotServerCAConfigMap }}
+      items:
+        - key: ca-bundle.crt
+          path: ca-bundle.crt
+  {{- end }}
   {{- end }}
   {{- if include "fse.jwt" . }}
   - name: jwt

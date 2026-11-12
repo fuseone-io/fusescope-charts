@@ -45,7 +45,7 @@ for values in "$chart"/ci/*-values.yaml; do
     helm lint --strict "$chart" -f "$values" >/dev/null
     helm template check "$chart" -f "$values" --namespace fusescope > "$work/$name.yaml"
     kubeconform -strict -summary "$work/$name.yaml"
-    python3 - "$work/$name.yaml" "$work" "$name" <<'PY'
+    python3 - "$work/$name.yaml" "$work" "$name" "$values" <<'PY'
 import sys, yaml
 docs = [d for d in yaml.safe_load_all(open(sys.argv[1])) if d]
 work, name = sys.argv[2], sys.argv[3]
@@ -112,6 +112,26 @@ for role, pod in pods.items():
     items = [i["key"] for i in cas[0]["secret"].get("items", [])]
     if items != want_items[role] or any(i["key"] != i["path"] for i in cas[0]["secret"]["items"]):
         fail(f"{role} projects client CAs {items}, not {want_items[role]}")
+# The querier alone dials the ingesters' hot window, so it alone trusts their CA, through
+# SSL_CERT_FILE and a ConfigMap whose one key is projected by name; with TLS off no role does.
+values = yaml.safe_load(open(sys.argv[4]))
+hot_ca = values.get("tls", {}).get("hotServerCAConfigMap")
+for role, pod in pods.items():
+    container = pod["containers"][0]
+    env = {e["name"]: e.get("value") for e in container.get("env", [])}
+    volumes = [v for v in pod["volumes"] if v["name"] == "hot-server-ca"]
+    mounts = [m for m in container.get("volumeMounts", []) if m["name"] == "hot-server-ca"]
+    if not tls_on or role != "querier":
+        if "SSL_CERT_FILE" in env or volumes or mounts:
+            fail(f"{role} trusts a hot-window CA: {env.get('SSL_CERT_FILE')} {volumes}")
+        continue
+    if env.get("SSL_CERT_FILE") != "/etc/fusescope/hot-server-ca/ca-bundle.crt":
+        fail(f"the querier's SSL_CERT_FILE is {env.get('SSL_CERT_FILE')}")
+    want = {"name": hot_ca, "items": [{"key": "ca-bundle.crt", "path": "ca-bundle.crt"}]}
+    if len(volumes) != 1 or volumes[0].get("configMap") != want:
+        fail(f"the querier's hot-window CA volume is {volumes}, not {want}")
+    if mounts != [{"name": "hot-server-ca", "mountPath": "/etc/fusescope/hot-server-ca", "readOnly": True}]:
+        fail(f"the querier mounts its hot-window CA as {mounts}")
 if tls_on:
     cas = {v["secret"]["secretName"] for pod in pods.values() for v in pod["volumes"] if v["name"] == "client-ca"}
     named = [identities["ingester"], identities["querier"], *cas, *secrets.values()]
@@ -135,6 +155,7 @@ refuse
 refuse -f "$chart/ci/staging-values.yaml" --set tls.enabled=false
 refuse -f "$chart/ci/staging-values.yaml" --set auth.mode=oauth
 refuse -f "$chart/ci/staging-values.yaml" --set tls.clientCASecret=
+refuse -f "$chart/ci/staging-values.yaml" --set tls.hotServerCAConfigMap=
 refuse -f "$chart/ci/staging-values.yaml" --set secrets.querier=fusescope-engine-ingester
 refuse -f "$chart/ci/staging-values.yaml" --set tls.identities.querier=fusescope-engine-ingester-tls
 refuse -f "$chart/ci/staging-values.yaml" --set tls.clientCASecret=fusescope-engine-querier-tls
@@ -165,7 +186,7 @@ PY
 for bound in 1 86400; do
     helm template check "$chart" -f "$chart/ci/staging-values.yaml" --set startupTimeoutSecs=$bound >/dev/null
 done
-echo "chart refuses a release without its image repository or its secrets, any two Secrets alike (roles, migrator, client CAs, identities), a startup budget outside 1..86400, a migration backoff outside 0..10, jwt without tls, or an unknown auth mode; without the migration Job it needs no migrator and no role migrates"
+echo "chart refuses a release without its image repository or its secrets, any two Secrets alike (roles, migrator, client CAs, identities), a TLS release without the hot window's CA bundle, a startup budget outside 1..86400, a migration backoff outside 0..10, jwt without tls, or an unknown auth mode; without the migration Job it needs no migrator and no role migrates"
 
 # Under the fusescope chart, through the package helm dependency build
 # embeds there, which is what a release of that chart carries.

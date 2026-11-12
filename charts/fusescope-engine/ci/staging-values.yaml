@@ -17,6 +17,7 @@ serviceAccounts:
       eks.amazonaws.com/role-arn: arn:aws:iam::000000000000:role/fusescope-compactor
 tls:
   clientCASecret: fusescope-engine-client-cas
+  hotServerCAConfigMap: fusescope-engine-hot-server-ca
   identities:
     ingester: fusescope-engine-ingester-tls
     querier: fusescope-engine-querier-tls
