@@ -9,9 +9,11 @@
 WARNING: fusescopeCollector.otlp.insecure is on. The receiver otlp/insecure takes OTLP on
 {{ include "otelCollector.fullname" . }}:{{ .Values.otelCollector.ports.otlp.servicePort }} (gRPC) and :{{ index .Values.otelCollector.ports "otlp-http" "servicePort" }} (HTTP), the earlier collector's Service name and ports,
 and on the collector's own Service ({{ .Values.fusescopeCollector.otlp.grpcPort }}, {{ .Values.fusescopeCollector.otlp.httpPort }}), without TLS or a key. Any workload that reaches
-these ports can send, inject or forge telemetry. Limit them with a NetworkPolicy, keep an inventory
-of the emitters, and follow the migration guide to move each client to TLS and a key; turn this off
-once otelcol_receiver_accepted_*{receiver="otlp/insecure"} stays at zero (collector ADR 0013).
+these ports can send, inject or forge telemetry. Admit only your emitters with
+fusescopeCollector.otlp.networkPolicy.ingressFrom, keep an inventory of them, and follow the
+migration guide to move each client to TLS and a key. Turn this off only when the
+otelcol_receiver_{accepted,refused,failed}_*{receiver="otlp/insecure"} counters show no increase
+through the guide's window and every client in the inventory is moved and verified (collector ADR 0013).
 {{- else if not (include "fusescopeCollector.active" .) }}
 
 WARNING: no collector in this release receives telemetry. Turn on a path with TLS and a key:

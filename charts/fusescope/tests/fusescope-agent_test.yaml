@@ -57,6 +57,9 @@ tests:
     template: templates/fusescope-collector/configmap.yaml
     set:
       fusescopeCollector.otlp.insecure: true
+      fusescopeCollector.otlp.networkPolicy.ingressFrom:
+        - podSelector:
+            matchLabels: {app: sdk}
     asserts:
       - matchRegex:
           path: data["config.yaml"]
@@ -203,10 +206,10 @@ tests:
             targetPort: otlp-agents
             protocol: TCP
 
+  # With the plaintext receiver too, 4317/4318 admit only otlp.networkPolicy.ingressFrom
+  # (fusescope-collector-networkpolicy_test.yaml).
   - it: should let only this release's agents reach the agents' port, and anyone the other ports
     template: templates/fusescope-collector/networkpolicy.yaml
-    set:
-      fusescopeCollector.otlp.insecure: true
     asserts:
       - isKind:
           of: NetworkPolicy
@@ -229,10 +232,6 @@ tests:
                 - port: otlp-agents
                   protocol: TCP
             - ports:
-                - port: otlp
-                  protocol: TCP
-                - port: otlp-http
-                  protocol: TCP
                 - port: health
                   protocol: TCP
 
@@ -311,6 +310,9 @@ tests:
     set:
       fusescopeCollector.otlp.insecure: true
       fusescopeCollector.agentListener.port: 4317
+      fusescopeCollector.otlp.networkPolicy.ingressFrom:
+        - podSelector:
+            matchLabels: {app: sdk}
     asserts:
       - failedTemplate:
           errorMessage: "fusescopeCollector.agentListener.port 4317 is already used by the collector (13133, 8888, 4317, 4318)"
@@ -323,6 +325,9 @@ tests:
       - ./values/otlp-insecure.yaml
     set:
       fusescopeCollector.agentListener.port: 4319
+      fusescopeCollector.otlp.networkPolicy.ingressFrom:
+        - podSelector:
+            matchLabels: {app: sdk}
     asserts:
       - failedTemplate:
           errorMessage: "fusescopeCollector.agentListener.port 4319 is already used by the collector (13133, 8888, 4317, 4318, 4319)"
