@@ -6,7 +6,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/fuseone-io/fusescope:0.163.0
+          value: ghcr.io/fuseone-io/fusescope:0.165.0
 
   - it: should fall back to the chart's appVersion without a tag
     set:
@@ -14,7 +14,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/fuseone-io/fusescope:0.163.0
+          value: ghcr.io/fuseone-io/fusescope:0.165.0
 
   - it: should take the global image registry
     set:
@@ -22,4 +22,4 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
-          value: registry.example.com/fuseone-io/fusescope:0.163.0
+          value: registry.example.com/fuseone-io/fusescope:0.165.0

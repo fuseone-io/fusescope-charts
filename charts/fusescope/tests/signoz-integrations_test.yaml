@@ -1,0 +1,88 @@
+suite: Test the integrations the backend installs by itself
+
+templates:
+  - templates/signoz/statefulset.yaml
+
+release:
+  name: fusescope
+  namespace: platform
+
+tests:
+  - it: should omit the variable when the list is empty
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_INTEGRATIONS_AUTOINSTALL
+          any: true
+
+  - it: should render one integration
+    set:
+      signoz.integrations.autoInstall: [builtin-fusescope_collector]
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_INTEGRATIONS_AUTOINSTALL
+            value: builtin-fusescope_collector
+
+  - it: should join several integrations with commas, in order
+    set:
+      signoz.integrations.autoInstall: [builtin-redis, builtin-aws-rds_mysql, builtin-fusescope_collector]
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_INTEGRATIONS_AUTOINSTALL
+            value: builtin-redis,builtin-aws-rds_mysql,builtin-fusescope_collector
+
+  - it: should refuse an id that is not built-in
+    set:
+      signoz.integrations.autoInstall: [redis]
+    asserts:
+      - failedTemplate:
+          errorPattern: 'signoz.integrations.autoInstall: "redis" is not a built-in integration id'
+
+  - it: should refuse an id with a comma, which the variable could not carry
+    set:
+      signoz.integrations.autoInstall: ["builtin-redis,builtin-nginx"]
+    asserts:
+      - failedTemplate:
+          errorPattern: 'is not a built-in integration id'
+
+  - it: should refuse an integration listed twice
+    set:
+      signoz.integrations.autoInstall: [builtin-redis, builtin-redis]
+    asserts:
+      - failedTemplate:
+          errorPattern: "signoz.integrations.autoInstall: builtin-redis is listed twice"
+
+  - it: should refuse the collector integration without the collector's self-metrics
+    set:
+      signoz.integrations.autoInstall: [builtin-fusescope_collector]
+      fusescopeCollector.selfMetrics.enabled: false
+    asserts:
+      - failedTemplate:
+          errorPattern: "builtin-fusescope_collector reads the collector's own telemetry: set fusescopeCollector.selfMetrics.enabled"
+
+  - it: should accept the collector integration whatever renders the collector, whose absence its no-telemetry alert reports
+    set:
+      signoz.integrations.autoInstall: [builtin-fusescope_collector]
+      fusescopeCollector.enabled: false
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_INTEGRATIONS_AUTOINSTALL
+            value: builtin-fusescope_collector
+
+  - it: should accept other integrations without the collector's self-metrics
+    set:
+      signoz.integrations.autoInstall: [builtin-redis]
+      fusescopeCollector.selfMetrics.enabled: false
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_INTEGRATIONS_AUTOINSTALL
+            value: builtin-redis
