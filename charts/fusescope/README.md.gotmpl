@@ -210,6 +210,12 @@ The chart renders a disk for the bucket, a filesystem cache disk in front of it 
 
 > [!WARNING]
 > ### Breaking Changes
+> #### Version 0.168.2
+> The FuseScope collector moves from 0.6.1 to 0.6.2, pinned by its signed multi-arch digest (`sha256:35b0ae88…98909`). This is also the image of the agents' DaemonSet.
+>
+> - **What changes:** the collector's `logspipeline` module publishes the canonical log pipelines corpus (collector ADR 0012, step 4). The backend's pipeline preview will read it at this version. The collector's behaviour and `fusescope-schema` are unchanged since 0.6.1.
+> - **No configuration change.** `fusescope-schema` stays on 0.4.2.
+>
 > #### Version 0.168.1
 > **Security fix.** In 0.168.0, with `fusescopeCollector.otlp.insecure` and the agents' listener NetworkPolicy (`agentListener.networkPolicy.enabled`, on by default) both on, the chart's NetworkPolicy admitted any source on 4317 and 4318. NetworkPolicies add up, so a policy of yours could not narrow that.
 >
