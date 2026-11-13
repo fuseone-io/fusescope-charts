@@ -319,6 +319,7 @@ Create Env
 {{- $defaultEnv = merge $defaultEnv (include "signoz.proxyEnv" . | fromYaml) -}}
 {{- with include "signoz.ingestionUrl" . }}{{ $_ := set $defaultEnv "signoz_global_ingestion__url" . }}{{ end -}}
 {{- $defaultEnv = merge $defaultEnv (include "signoz.retentionEnv" . | fromYaml) -}}
+{{- $defaultEnv = merge $defaultEnv (include "signoz.integrationsEnv" . | fromYaml) -}}
 
 {{/*
 SQL STORE POSTGRES ENV
@@ -459,6 +460,31 @@ Default retention env, as a YAML map. Unset signals keep the schema default.
 {{- with index $default $signal }}
 signoz_retention_default_{{ $signal }}: {{ int64 . | quote }}
 {{- end }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Integrations FuseScope installs by itself, as a YAML map; nothing when the list is empty.
+The ids are checked as FuseScope's catalog schema allows them; FuseScope checks them against
+its catalog when it starts.
+*/}}
+{{- define "signoz.integrationsEnv" -}}
+{{- $ids := ((.Values.signoz.integrations | default dict).autoInstall | default list) -}}
+{{- $seen := dict -}}
+{{- range $ids }}
+{{- if not (regexMatch "^builtin-[a-z0-9_]+(-[a-z0-9_]+)*$" (toString .)) }}
+{{- fail (printf "signoz.integrations.autoInstall: %q is not a built-in integration id" (toString .)) }}
+{{- end }}
+{{- if hasKey $seen . }}
+{{- fail (printf "signoz.integrations.autoInstall: %s is listed twice" .) }}
+{{- end }}
+{{- $_ := set $seen . true }}
+{{- end }}
+{{- if and (has "builtin-fusescope_collector" $ids) (not $.Values.fusescopeCollector.selfMetrics.enabled) }}
+{{- fail "signoz.integrations.autoInstall: builtin-fusescope_collector reads the collector's own telemetry: set fusescopeCollector.selfMetrics.enabled" }}
+{{- end }}
+{{- with $ids }}
+signoz_integrations_autoinstall: {{ join "," . | quote }}
 {{- end }}
 {{- end -}}
 

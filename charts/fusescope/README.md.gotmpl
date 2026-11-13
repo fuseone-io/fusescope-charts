@@ -210,6 +210,19 @@ The chart renders a disk for the bucket, a filesystem cache disk in front of it 
 
 > [!WARNING]
 > ### Breaking Changes
+> #### Version 0.169.0
+> FuseScope moves from 0.163.0 to 0.165.0 (`signoz.image.tag`).
+>
+> - **Installed integrations own their dashboards and alert rules.** At startup, migration 147 moves each installed integration's dashboards to the new ownership table. It refuses, without changing anything, a row it cannot attribute to one installed integration, and FuseScope does not start until that row is fixed or removed. The error lists each row. Migration 148 adds the table that records automatic installations.
+> - **The integration catalog moves to v1.2.0**, which adds `builtin-fusescope_collector`: a dashboard and eight alert rules on the collector's own telemetry.
+> - **Concurrent integration requests:** install, upgrade and uninstall of one integration run one at a time. A request that meets another one gets 409. Retrying completes an interrupted one.
+> - **New value: `signoz.integrations.autoInstall`**, empty by default. It lists built-in integrations FuseScope installs in every organization, existing and new, once, as `fusescope:auto-install`.
+>   - Removing an id installs nothing more and uninstalls nothing.
+>   - An organization that uninstalls one is never given it again.
+>   - The chart refuses an id that is not built-in or is listed twice, and refuses `builtin-fusescope_collector` without `fusescopeCollector.selfMetrics.enabled`.
+>   - FuseScope refuses to start with an id its catalog does not serve.
+> - **No configuration change is required.**
+>
 > #### Version 0.168.2
 > The FuseScope collector moves from 0.6.1 to 0.6.2, pinned by its signed multi-arch digest (`sha256:35b0ae88…98909`). This is also the image of the agents' DaemonSet.
 >

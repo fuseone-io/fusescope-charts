@@ -795,8 +795,8 @@ signoz:
     # @default -- "fuseone-io/fusescope"
     repository: fuseone-io/fusescope
     # signoz.image.tag - The container image tag.
-    # @default -- "0.163.0"
-    tag: 0.163.0
+    # @default -- "0.165.0"
+    tag: 0.165.0
     # signoz.image.pullPolicy - The image pull policy.
     # @default -- "IfNotPresent"
     pullPolicy: IfNotPresent
@@ -1059,6 +1059,15 @@ signoz:
       # signoz.retention.default.metrics -- (int) Default metrics retention in days. Empty keeps the schema default.
       # @section -- SigNoz Retention
       metrics:
+  integrations:
+    # signoz.integrations.autoInstall -- Built-in integrations FuseScope installs in every
+    # organization, existing and new, once, as `fusescope:auto-install`, through the same path as
+    # Integrations > Install. Each id must be in the catalog of the FuseScope release this chart runs,
+    # or FuseScope does not start. Removing an id installs nothing more and uninstalls nothing; an
+    # organization that uninstalls one is never given it again. `builtin-fusescope_collector` needs
+    # `fusescopeCollector.selfMetrics.enabled`.
+    # @section -- SigNoz Integrations
+    autoInstall: []
   # signoz.resources -- Resource requests and limits.
   # Ref: http://kubernetes.io/docs/user-guide/compute-resources/
   # @section -- SigNoz
