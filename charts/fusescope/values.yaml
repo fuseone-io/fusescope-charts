@@ -1478,14 +1478,14 @@ fusescopeCollector:
   # @section -- FuseScope Collector
   replicaCount: 1
   # fusescopeCollector.image -- Collector image, by `tag` and `digest`: with both, the image
-  # is `<tag>@<digest>` and the digest is what is pulled. The default is the signed 0.6.2
+  # is `<tag>@<digest>` and the digest is what is pulled. The default is the signed 0.6.3
   # multi-arch index.
   # @section -- FuseScope Collector
   image:
     registry: ghcr.io
     repository: fuseone-io/fusescope-collector
-    tag: 0.6.2
-    digest: sha256:35b0ae88a6d7bb7735e82e63ee6f91d1e8fed158f24e23c13639577426c98909
+    tag: 0.6.3
+    digest: sha256:d97596ad904d081e2c824790429a1ffa451ec1418089fe7fe3c131f70a4c8431
     pullPolicy: IfNotPresent
   # fusescopeCollector.imagePullSecrets -- Image pull secrets. Overrides the root and global values.
   # @section -- FuseScope Collector
@@ -1806,7 +1806,8 @@ fusescopeCollector:
 # @section -- FuseScope Agent
 fusescopeAgent:
   # fusescopeAgent.enabled -- Run the FuseScope collector in agent mode, a DaemonSet: pod logs,
-  # host metrics and kubelet stats of each node, sent to the collector's agents' listener
+  # host metrics and kubelet stats of each node, and with `otlp.enabled` the OTLP of the node's
+  # pods, sent to the collector's agents' listener
   # (`fusescopeCollector.agentListener`) over mTLS with TLS 1.3 and a token. It writes no storage
   # and takes no OpAMP configuration. Needs `fusescopeCollector.agentListener.enabled`.
   # @section -- FuseScope Agent
@@ -1882,6 +1883,56 @@ fusescopeAgent:
     # whatever answers on the node's port 10250.
     # @section -- FuseScope Agent
     insecureSkipVerify: false
+  otlp:
+    # fusescopeAgent.otlp.enabled -- Receive OTLP from pods' SDKs on the agent of their own node
+    # ([collector ADR 0014](https://github.com/fuseone-io/fusescope-collector-server/blob/main/docs/adr/0014-otlp-from-pods-to-the-agent.md)),
+    # through the Service `RELEASE-fusescope-agent-otlp` with `internalTrafficPolicy: Local`,
+    # over TLS 1.3 with a bearer token, both required. No plaintext, `hostPort` or `hostNetwork`.
+    # Needs Kubernetes 1.26 or later. The node-local route is not isolation: TLS and the token
+    # are the security boundary.
+    # @section -- FuseScope Agent
+    enabled: false
+    # fusescopeAgent.otlp.grpcPort -- OTLP/gRPC port, on the pod and the Service. Not 13133 or
+    # 8888, which the agent uses.
+    # @section -- FuseScope Agent
+    grpcPort: 4317
+    # fusescopeAgent.otlp.httpPort -- OTLP/HTTP port, on the pod and the Service.
+    # @section -- FuseScope Agent
+    httpPort: 4318
+    tls:
+      # fusescopeAgent.otlp.tls.existingSecret -- (string) `kubernetes.io/tls` Secret with the
+      # server certificate and key. The certificate must name the Service
+      # (`RELEASE-fusescope-agent-otlp.NAMESPACE.svc`). Renewals are read again within an hour.
+      # @section -- FuseScope Agent
+      existingSecret: ""
+      # fusescopeAgent.otlp.tls.certManager -- A cert-manager Certificate (server auth) for every
+      # name of the Service, in `RELEASE-fusescope-agent-otlp-tls`, instead of `existingSecret`.
+      # With a CA issuer, its `ca.crt` is the bundle SDKs verify the agent with.
+      # @section -- FuseScope Agent
+      certManager:
+        enabled: false
+        issuerRef:
+          name: ""
+          kind: Issuer
+          group: cert-manager.io
+        duration: 2160h
+        renewBefore: 360h
+    token:
+      # fusescopeAgent.otlp.token.existingSecret -- (string) Secret holding the bearer token SDKs
+      # present, required. Not the agents' gateway token (`fusescopeCollector.agentListener.token`).
+      # Use a header-safe alphabet, preferably base64url, e.g. `openssl rand -hex 32`.
+      # @section -- FuseScope Agent
+      existingSecret: ""
+      # fusescopeAgent.otlp.token.secretKey -- Key in that Secret holding the token.
+      # @section -- FuseScope Agent
+      secretKey: token
+    networkPolicy:
+      # fusescopeAgent.otlp.networkPolicy.ingressFrom -- NetworkPolicy peers admitted on the two
+      # OTLP ports, e.g. a `namespaceSelector` for the application namespaces. Empty, no policy is
+      # rendered. Extra defence only: a policy cannot express "same node", so any admitted pod can
+      # still reach every agent's Pod IP.
+      # @section -- FuseScope Agent
+      ingressFrom: []
   # fusescopeAgent.statePath -- Host directory for the log read offsets, so a restarted agent
   # resumes where it stopped.
   # @section -- FuseScope Agent

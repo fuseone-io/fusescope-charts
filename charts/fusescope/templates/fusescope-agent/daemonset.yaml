@@ -77,6 +77,15 @@ spec:
             - name: health
               containerPort: 13133
               protocol: TCP
+            {{- if $a.otlp.enabled }}
+            # Reached through the node-local Service only; no hostPort (collector ADR 0014).
+            - name: otlp-grpc
+              containerPort: {{ $a.otlp.grpcPort }}
+              protocol: TCP
+            - name: otlp-http
+              containerPort: {{ $a.otlp.httpPort }}
+              protocol: TCP
+            {{- end }}
           livenessProbe:
             tcpSocket:
               port: health
@@ -102,6 +111,14 @@ spec:
             - name: token
               mountPath: /etc/fusescope-agent/token
               readOnly: true
+            {{- if $a.otlp.enabled }}
+            - name: otlp-tls
+              mountPath: /etc/fusescope-agent/otlp-tls
+              readOnly: true
+            - name: otlp-token
+              mountPath: /etc/fusescope-agent/otlp-token
+              readOnly: true
+            {{- end }}
             {{- if $a.podLogs.enabled }}
             - name: pod-logs
               mountPath: /var/log/pods
@@ -143,6 +160,24 @@ spec:
             items:
               - key: {{ include "fusescopeCollector.agentTokenKey" . }}
                 path: token
+        {{- if $a.otlp.enabled }}
+        - name: otlp-tls
+          secret:
+            secretName: {{ include "fusescopeAgent.otlpTLSSecret" . }}
+            defaultMode: 0440
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+        - name: otlp-token
+          secret:
+            secretName: {{ $a.otlp.token.existingSecret }}
+            defaultMode: 0440
+            items:
+              - key: {{ $a.otlp.token.secretKey }}
+                path: token
+        {{- end }}
         {{- if $a.podLogs.enabled }}
         - name: pod-logs
           hostPath:

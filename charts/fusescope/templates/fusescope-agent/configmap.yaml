@@ -4,6 +4,14 @@
 {{- $metrics := list -}}
 {{- if $a.hostMetrics.enabled }}{{ $metrics = append $metrics "host_metrics" }}{{ end -}}
 {{- if $a.kubeletStats.enabled }}{{ $metrics = append $metrics "kubelet_stats" }}{{ end -}}
+{{- $logs := list -}}
+{{- if $a.podLogs.enabled }}{{ $logs = append $logs "file_log/pods" }}{{ end -}}
+{{- $traces := list -}}
+{{- if $a.otlp.enabled -}}
+{{- $metrics = append $metrics "otlp/sdks" -}}
+{{- $logs = append $logs "otlp/sdks" -}}
+{{- $traces = append $traces "otlp/sdks" -}}
+{{- end -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -12,8 +20,9 @@ metadata:
     {{- include "fusescopeAgent.labels" . | nindent 4 }}
 data:
   # Agent mode (collector-server config/agent-kubernetes.yaml): this node's
-  # telemetry, sent to the gateway over mTLS with TLS 1.3 and a token. It
-  # writes no storage and takes no configuration over OpAMP.
+  # telemetry, and with otlp.enabled its pods' OTLP (collector ADR 0014), sent
+  # to the gateway over mTLS with TLS 1.3 and a token. It writes no storage and
+  # takes no configuration over OpAMP.
   config.yaml: |
     extensions:
       # Probes only: status, no configuration.
@@ -29,6 +38,12 @@ data:
       bearertokenauth/gateway:
         scheme: Bearer
         filename: /etc/fusescope-agent/token/token
+      {{- if $a.otlp.enabled }}
+      # The token pods' SDKs present; read again when its Secret changes.
+      bearertokenauth/sdks:
+        scheme: Bearer
+        filename: /etc/fusescope-agent/otlp-token/token
+      {{- end }}
       {{- if $a.podLogs.enabled }}
       file_storage/checkpoints:
         directory: /var/lib/fusescope-agent/state
@@ -36,6 +51,23 @@ data:
       {{- end }}
 
     receivers:
+      {{- if $a.otlp.enabled }}
+      # Pods' SDKs, through the node-local Service (collector ADR 0014): TLS 1.3
+      # and the token, both required; a renewed certificate is read again.
+      otlp/sdks:
+        protocols:
+          {{- range $proto, $port := dict "grpc" $a.otlp.grpcPort "http" $a.otlp.httpPort }}
+          {{ $proto }}:
+            endpoint: 0.0.0.0:{{ $port }}
+            tls:
+              min_version: "1.3"
+              cert_file: /etc/fusescope-agent/otlp-tls/tls.crt
+              key_file: /etc/fusescope-agent/otlp-tls/tls.key
+              reload_interval: 1h
+            auth:
+              authenticator: bearertokenauth/sdks
+          {{- end }}
+      {{- end }}
       {{- if $a.podLogs.enabled }}
       file_log/pods:
         include: [/var/log/pods/*/*/*.log]
@@ -100,7 +132,7 @@ data:
             flush_timeout: 200ms
 
     service:
-      extensions: [healthcheckv2, bearertokenauth/gateway{{ if $a.podLogs.enabled }}, file_storage/checkpoints{{ end }}]
+      extensions: [healthcheckv2, bearertokenauth/gateway{{ if $a.otlp.enabled }}, bearertokenauth/sdks{{ end }}{{ if $a.podLogs.enabled }}, file_storage/checkpoints{{ end }}]
       # Only on loopback, never exposed.
       telemetry:
         metrics:
@@ -111,15 +143,21 @@ data:
                     host: 127.0.0.1
                     port: 8888
       pipelines:
+        {{- if $traces }}
+        traces:
+          receivers: [{{ join ", " $traces }}]
+          processors: [memory_limiter, k8s_attributes, resource_detection]
+          exporters: [otlp_grpc/gateway]
+        {{- end }}
         {{- if $metrics }}
         metrics:
           receivers: [{{ join ", " $metrics }}]
           processors: [memory_limiter, k8s_attributes, resource_detection]
           exporters: [otlp_grpc/gateway]
         {{- end }}
-        {{- if $a.podLogs.enabled }}
+        {{- if $logs }}
         logs:
-          receivers: [file_log/pods]
+          receivers: [{{ join ", " $logs }}]
           processors: [memory_limiter, k8s_attributes, resource_detection]
           exporters: [otlp_grpc/gateway]
         {{- end }}

@@ -1,0 +1,599 @@
+suite: Test OTLP from pods to the agent on their node (collector ADR 0014)
+
+templates:
+  - templates/fusescope-agent/validate.yaml
+  - templates/fusescope-agent/configmap.yaml
+  - templates/fusescope-agent/daemonset.yaml
+  - templates/fusescope-agent/service-otlp.yaml
+  - templates/fusescope-agent/networkpolicy.yaml
+  - templates/fusescope-collector/certificates.yaml
+
+release:
+  name: fusescope
+  namespace: platform
+
+capabilities:
+  majorVersion: 1
+  minorVersion: 30
+  apiVersions:
+    - networking.k8s.io/v1
+    - cert-manager.io/v1
+
+# The agents' listener and the agents, with OTLP off; tests turn it on.
+values:
+  - ./values/fusescope-agent.yaml
+  - ./values/fusescope-agent-otlp.yaml
+
+tests:
+  # Off by default.
+
+  - it: should serve no OTLP from the agent by default
+    set:
+      fusescopeAgent.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: templates/fusescope-agent/service-otlp.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/fusescope-agent/networkpolicy.yaml
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: otlp/sdks|bearertokenauth/sdks
+        template: templates/fusescope-agent/configmap.yaml
+      - notContains:
+          path: spec.template.spec.containers[0].ports
+          content:
+            name: otlp-grpc
+          any: true
+        template: templates/fusescope-agent/daemonset.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/fusescope-agent/validate.yaml
+
+  # The receiver.
+
+  - it: should receive OTLP on gRPC 4317 and HTTP 4318 with TLS 1.3, reloaded certificates and the token
+    template: templates/fusescope-agent/configmap.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.otlp.enabled: true
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: |-
+            otlp/sdks:
+                protocols:
+                  grpc:
+                    endpoint: 0.0.0.0:4317
+                    tls:
+                      min_version: "1.3"
+                      cert_file: /etc/fusescope-agent/otlp-tls/tls.crt
+                      key_file: /etc/fusescope-agent/otlp-tls/tls.key
+                      reload_interval: 1h
+                    auth:
+                      authenticator: bearertokenauth/sdks
+                  http:
+                    endpoint: 0.0.0.0:4318
+                    tls:
+                      min_version: "1.3"
+                      cert_file: /etc/fusescope-agent/otlp-tls/tls.crt
+                      key_file: /etc/fusescope-agent/otlp-tls/tls.key
+                      reload_interval: 1h
+                    auth:
+                      authenticator: bearertokenauth/sdks
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: |-
+            bearertokenauth/sdks:
+                scheme: Bearer
+                filename: /etc/fusescope-agent/otlp-token/token
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'extensions: \[healthcheckv2, bearertokenauth/gateway, bearertokenauth/sdks, file_storage/checkpoints\]'
+      # Never plaintext: each protocol has its TLS block.
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: insecure
+
+  - it: should add otlp/sdks to all three pipelines next to the node sources
+    template: templates/fusescope-agent/configmap.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.otlp.enabled: true
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: |-
+            traces:
+                  receivers: \[otlp/sdks\]
+                  processors: \[memory_limiter, k8s_attributes, resource_detection\]
+                  exporters: \[otlp_grpc/gateway\]
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: |-
+            metrics:
+                  receivers: \[host_metrics, kubelet_stats, otlp/sdks\]
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: |-
+            logs:
+                  receivers: \[file_log/pods, otlp/sdks\]
+
+  - it: should run an OTLP-only agent, with all three pipelines, as non-root
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.otlp.enabled: true
+      fusescopeAgent.podLogs.enabled: false
+      fusescopeAgent.hostMetrics.enabled: false
+      fusescopeAgent.kubeletStats.enabled: false
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: |-
+            pipelines:
+                traces:
+                  receivers: \[otlp/sdks\]
+                  processors: \[memory_limiter, k8s_attributes, resource_detection\]
+                  exporters: \[otlp_grpc/gateway\]
+                metrics:
+                  receivers: \[otlp/sdks\]
+                  processors: \[memory_limiter, k8s_attributes, resource_detection\]
+                  exporters: \[otlp_grpc/gateway\]
+                logs:
+                  receivers: \[otlp/sdks\]
+                  processors: \[memory_limiter, k8s_attributes, resource_detection\]
+                  exporters: \[otlp_grpc/gateway\]
+        template: templates/fusescope-agent/configmap.yaml
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: file_log|host_metrics|kubelet_stats|file_storage
+        template: templates/fusescope-agent/configmap.yaml
+      - equal:
+          path: spec.template.spec.securityContext.runAsUser
+          value: 65532
+        template: templates/fusescope-agent/daemonset.yaml
+      - equal:
+          path: spec.template.spec.securityContext.runAsNonRoot
+          value: true
+        template: templates/fusescope-agent/daemonset.yaml
+      - notContains:
+          path: spec.template.spec.volumes
+          content:
+            name: pod-logs
+          any: true
+        template: templates/fusescope-agent/daemonset.yaml
+
+  - it: should take the ports from values
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.otlp.enabled: true
+      fusescopeAgent.otlp.grpcPort: 14317
+      fusescopeAgent.otlp.httpPort: 14318
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'grpc:\n\s+endpoint: 0\.0\.0\.0:14317'
+        template: templates/fusescope-agent/configmap.yaml
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'http:\n\s+endpoint: 0\.0\.0\.0:14318'
+        template: templates/fusescope-agent/configmap.yaml
+      - contains:
+          path: spec.template.spec.containers[0].ports
+          content:
+            name: otlp-grpc
+            containerPort: 14317
+            protocol: TCP
+        template: templates/fusescope-agent/daemonset.yaml
+      - contains:
+          path: spec.ports
+          content:
+            name: otlp-http
+            port: 14318
+            targetPort: otlp-http
+            protocol: TCP
+        template: templates/fusescope-agent/service-otlp.yaml
+
+  # The pod.
+
+  - it: should expose the two ports on the container, with no hostPort or hostNetwork
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.otlp.enabled: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].ports
+          content:
+            name: otlp-grpc
+            containerPort: 4317
+            protocol: TCP
+      - contains:
+          path: spec.template.spec.containers[0].ports
+          content:
+            name: otlp-http
+            containerPort: 4318
+            protocol: TCP
+      - notExists:
+          path: spec.template.spec.containers[0].ports[1].hostPort
+      - notExists:
+          path: spec.template.spec.containers[0].ports[2].hostPort
+      - equal:
+          path: spec.template.spec.hostNetwork
+          value: false
+
+  - it: should mount the server certificate and the token as directories, without subPath
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.otlp.enabled: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: otlp-tls
+            mountPath: /etc/fusescope-agent/otlp-tls
+            readOnly: true
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: otlp-token
+            mountPath: /etc/fusescope-agent/otlp-token
+            readOnly: true
+      - notExists:
+          path: spec.template.spec.containers[0].volumeMounts[?(@.subPath)]
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: otlp-token
+            secret:
+              secretName: sdk-token
+              defaultMode: 0440
+              items:
+                - key: token
+                  path: token
+
+  # The two TLS paths.
+
+  - it: should mount exactly the existingSecret and render no Certificate for it
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.otlp.enabled: true
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: otlp-tls
+            secret:
+              secretName: agent-otlp-server
+              defaultMode: 0440
+              items:
+                - key: tls.crt
+                  path: tls.crt
+                - key: tls.key
+                  path: tls.key
+        template: templates/fusescope-agent/daemonset.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/fusescope-collector/certificates.yaml
+
+  - it: should issue a server Certificate for every name of the Service and mount its Secret
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.otlp.enabled: true
+      fusescopeAgent.otlp.tls.existingSecret: ""
+      fusescopeAgent.otlp.tls.certManager.enabled: true
+      fusescopeAgent.otlp.tls.certManager.issuerRef.name: internal-ca
+    asserts:
+      - hasDocuments:
+          count: 1
+        template: templates/fusescope-collector/certificates.yaml
+      - isKind:
+          of: Certificate
+        template: templates/fusescope-collector/certificates.yaml
+      - equal:
+          path: metadata.name
+          value: fusescope-agent-otlp-tls
+        template: templates/fusescope-collector/certificates.yaml
+      - equal:
+          path: spec.secretName
+          value: fusescope-agent-otlp-tls
+        template: templates/fusescope-collector/certificates.yaml
+      - equal:
+          path: spec.dnsNames
+          value:
+            - fusescope-agent-otlp
+            - fusescope-agent-otlp.platform
+            - fusescope-agent-otlp.platform.svc
+            - fusescope-agent-otlp.platform.svc.cluster.local
+        template: templates/fusescope-collector/certificates.yaml
+      - equal:
+          path: spec.usages
+          value: [server auth]
+        template: templates/fusescope-collector/certificates.yaml
+      - equal:
+          path: spec.issuerRef
+          value: {name: internal-ca, kind: Issuer, group: cert-manager.io}
+        template: templates/fusescope-collector/certificates.yaml
+      - equal:
+          path: spec.privateKey.rotationPolicy
+          value: Always
+        template: templates/fusescope-collector/certificates.yaml
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: otlp-tls
+            secret:
+              secretName: fusescope-agent-otlp-tls
+              defaultMode: 0440
+              items:
+                - key: tls.crt
+                  path: tls.crt
+                - key: tls.key
+                  path: tls.key
+        template: templates/fusescope-agent/daemonset.yaml
+
+  # The Service.
+
+  - it: should route through a ClusterIP Service to the agent on the sender's node only
+    template: templates/fusescope-agent/service-otlp.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.otlp.enabled: true
+    asserts:
+      - isKind:
+          of: Service
+      - equal:
+          path: metadata.name
+          value: fusescope-agent-otlp
+      - equal:
+          path: spec.type
+          value: ClusterIP
+      - equal:
+          path: spec.internalTrafficPolicy
+          value: Local
+      - equal:
+          path: spec.selector
+          value:
+            app.kubernetes.io/name: fusescope
+            app.kubernetes.io/instance: fusescope
+            app.kubernetes.io/component: fusescope-agent
+      - equal:
+          path: spec.ports
+          value:
+            - name: otlp-grpc
+              port: 4317
+              targetPort: otlp-grpc
+              protocol: TCP
+            - name: otlp-http
+              port: 4318
+              targetPort: otlp-http
+              protocol: TCP
+      - notExists:
+          path: spec.externalTrafficPolicy
+
+  # The NetworkPolicy.
+
+  - it: should render no NetworkPolicy with an empty ingressFrom
+    template: templates/fusescope-agent/networkpolicy.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.otlp.enabled: true
+      fusescopeAgent.otlp.networkPolicy.ingressFrom: []
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: should admit only the configured peers on both OTLP ports
+    template: templates/fusescope-agent/networkpolicy.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.otlp.enabled: true
+      fusescopeAgent.otlp.networkPolicy.ingressFrom:
+        - namespaceSelector:
+            matchLabels: {fusescope.io/otlp: "true"}
+    asserts:
+      - isKind:
+          of: NetworkPolicy
+      - equal:
+          path: metadata.name
+          value: fusescope-agent-otlp
+      - equal:
+          path: spec.podSelector.matchLabels
+          value:
+            app.kubernetes.io/name: fusescope
+            app.kubernetes.io/instance: fusescope
+            app.kubernetes.io/component: fusescope-agent
+      - equal:
+          path: spec.policyTypes
+          value: [Ingress]
+      - equal:
+          path: spec.ingress[0]
+          value:
+            from:
+              - namespaceSelector:
+                  matchLabels: {fusescope.io/otlp: "true"}
+            ports:
+              - port: otlp-grpc
+                protocol: TCP
+              - port: otlp-http
+                protocol: TCP
+      # Probes keep reaching the health port; no rule without a source names an OTLP port.
+      - equal:
+          path: spec.ingress[1]
+          value:
+            ports:
+              - port: health
+                protocol: TCP
+      - lengthEqual:
+          path: spec.ingress
+          count: 2
+
+  # Refusals, in an always-rendered template.
+
+  - it: should refuse otlp.enabled with the agent off
+    template: templates/fusescope-agent/validate.yaml
+    set:
+      fusescopeAgent.enabled: false
+      fusescopeAgent.otlp.enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: fusescopeAgent.otlp.enabled needs fusescopeAgent.enabled
+
+  - it: should refuse OTLP without a server certificate
+    template: templates/fusescope-agent/validate.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.otlp.enabled: true
+      fusescopeAgent.otlp.tls.existingSecret: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: fusescopeAgent.otlp.tls.existingSecret or fusescopeAgent.otlp.tls.certManager.enabled is required
+
+  - it: should refuse two certificate sources
+    template: templates/fusescope-agent/validate.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.otlp.enabled: true
+      fusescopeAgent.otlp.tls.certManager.enabled: true
+      fusescopeAgent.otlp.tls.certManager.issuerRef.name: internal-ca
+    asserts:
+      - failedTemplate:
+          errorPattern: "fusescopeAgent.otlp.tls: set existingSecret or certManager.enabled, not both"
+
+  - it: should refuse cert-manager without an issuer
+    template: templates/fusescope-agent/validate.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.otlp.enabled: true
+      fusescopeAgent.otlp.tls.existingSecret: ""
+      fusescopeAgent.otlp.tls.certManager.enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: fusescopeAgent.otlp.tls.certManager.issuerRef.name is required
+
+  - it: should refuse OTLP without a token
+    template: templates/fusescope-agent/validate.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.otlp.enabled: true
+      fusescopeAgent.otlp.token.existingSecret: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: fusescopeAgent.otlp.token.existingSecret is required
+
+  - it: should refuse an empty token key
+    template: templates/fusescope-agent/validate.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.otlp.enabled: true
+      fusescopeAgent.otlp.token.secretKey: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: fusescopeAgent.otlp.token.secretKey is required
+
+  - it: should refuse the agents' own gateway token
+    template: templates/fusescope-agent/validate.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.otlp.enabled: true
+      fusescopeAgent.otlp.token.existingSecret: agent-token
+    asserts:
+      - failedTemplate:
+          errorPattern: must not be the agents' gateway token
+
+  - it: should accept another key of the gateway token's Secret
+    template: templates/fusescope-agent/validate.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.otlp.enabled: true
+      fusescopeAgent.otlp.token.existingSecret: agent-token
+      fusescopeAgent.otlp.token.secretKey: sdk
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: should refuse Kubernetes older than 1.26
+    template: templates/fusescope-agent/validate.yaml
+    capabilities:
+      majorVersion: 1
+      minorVersion: 25
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.otlp.enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: needs Kubernetes 1.26 or later
+
+  - it: should accept Kubernetes 1.26
+    template: templates/fusescope-agent/validate.yaml
+    capabilities:
+      majorVersion: 1
+      minorVersion: 26
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.otlp.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: should refuse a port out of range
+    template: templates/fusescope-agent/validate.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.otlp.enabled: true
+      fusescopeAgent.otlp.grpcPort: 0
+    asserts:
+      - failedTemplate:
+          errorPattern: "fusescopeAgent.otlp.grpcPort 0 must be between 1 and 65535"
+
+  - it: should refuse a port above 65535
+    template: templates/fusescope-agent/validate.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.otlp.enabled: true
+      fusescopeAgent.otlp.httpPort: 65536
+    asserts:
+      - failedTemplate:
+          errorPattern: "fusescopeAgent.otlp.httpPort 65536 must be between 1 and 65535"
+
+  - it: should refuse the same port for gRPC and HTTP
+    template: templates/fusescope-agent/validate.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.otlp.enabled: true
+      fusescopeAgent.otlp.httpPort: 4317
+    asserts:
+      - failedTemplate:
+          errorPattern: fusescopeAgent.otlp.grpcPort and httpPort must differ
+
+  - it: should refuse the health port
+    template: templates/fusescope-agent/validate.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.otlp.enabled: true
+      fusescopeAgent.otlp.grpcPort: 13133
+    asserts:
+      - failedTemplate:
+          errorPattern: "fusescopeAgent.otlp.grpcPort 13133 is taken by the agent's health check or its own metrics"
+
+  - it: should refuse the self-metrics port
+    template: templates/fusescope-agent/validate.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.otlp.enabled: true
+      fusescopeAgent.otlp.httpPort: 8888
+    asserts:
+      - failedTemplate:
+          errorPattern: "fusescopeAgent.otlp.httpPort 8888 is taken by the agent's health check or its own metrics"
+
+  - it: should refuse a port that is not a number
+    template: templates/fusescope-agent/validate.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.otlp.enabled: true
+      fusescopeAgent.otlp.grpcPort: "4317a"
+    asserts:
+      - failedTemplate:
+          errorPattern: "fusescopeAgent.otlp.grpcPort 4317a must be between 1 and 65535"

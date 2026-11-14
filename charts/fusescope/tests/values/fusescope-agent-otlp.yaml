@@ -1,0 +1,6 @@
+fusescopeAgent:
+  otlp:
+    tls:
+      existingSecret: agent-otlp-server
+    token:
+      existingSecret: sdk-token

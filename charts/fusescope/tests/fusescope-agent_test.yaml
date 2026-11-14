@@ -346,7 +346,7 @@ tests:
           value: fusescope-agent
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/fuseone-io/fusescope-collector:0.6.2@sha256:35b0ae88a6d7bb7735e82e63ee6f91d1e8fed158f24e23c13639577426c98909
+          value: ghcr.io/fuseone-io/fusescope-collector:0.6.3@sha256:d97596ad904d081e2c824790429a1ffa451ec1418089fe7fe3c131f70a4c8431
       - equal:
           path: spec.template.spec.containers[0].args
           value:
@@ -512,7 +512,7 @@ tests:
       fusescopeAgent.kubeletStats.enabled: false
     asserts:
       - failedTemplate:
-          errorMessage: "fusescopeAgent.enabled with nothing to collect: enable podLogs, hostMetrics or kubeletStats"
+          errorMessage: "fusescopeAgent.enabled with nothing to collect: enable podLogs, hostMetrics, kubeletStats or otlp"
 
   - it: should refuse agents without a client certificate
     template: templates/fusescope-agent/daemonset.yaml

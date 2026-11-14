@@ -783,8 +783,73 @@ Fails on agent settings that cannot work. Included first by every agent template
 {{- if and (not $a.gateway.endpoint) (not (include "fusescopeCollector.agentListenerEnabled" .)) -}}
 {{- fail "fusescopeAgent.enabled needs fusescopeCollector.agentListener.enabled, or fusescopeAgent.gateway.endpoint for a gateway outside this release" -}}
 {{- end -}}
-{{- if not (or $a.podLogs.enabled $a.hostMetrics.enabled $a.kubeletStats.enabled) -}}
-{{- fail "fusescopeAgent.enabled with nothing to collect: enable podLogs, hostMetrics or kubeletStats" -}}
+{{- if not (or $a.podLogs.enabled $a.hostMetrics.enabled $a.kubeletStats.enabled $a.otlp.enabled) -}}
+{{- fail "fusescopeAgent.enabled with nothing to collect: enable podLogs, hostMetrics, kubeletStats or otlp" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+The agent's OTLP receiver for pods' SDKs (collector ADR 0014): its Service and its server
+certificate's Secret.
+*/}}
+{{- define "fusescopeAgent.otlpServiceName" -}}
+{{- printf "%s-otlp" (include "fusescopeAgent.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{- define "fusescopeAgent.otlpTLSSecret" -}}
+{{- $tls := .Values.fusescopeAgent.otlp.tls -}}
+{{- if $tls.certManager.enabled -}}
+{{- printf "%s-tls" (include "fusescopeAgent.otlpServiceName" .) | trunc 63 | trimSuffix "-" -}}
+{{- else -}}
+{{- $tls.existingSecret -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Refusals of collector ADR 0014 for the agent's OTLP receiver. Included by an always-rendered
+template, so they also catch otlp.enabled with the agent off.
+*/}}
+{{- define "fusescopeAgent.otlpChecks" -}}
+{{- $a := .Values.fusescopeAgent -}}
+{{- $o := $a.otlp -}}
+{{- if $o.enabled -}}
+{{- if not $a.enabled -}}
+{{- fail "fusescopeAgent.otlp.enabled needs fusescopeAgent.enabled: the OTLP receiver runs in the agents' DaemonSet" -}}
+{{- end -}}
+{{- if semverCompare "<1.26-0" .Capabilities.KubeVersion.Version -}}
+{{- fail (printf "fusescopeAgent.otlp.enabled needs Kubernetes 1.26 or later, for internalTrafficPolicy: Local on its Service (collector ADR 0014); this cluster is %s" .Capabilities.KubeVersion.Version) -}}
+{{- end -}}
+{{- if and $o.tls.existingSecret $o.tls.certManager.enabled -}}
+{{- fail "fusescopeAgent.otlp.tls: set existingSecret or certManager.enabled, not both" -}}
+{{- end -}}
+{{- if not (or $o.tls.existingSecret $o.tls.certManager.enabled) -}}
+{{- fail "fusescopeAgent.otlp.tls.existingSecret or fusescopeAgent.otlp.tls.certManager.enabled is required: the agent serves OTLP only over TLS 1.3 (collector ADR 0014)" -}}
+{{- end -}}
+{{- if and $o.tls.certManager.enabled (not $o.tls.certManager.issuerRef.name) -}}
+{{- fail "fusescopeAgent.otlp.tls.certManager.issuerRef.name is required" -}}
+{{- end -}}
+{{- if not $o.token.existingSecret -}}
+{{- fail "fusescopeAgent.otlp.token.existingSecret is required: the agent accepts OTLP only with a bearer token, read from a Secret (collector ADR 0014)" -}}
+{{- end -}}
+{{- if not $o.token.secretKey -}}
+{{- fail "fusescopeAgent.otlp.token.secretKey is required" -}}
+{{- end -}}
+{{- $gw := .Values.fusescopeCollector.agentListener.token -}}
+{{- if and (eq $o.token.existingSecret (toString $gw.existingSecret)) (eq $o.token.secretKey (toString $gw.secretKey)) -}}
+{{- fail "fusescopeAgent.otlp.token must not be the agents' gateway token (fusescopeCollector.agentListener.token): SDKs get a token of their own (collector ADR 0014)" -}}
+{{- end -}}
+{{- range $name := list "grpcPort" "httpPort" -}}
+{{- $v := toString (index $o $name) -}}
+{{- if or (not (regexMatch "^[0-9]{1,5}$" $v)) (lt (atoi $v) 1) (gt (atoi $v) 65535) -}}
+{{- fail (printf "fusescopeAgent.otlp.%s %s must be between 1 and 65535" $name $v) -}}
+{{- end -}}
+{{- if has (atoi $v) (list 13133 8888) -}}
+{{- fail (printf "fusescopeAgent.otlp.%s %s is taken by the agent's health check or its own metrics" $name $v) -}}
+{{- end -}}
+{{- end -}}
+{{- if eq (toString $o.grpcPort) (toString $o.httpPort) -}}
+{{- fail "fusescopeAgent.otlp.grpcPort and httpPort must differ" -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 

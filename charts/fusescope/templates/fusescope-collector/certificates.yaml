@@ -102,3 +102,31 @@ spec:
     kind: {{ $agentTLS.issuerRef.kind }}
     group: {{ $agentTLS.issuerRef.group }}
 {{- end }}
+{{- $otlpTLS := .Values.fusescopeAgent.otlp.tls.certManager -}}
+{{- if and .Values.fusescopeAgent.enabled .Values.fusescopeAgent.otlp.enabled $otlpTLS.enabled }}
+---
+# The agents' OTLP server certificate, for every name of their node-local Service (collector ADR 0014).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "fusescopeAgent.otlpTLSSecret" . }}
+  labels:
+    {{- include "fusescopeAgent.labels" . | nindent 4 }}
+spec:
+  secretName: {{ include "fusescopeAgent.otlpTLSSecret" . }}
+  dnsNames:
+    {{- include "fusescope.serviceDNSNames" (dict "name" (include "fusescopeAgent.otlpServiceName" .) "namespace" .Release.Namespace "clusterDomain" $clusterDomain) | fromJsonArray | toYaml | nindent 4 }}
+  duration: {{ $otlpTLS.duration }}
+  renewBefore: {{ $otlpTLS.renewBefore }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - server auth
+  issuerRef:
+    # Refused empty by fusescopeAgent.otlpChecks.
+    name: {{ $otlpTLS.issuerRef.name }}
+    kind: {{ $otlpTLS.issuerRef.kind }}
+    group: {{ $otlpTLS.issuerRef.group }}
+{{- end }}

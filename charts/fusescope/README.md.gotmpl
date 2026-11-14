@@ -66,7 +66,7 @@ kubectl delete namespace platform
 The FuseScope collector (`fusescopeCollector`, [fusescope-collector-server](https://github.com/fuseone-io/fusescope-collector-server)) is the chart's OTLP collector. It writes traces, logs and metrics, plus the span metrics it derives from traces, to ClickHouse directly. FuseScope manages its log pipelines, span attribute mapping and LLM pricing over OpAMP; it cannot change what the collector receives or where it writes.
 
 - **What it receives.** It takes telemetry only on the paths you turn on:
-  - the FuseScope agents (`fusescopeAgent` with `fusescopeCollector.agentListener`), over TLS 1.3 with a client certificate and a token;
+  - the FuseScope agents (`fusescopeAgent` with `fusescopeCollector.agentListener`), over TLS 1.3 with a client certificate and a token, carrying with `fusescopeAgent.otlp` the OTLP of each node's pods (below);
   - RUM (`fusescopeCollector.rum`), over TLS with RUM keys;
   - for a SigNoz migration, the plaintext receiver below.
 
@@ -152,12 +152,64 @@ fusescopeAgent:
   2. Issue the listener's and the agents' certificates from the new CA (switch the `issuerRef`, or replace the `existingSecret`s).
   3. Remove the old CA from the bundle, or unset both `existingSecret`s to go back to each Secret's `ca.crt`.
 - **Network.** `fusescopeCollector.agentListener.networkPolicy` (on by default) adds a NetworkPolicy to the collector pods: the agents' port accepts only this release's agent pods in the release's namespace (a `podSelector`, with no namespace label, so it works on any Kubernetes version), and the other ports keep accepting from anywhere. It needs a CNI that enforces NetworkPolicy. For agents elsewhere, `networkPolicy.ingressFrom` replaces the default peer, for example a `namespaceSelector` on a label the agents' namespace carries with a `podSelector` on `app.kubernetes.io/component: fusescope-agent`.
-- **Not an endpoint for applications.** The agent only collects this node's pod logs, host metrics and kubelet stats. It exposes no OTLP port, on the pod or the node. Applications send to the collector, on 4317/4318 only with `fusescopeCollector.otlp.insecure`.
+- **OTLP from applications.** Off by default, the agent only collects this node's pod logs, host metrics and kubelet stats and exposes no OTLP port. With `fusescopeAgent.otlp.enabled`, pods send to the agent on their node over TLS 1.3 with a token, through a Service (next section). It is never exposed on the node: no `hostPort` or `hostNetwork`.
 - **Root, as a restricted exception** ([collector-server ADR 0011](https://github.com/fuseone-io/fusescope-collector-server/pull/82), amending ADR 0004). The agent runs as uid 0 only with `podLogs` or `hostMetrics`, because nodes keep pod logs and parts of `/proc` readable by root only; with `kubeletStats` alone it runs as 65532, and the chart refuses uid 0 or `runAsNonRoot: false` there. A non-root agent gets an `fsGroup` (its `runAsGroup`, unless set), so it can read its mounted certificate, key and token. It is never privileged, cannot escalate privileges, drops every capability, has a read-only root filesystem and the `RuntimeDefault` seccomp profile, and shares no host namespace (no `hostNetwork`, `hostPID` or `hostIPC`). The chart refuses to render it otherwise: any other seccomp profile, on the pod or the container, and any user set on the container (`runAsUser`, `runAsGroup`, `runAsNonRoot` belong to `fusescopeAgent.podSecurityContext` only). Every host path is mounted read-only (`/var/log/pods`, the host root at `/hostfs`) except its log read offsets, `fusescopeAgent.statePath`. Uid 0 can still read most of the node's files through `/hostfs`, capabilities or not: where nodes let a non-root user read pod logs, set `fusescopeAgent.podSecurityContext.runAsUser`, `runAsGroup` and `runAsNonRoot: true`. Its ClusterRole only reads pods, namespaces, nodes and replica sets, plus `nodes/stats` with `kubeletStats`.
 - **Node identity and network.** Without `hostNetwork`, the agent's own hostname is its pod's, so it sets `host.name` and `k8s.node.name` to the node's name (`OTEL_RESOURCE_ATTRIBUTES`, read by the `env` detector ahead of `system`). For the same reason it runs no host network scraper, which would read the pod's network namespace: the node's network traffic comes from kubelet stats (`k8s.node.network.*`).
 - **Pod Security.** With `podLogs` or `hostMetrics`, the agent needs root and host path volumes, which the `restricted` and `baseline` Pod Security levels do not allow: install the release in a namespace labelled `privileged`, or run the agents in a namespace of their own with that label and a gateway outside it (`fusescopeAgent.gateway`), whose release then admits them with `fusescopeCollector.agentListener.networkPolicy.ingressFrom`.
 - **Kubelet.** Kubelet stats are read from `https://NODE_NAME:10250` with the agent's service account and verify the kubelet's serving certificate. Where kubelets serve a self-signed one, `fusescopeAgent.kubeletStats.insecureSkipVerify` turns the check off, or disable `kubeletStats`.
 - **Another gateway.** To send to a gateway outside this release, set `fusescopeAgent.gateway.endpoint` and `fusescopeAgent.gateway.ca.existingSecret`, and give both the same token Secret name (`fusescopeCollector.agentListener.token`).
+
+### OTLP from pods to the agent
+
+With `fusescopeAgent.otlp.enabled`, the agents also receive OTLP from the SDKs of the pods on their node ([collector ADR 0014](https://github.com/fuseone-io/fusescope-collector-server/blob/main/docs/adr/0014-otlp-from-pods-to-the-agent.md)) and send it to the gateway with the node's own telemetry, enriched with the sending pod's Kubernetes attributes. It replaces, for the SDKs that move, the plaintext receiver of a SigNoz migration.
+
+```yaml
+fusescopeAgent:
+  enabled: true
+  otlp:
+    enabled: true
+    tls:
+      certManager:
+        enabled: true
+        issuerRef: {name: internal-ca}       # a CA issuer, so ca.crt is set for the SDKs
+    token:
+      existingSecret: fusescope-agent-otlp-token
+    networkPolicy:
+      ingressFrom:                           # optional, extra defence
+        - namespaceSelector:
+            matchLabels: {fusescope.io/otlp: "true"}
+```
+
+- **The route.** The Service `RELEASE-fusescope-agent-otlp` (gRPC 4317, HTTP 4318) has `internalTrafficPolicy: Local`, so a pod's connection through it goes to the agent on the pod's node. On a node without an agent the Service has no endpoint and connections fail; the SDK retries. The agents' scheduling constraints (`nodeSelector`, `affinity`, `tolerations`) decide which nodes have one. It needs Kubernetes 1.26 or later, and the chart refuses older versions.
+- **Not isolation.** Any pod can still try an agent's Pod IP directly, on any node. **TLS 1.3 and the token are the security boundary**: the agent serves no plaintext and refuses a request without the token. `networkPolicy.ingressFrom` admits only the listed peers on the two ports, which narrows who can try. It cannot express "same node" and needs a CNI that enforces NetworkPolicy. Empty, no policy is rendered.
+- **The token is shared.** Any holder can send telemetry with resource attributes of its choosing, and use the agent's and gateway's capacity. The agent adds the attributes of the connecting pod, but attributes the SDK sets pass through. Rotate the token, keep `ingressFrom` narrow, and rely on `memory_limiter`. It must not be the agents' gateway token (`fusescopeCollector.agentListener.token`); the chart refuses it.
+- **Token alphabet.** Create the token from a header-safe alphabet, preferably base64url, e.g. `kubectl create secret generic fusescope-agent-otlp-token --from-literal=token=$(openssl rand -hex 32)`. The SDK examples below encode only the space after `Bearer`. Keep it without a trailing newline (`--from-literal`, not a file written by `echo` or `openssl rand > file`): SDKs refuse to send a header with one.
+- **Certificates.** A `kubernetes.io/tls` Secret you provide (`otlp.tls.existingSecret`), whose certificate names the Service, or a cert-manager Certificate for all its names (`otlp.tls.certManager`), not both. The agents read a renewed certificate again within an hour, and a changed token at once, without a restart.
+- **Credentials live in the release namespace.** A pod cannot mount a Secret from another namespace, so copy the CA bundle (the `ca.crt` of the certificate's Secret, or your CA) and the token into each application namespace, for example with a secret sync controller, and update those copies when you rotate.
+- **A new pod's first records.** The agent adds pod attributes from its cache of the node's pods. Records a pod sends in its first moments, before the cache sees it, can arrive without them; they still carry the node.
+- **Only what the agent sees.** Refusals and drops at the agents' receiver are not visible in FuseScope until the agents' own telemetry is collected; check an agent's logs for refused requests.
+
+SDKs take the standard variables. A Kubernetes example over gRPC, with the CA mounted from a volume and the token from a Secret, never as a literal:
+
+```yaml
+env:
+  - name: OTEL_EXPORTER_OTLP_PROTOCOL
+    value: grpc
+  - name: OTEL_EXPORTER_OTLP_ENDPOINT
+    value: https://RELEASE-fusescope-agent-otlp.RELEASE_NAMESPACE.svc:4317
+  - name: OTEL_EXPORTER_OTLP_CERTIFICATE
+    value: /etc/fusescope-agent-ca/ca.crt
+  - name: FUSESCOPE_AGENT_TOKEN
+    valueFrom:
+      secretKeyRef: {name: fusescope-agent-otlp-token, key: token}
+  - name: OTEL_EXPORTER_OTLP_HEADERS
+    value: Authorization=Bearer%20$(FUSESCOPE_AGENT_TOKEN)
+```
+
+- **Over HTTP,** set `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf` and port 4318.
+- **Why the protocol is explicit.** The default differs between SDKs, so without it some send HTTP to 4317.
+- **Why `%20`.** `OTEL_EXPORTER_OTLP_HEADERS` follows the W3C baggage syntax, so the space in the header value is written `%20`.
+- **`$(FUSESCOPE_AGENT_TOKEN)`** is expanded by Kubernetes, so the token variable must come before the headers variable.
 
 ### MCP server
 
@@ -210,6 +262,15 @@ The chart renders a disk for the bucket, a filesystem cache disk in front of it 
 
 > [!WARNING]
 > ### Breaking Changes
+> #### Version 0.170.0
+> The FuseScope collector moves from 0.6.2 to 0.6.3, pinned by its signed multi-arch digest (`sha256:d97596ad…a4c8431`). This is also the image of the agents' DaemonSet.
+>
+> - **New, off by default: `fusescopeAgent.otlp`.** Pods' SDKs can send OTLP to the agent on their node, through the Service `RELEASE-fusescope-agent-otlp` with `internalTrafficPolicy: Local`, over TLS 1.3 with a bearer token ([collector ADR 0014](https://github.com/fuseone-io/fusescope-collector-server/blob/main/docs/adr/0014-otlp-from-pods-to-the-agent.md)). See "OTLP from pods to the agent".
+>   - The chart refuses it without a certificate or a token, with the agents' gateway token, on Kubernetes before 1.26, with `fusescopeAgent.enabled` off, and with ports out of range, equal, or 13133 or 8888.
+>   - An agent can run with OTLP alone, as non-root.
+> - **The collector's own metrics name their exporter.** `otelcol_exporter_fusescope_clickhouse_*` gain an `exporter` label (`fusescope_clickhouse`, `fusescope_clickhouse/meter`), so the main and meter exporters no longer share series. Queries by `table` or `outcome` keep working.
+> - **No configuration change is required.**
+>
 > #### Version 0.169.0
 > FuseScope moves from 0.163.0 to 0.165.0 (`signoz.image.tag`).
 >
