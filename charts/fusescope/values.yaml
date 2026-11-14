@@ -1478,14 +1478,14 @@ fusescopeCollector:
   # @section -- FuseScope Collector
   replicaCount: 1
   # fusescopeCollector.image -- Collector image, by `tag` and `digest`: with both, the image
-  # is `<tag>@<digest>` and the digest is what is pulled. The default is the signed 0.6.3
+  # is `<tag>@<digest>` and the digest is what is pulled. The default is the signed 0.6.4
   # multi-arch index.
   # @section -- FuseScope Collector
   image:
     registry: ghcr.io
     repository: fuseone-io/fusescope-collector
-    tag: 0.6.3
-    digest: sha256:d97596ad904d081e2c824790429a1ffa451ec1418089fe7fe3c131f70a4c8431
+    tag: 0.6.4
+    digest: sha256:65e3c13edb375a795ea1b3f6e3deba4c37e4326a51e3c0917d308c352800704d
     pullPolicy: IfNotPresent
   # fusescopeCollector.imagePullSecrets -- Image pull secrets. Overrides the root and global values.
   # @section -- FuseScope Collector

@@ -1,7 +1,7 @@
 
 # FuseScope
 
-![Version: 0.170.0](https://img.shields.io/badge/Version-0.170.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.165.0](https://img.shields.io/badge/AppVersion-0.165.0-informational?style=flat-square)
+![Version: 0.170.1](https://img.shields.io/badge/Version-0.170.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.165.0](https://img.shields.io/badge/AppVersion-0.165.0-informational?style=flat-square)
 
 FuseScope is an open-source observability platform native to OpenTelemetry, with logs, traces and metrics in a single application. It is a hard fork of [SigNoz](https://github.com/SigNoz/signoz) maintained by FuseOne.
 
@@ -262,6 +262,12 @@ The chart renders a disk for the bucket, a filesystem cache disk in front of it 
 
 > [!WARNING]
 > ### Breaking Changes
+> #### Version 0.170.1
+> The FuseScope collector moves from 0.6.3 to 0.6.4, pinned by its signed multi-arch digest (`sha256:65e3c13e…800704d`). This is also the image of the agents' DaemonSet.
+>
+> - **What changes:** nothing in the collector's behaviour or in `fusescope-schema`. 0.6.4 carries only documentation: collector `DESIGN.md` now describes the agents' OTLP path (`fusescopeAgent.otlp`) as available.
+> - **No configuration change.**
+>
 > #### Version 0.170.0
 > The FuseScope collector moves from 0.6.2 to 0.6.3, pinned by its signed multi-arch digest (`sha256:d97596ad…a4c8431`). This is also the image of the agents' DaemonSet.
 >
@@ -1708,14 +1714,14 @@ timeoutSeconds: 5</pre>
             <td id="fusescopeCollector--image"><a href="./values.yaml#L1484">fusescopeCollector.image</a></td>
             <td>object</td>
             <td>
-                <div style="max-width: 300px;"><pre lang="yaml">digest: sha256:d97596ad904d081e2c824790429a1ffa451ec1418089fe7fe3c131f70a4c8431
+                <div style="max-width: 300px;"><pre lang="yaml">digest: sha256:65e3c13edb375a795ea1b3f6e3deba4c37e4326a51e3c0917d308c352800704d
 pullPolicy: IfNotPresent
 registry: ghcr.io
 repository: fuseone-io/fusescope-collector
-tag: 0.6.3</pre>
+tag: 0.6.4</pre>
 </div>
             </td>
-            <td>Collector image, by `tag` and `digest`: with both, the image is `<tag>@<digest>` and the digest is what is pulled. The default is the signed 0.6.3 multi-arch index.</td>
+            <td>Collector image, by `tag` and `digest`: with both, the image is `<tag>@<digest>` and the digest is what is pulled. The default is the signed 0.6.4 multi-arch index.</td>
         </tr>
         <tr>
             <td id="fusescopeCollector--imagePullSecrets"><a href="./values.yaml#L1492">fusescopeCollector.imagePullSecrets</a></td>
