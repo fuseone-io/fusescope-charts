@@ -1,0 +1,26 @@
+{{- if and .Values.fusescopeAgent.enabled .Values.fusescopeAgent.otlp.enabled }}
+{{- $o := .Values.fusescopeAgent.otlp -}}
+# Pods' SDKs reach the agent on their own node: with internalTrafficPolicy Local, a node
+# without an agent has no endpoint here and connections fail (collector ADR 0014). This routes;
+# it does not isolate: TLS and the token are the security boundary.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "fusescopeAgent.otlpServiceName" . }}
+  labels:
+    {{- include "fusescopeAgent.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  internalTrafficPolicy: Local
+  selector:
+    {{- include "fusescopeAgent.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: otlp-grpc
+      port: {{ $o.grpcPort }}
+      targetPort: otlp-grpc
+      protocol: TCP
+    - name: otlp-http
+      port: {{ $o.httpPort }}
+      targetPort: otlp-http
+      protocol: TCP
+{{- end }}

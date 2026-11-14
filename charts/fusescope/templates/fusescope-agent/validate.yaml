@@ -1,0 +1,2 @@
+{{- /* Renders nothing: refuses incomplete or forbidden agent OTLP settings (collector ADR 0014). */ -}}
+{{- include "fusescopeAgent.otlpChecks" . -}}
