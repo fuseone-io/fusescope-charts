@@ -493,7 +493,7 @@ tests:
       - failedTemplate:
           errorPattern: fusescopeAgent.otlp.token.secretKey is required
 
-  - it: should refuse the agents' own gateway token
+  - it: should refuse the Secret and key of the agents' gateway token
     template: templates/fusescope-agent/validate.yaml
     set:
       fusescopeAgent.enabled: true
@@ -501,7 +501,7 @@ tests:
       fusescopeAgent.otlp.token.existingSecret: agent-token
     asserts:
       - failedTemplate:
-          errorPattern: must not be the agents' gateway token
+          errorPattern: must not name the same Secret and key as the agents' gateway token
 
   - it: should accept another key of the gateway token's Secret
     template: templates/fusescope-agent/validate.yaml

@@ -1,7 +1,8 @@
 {{- $o := .Values.fusescopeAgent.otlp -}}
 {{- if and .Values.fusescopeAgent.enabled $o.enabled $o.networkPolicy.ingressFrom }}
-# The OTLP ports accept only otlp.networkPolicy.ingressFrom; no rule without a source names them.
-# Extra defence only (collector ADR 0014): a policy cannot express "same node".
+# This policy admits only otlp.networkPolicy.ingressFrom on the OTLP ports; no rule without a source
+# names them. Policies add up, so another one selecting the agents can admit more. Extra defence
+# only (collector ADR 0014): a policy cannot express "same node".
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

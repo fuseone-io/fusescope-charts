@@ -836,7 +836,7 @@ template, so they also catch otlp.enabled with the agent off.
 {{- end -}}
 {{- $gw := .Values.fusescopeCollector.agentListener.token -}}
 {{- if and (eq $o.token.existingSecret (toString $gw.existingSecret)) (eq $o.token.secretKey (toString $gw.secretKey)) -}}
-{{- fail "fusescopeAgent.otlp.token must not be the agents' gateway token (fusescopeCollector.agentListener.token): SDKs get a token of their own (collector ADR 0014)" -}}
+{{- fail "fusescopeAgent.otlp.token must not name the same Secret and key as the agents' gateway token (fusescopeCollector.agentListener.token): SDKs get a token of their own (collector ADR 0014). The chart compares the reference only; it cannot see the same token copied into another Secret or key" -}}
 {{- end -}}
 {{- range $name := list "grpcPort" "httpPort" -}}
 {{- $v := toString (index $o $name) -}}

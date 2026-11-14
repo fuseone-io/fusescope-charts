@@ -1919,18 +1919,21 @@ fusescopeAgent:
         renewBefore: 360h
     token:
       # fusescopeAgent.otlp.token.existingSecret -- (string) Secret holding the bearer token SDKs
-      # present, required. Not the agents' gateway token (`fusescopeCollector.agentListener.token`).
-      # Use a header-safe alphabet, preferably base64url, e.g. `openssl rand -hex 32`.
+      # present, required. It must be a token of its own, not the agents' gateway token
+      # (`fusescopeCollector.agentListener.token`). The chart refuses the same Secret and key, but
+      # cannot detect the same token copied into another Secret or key. Use a header-safe
+      # alphabet, preferably base64url, e.g. `openssl rand -hex 32`.
       # @section -- FuseScope Agent
       existingSecret: ""
       # fusescopeAgent.otlp.token.secretKey -- Key in that Secret holding the token.
       # @section -- FuseScope Agent
       secretKey: token
     networkPolicy:
-      # fusescopeAgent.otlp.networkPolicy.ingressFrom -- NetworkPolicy peers admitted on the two
-      # OTLP ports, e.g. a `namespaceSelector` for the application namespaces. Empty, no policy is
-      # rendered. Extra defence only: a policy cannot express "same node", so any admitted pod can
-      # still reach every agent's Pod IP.
+      # fusescopeAgent.otlp.networkPolicy.ingressFrom -- NetworkPolicy peers the chart's policy
+      # admits on the two OTLP ports, e.g. a `namespaceSelector` for the application namespaces.
+      # Empty, no policy is rendered. NetworkPolicies add up: another policy selecting the agent
+      # pods can admit more sources. Extra defence only: a policy cannot express "same node", so
+      # any admitted pod can still reach every agent's Pod IP.
       # @section -- FuseScope Agent
       ingressFrom: []
   # fusescopeAgent.statePath -- Host directory for the log read offsets, so a restarted agent
