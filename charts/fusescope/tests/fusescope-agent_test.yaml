@@ -346,7 +346,7 @@ tests:
           value: fusescope-agent
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/fuseone-io/fusescope-collector:0.6.3@sha256:d97596ad904d081e2c824790429a1ffa451ec1418089fe7fe3c131f70a4c8431
+          value: ghcr.io/fuseone-io/fusescope-collector:0.6.4@sha256:65e3c13edb375a795ea1b3f6e3deba4c37e4326a51e3c0917d308c352800704d
       - equal:
           path: spec.template.spec.containers[0].args
           value:

@@ -262,6 +262,12 @@ The chart renders a disk for the bucket, a filesystem cache disk in front of it 
 
 > [!WARNING]
 > ### Breaking Changes
+> #### Version 0.170.1
+> The FuseScope collector moves from 0.6.3 to 0.6.4, pinned by its signed multi-arch digest (`sha256:65e3c13e…800704d`). This is also the image of the agents' DaemonSet.
+>
+> - **What changes:** nothing in the collector's behaviour or in `fusescope-schema`. 0.6.4 carries only documentation: collector `DESIGN.md` now describes the agents' OTLP path (`fusescopeAgent.otlp`) as available.
+> - **No configuration change.**
+>
 > #### Version 0.170.0
 > The FuseScope collector moves from 0.6.2 to 0.6.3, pinned by its signed multi-arch digest (`sha256:d97596ad…a4c8431`). This is also the image of the agents' DaemonSet.
 >
