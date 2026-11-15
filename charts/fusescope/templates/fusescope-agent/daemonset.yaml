@@ -73,6 +73,11 @@ spec:
             # would report the pod's hostname as host.name.
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: host.name=$(K8S_NODE_NAME),k8s.node.name=$(K8S_NODE_NAME)
+            {{- with include "fusescope.goMemLimit" (dict "resources" $a.resources "pct" $a.goMemLimitPercentage "where" "fusescopeAgent") }}
+            # The Go runtime collects before the container's limit (collector DESIGN.md §4).
+            - name: GOMEMLIMIT
+              value: {{ . }}
+            {{- end }}
           ports:
             - name: health
               containerPort: 13133

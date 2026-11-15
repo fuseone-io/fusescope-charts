@@ -3,17 +3,21 @@
 {{- $agentsPolicy := and $agents $c.agentListener.networkPolicy.enabled -}}
 {{- $otlp := include "fusescopeCollector.otlpEnabled" . -}}
 {{- $otlpPeers := $c.otlp.networkPolicy.ingressFrom -}}
+{{- $rum := include "fusescopeCollector.rumEnabled" . -}}
+{{- $rumPeers := $c.rum.networkPolicy.ingressFrom -}}
 {{- if and $agentsPolicy $otlp (not $otlpPeers) -}}
 {{- fail "fusescopeCollector.otlp.insecure with the agents' NetworkPolicy needs fusescopeCollector.otlp.networkPolicy.ingressFrom, the only peers admitted on 4317/4318: the policy no longer opens them to any source (collector ADR 0013). Or set fusescopeCollector.agentListener.networkPolicy.enabled: false and apply a complete policy of your own." -}}
 {{- end -}}
-{{- if or $agentsPolicy (and $otlp $otlpPeers) }}
+{{- if or $agentsPolicy (and $otlp $otlpPeers) (and $rum $rumPeers) }}
 {{- $open := list -}}
 {{- if and $agents (not $agentsPolicy) }}{{ $open = append $open "otlp-agents" }}{{ end -}}
-{{- if include "fusescopeCollector.rumEnabled" . }}{{ $open = append $open "rum" }}{{ end -}}
+{{- if and $otlp (not $otlpPeers) }}{{ $open = concat $open (list "otlp" "otlp-http") }}{{ end -}}
+{{- if and $rum (not $rumPeers) }}{{ $open = append $open "rum" }}{{ end -}}
 {{- $open = append $open "health" }}
-# The agents' port accepts only the agent pods (this release's, or ingressFrom), and the plaintext
-# receiver's ports only otlp.networkPolicy.ingressFrom (collector ADR 0013). No rule without a
-# source names either. The other ports keep accepting from anywhere, as without this policy.
+# The agents' port accepts only the agent pods (this release's, or ingressFrom), the plaintext
+# receiver's ports only otlp.networkPolicy.ingressFrom (collector ADR 0013), and the RUM port, when
+# rum.networkPolicy.ingressFrom is set, only those peers. No rule without a source names a port
+# that has peers. The other ports keep accepting from anywhere, as without this policy.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -41,13 +45,20 @@ spec:
         - port: otlp-agents
           protocol: TCP
     {{- end }}
-    {{- if $otlp }}
+    {{- if and $otlp $otlpPeers }}
     - from:
         {{- toYaml $otlpPeers | nindent 8 }}
       ports:
         - port: otlp
           protocol: TCP
         - port: otlp-http
+          protocol: TCP
+    {{- end }}
+    {{- if and $rum $rumPeers }}
+    - from:
+        {{- toYaml $rumPeers | nindent 8 }}
+      ports:
+        - port: rum
           protocol: TCP
     {{- end }}
     - ports:

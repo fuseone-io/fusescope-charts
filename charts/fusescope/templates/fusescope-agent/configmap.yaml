@@ -1,6 +1,10 @@
 {{- if .Values.fusescopeAgent.enabled }}
 {{- include "fusescopeAgent.validate" . -}}
 {{- $a := .Values.fusescopeAgent -}}
+{{- $queueMiB := $a.sendingQueue.sizeMiB -}}
+{{- if not $queueMiB -}}
+{{- $queueMiB = default "64" (include "fusescope.memoryLimitShareMiB" (dict "resources" $a.resources "pct" 25 "where" "fusescopeAgent" "pctWhere" "fusescopeAgent")) -}}
+{{- end -}}
 {{- $metrics := list -}}
 {{- if $a.hostMetrics.enabled }}{{ $metrics = append $metrics "host_metrics" }}{{ end -}}
 {{- if $a.kubeletStats.enabled }}{{ $metrics = append $metrics "kubelet_stats" }}{{ end -}}
@@ -127,7 +131,11 @@ data:
           authenticator: bearertokenauth/gateway
         retry_on_failure:
           enabled: true
+        # Bounded in bytes, not requests: many small requests do not fill it while it holds
+        # little data, and it stays within the agent's memory.
         sending_queue:
+          sizer: bytes
+          queue_size: {{ mul (int $queueMiB) 1048576 }}
           batch:
             flush_timeout: 200ms
 

@@ -1039,3 +1039,37 @@ tls:
 {{- end -}}
 {{- toJson $out -}}
 {{- end -}}
+
+{{/*
+A share of a container's memory limit, in whole MiB, or empty without a limit or with pct 0.
+Args: dict "resources" (the container's resources), "pct" (0-95), "where" (the values path).
+*/}}
+{{- define "fusescope.memoryLimitShareMiB" -}}
+{{- $pct := int .pct -}}
+{{- if or (lt $pct 0) (gt $pct 95) -}}
+{{- fail (printf "%s %v must be between 0 and 95" .pctWhere .pct) -}}
+{{- end -}}
+{{- $lim := "" -}}
+{{- with .resources }}{{ with .limits }}{{ $lim = toString (default "" .memory) }}{{ end }}{{ end -}}
+{{- if and $lim (gt $pct 0) -}}
+{{- if not (regexMatch "^[0-9]+([.][0-9]+)?(Ki|Mi|Gi|Ti|K|M|G|T)?$" $lim) -}}
+{{- fail (printf "%s.resources.limits.memory %s is not a memory quantity" .where $lim) -}}
+{{- end -}}
+{{- $num := regexFind "^[0-9]+([.][0-9]+)?" $lim -}}
+{{- $unit := trimPrefix $num $lim -}}
+{{- $mult := dict "" 1.0 "Ki" 1024.0 "Mi" 1048576.0 "Gi" 1073741824.0 "Ti" 1099511627776.0 "K" 1000.0 "M" 1000000.0 "G" 1000000000.0 "T" 1000000000000.0 -}}
+{{- $bytes := mulf (float64 $num) (index $mult $unit) -}}
+{{- printf "%d" (int64 (floor (divf (mulf $bytes $pct) 104857600.0))) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+GOMEMLIMIT for a container: goMemLimitPercentage of its memory limit, so the Go runtime collects
+before the limit and memory_limiter refuses data in time instead of the pod being OOMKilled.
+Args: dict "resources", "pct", "where".
+*/}}
+{{- define "fusescope.goMemLimit" -}}
+{{- with include "fusescope.memoryLimitShareMiB" (dict "resources" .resources "pct" .pct "where" .where "pctWhere" (printf "%s.goMemLimitPercentage" .where)) -}}
+{{- printf "%sMiB" . -}}
+{{- end -}}
+{{- end -}}
