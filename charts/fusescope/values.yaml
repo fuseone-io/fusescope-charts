@@ -1746,7 +1746,7 @@ fusescopeCollector:
   # fusescopeCollector.goMemLimitPercentage -- `GOMEMLIMIT`, as a percentage of
   # `resources.limits.memory`, so the Go runtime collects before the limit and `memory_limiter`
   # refuses data in time instead of the pod being OOMKilled. 0, or no memory limit, sets none.
-  # At most 95.
+  # A whole number from 0 to 95.
   # @section -- FuseScope Collector
   goMemLimitPercentage: 80
   # fusescopeCollector.resources -- Resources. `memory_limiter` refuses data above 80% of the
@@ -1976,13 +1976,13 @@ fusescopeAgent:
       memory: 512Mi
   # fusescopeAgent.goMemLimitPercentage -- `GOMEMLIMIT`, as a percentage of
   # `resources.limits.memory`, so the Go runtime collects before the limit. 0, or no memory
-  # limit, sets none. At most 95.
+  # limit, sets none. A whole number from 0 to 95.
   # @section -- FuseScope Agent
   goMemLimitPercentage: 80
   sendingQueue:
     # fusescopeAgent.sendingQueue.sizeMiB -- (int) Size of the agents' queue to the gateway, in
-    # MiB of data rather than in requests. Empty, a quarter of `resources.limits.memory`, or 64
-    # without a limit.
+    # MiB of data rather than in requests: a whole number, 1 or more. Empty, a quarter of
+    # `resources.limits.memory`, or 64 without a limit.
     # @default -- "a quarter of the memory limit"
     # @section -- FuseScope Agent
     sizeMiB:

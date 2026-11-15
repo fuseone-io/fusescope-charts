@@ -2141,7 +2141,7 @@ tls: []</pre>
                 <div style="max-width: 300px;"><pre lang="yaml">80</pre>
 </div>
             </td>
-            <td>`GOMEMLIMIT`, as a percentage of `resources.limits.memory`, so the Go runtime collects before the limit and `memory_limiter` refuses data in time instead of the pod being OOMKilled. 0, or no memory limit, sets none. At most 95.</td>
+            <td>`GOMEMLIMIT`, as a percentage of `resources.limits.memory`, so the Go runtime collects before the limit and `memory_limiter` refuses data in time instead of the pod being OOMKilled. 0, or no memory limit, sets none. A whole number from 0 to 95.</td>
         </tr>
         <tr>
             <td id="fusescopeCollector--resources"><a href="./values.yaml#L1756">fusescopeCollector.resources</a></td>
@@ -2537,7 +2537,7 @@ requests:
                 <div style="max-width: 300px;"><pre lang="yaml">80</pre>
 </div>
             </td>
-            <td>`GOMEMLIMIT`, as a percentage of `resources.limits.memory`, so the Go runtime collects before the limit. 0, or no memory limit, sets none. At most 95.</td>
+            <td>`GOMEMLIMIT`, as a percentage of `resources.limits.memory`, so the Go runtime collects before the limit. 0, or no memory limit, sets none. A whole number from 0 to 95.</td>
         </tr>
         <tr>
             <td id="fusescopeAgent--sendingQueue--sizeMiB"><a href="./values.yaml#L1988">fusescopeAgent.sendingQueue.sizeMiB</a></td>
@@ -2546,7 +2546,7 @@ requests:
                 <div style="max-width: 300px;"><pre lang="yaml">a quarter of the memory limit</pre>
 </div>
             </td>
-            <td>Size of the agents' queue to the gateway, in MiB of data rather than in requests. Empty, a quarter of `resources.limits.memory`, or 64 without a limit.</td>
+            <td>Size of the agents' queue to the gateway, in MiB of data rather than in requests: a whole number, 1 or more. Empty, a quarter of `resources.limits.memory`, or 64 without a limit.</td>
         </tr>
         <tr>
             <td id="fusescopeAgent--podSecurityContext"><a href="./values.yaml#L1996">fusescopeAgent.podSecurityContext</a></td>

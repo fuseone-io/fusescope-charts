@@ -1,7 +1,10 @@
 {{- if .Values.fusescopeAgent.enabled }}
 {{- include "fusescopeAgent.validate" . -}}
 {{- $a := .Values.fusescopeAgent -}}
-{{- $queueMiB := $a.sendingQueue.sizeMiB -}}
+{{- $queueMiB := "" -}}
+{{- if not (or (kindIs "invalid" $a.sendingQueue.sizeMiB) (eq (toString $a.sendingQueue.sizeMiB) "")) -}}
+{{- $queueMiB = include "fusescope.wholeNumber" (dict "value" $a.sendingQueue.sizeMiB "min" 1 "max" nil "where" "fusescopeAgent.sendingQueue.sizeMiB" "msg" "must be a whole number of MiB, 1 or more") -}}
+{{- end -}}
 {{- if not $queueMiB -}}
 {{- $queueMiB = default "64" (include "fusescope.memoryLimitShareMiB" (dict "resources" $a.resources "pct" 25 "where" "fusescopeAgent" "pctWhere" "fusescopeAgent")) -}}
 {{- end -}}
@@ -135,7 +138,7 @@ data:
         # little data, and it stays within the agent's memory.
         sending_queue:
           sizer: bytes
-          queue_size: {{ mul (int $queueMiB) 1048576 }}
+          queue_size: {{ mul (int64 $queueMiB) 1048576 }}
           batch:
             flush_timeout: 200ms
 

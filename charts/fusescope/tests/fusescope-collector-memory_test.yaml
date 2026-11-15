@@ -90,6 +90,79 @@ tests:
           content: {name: GOMEMLIMIT}
           any: true
 
+  - it: should read a decimal exponent as text ("129e6")
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits.memory: "129e6"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT, value: 98MiB}
+
+  - it: should read a decimal exponent read by YAML as a number (129e6)
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits.memory: 129e6
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT, value: 98MiB}
+
+  - it: should read a limit in Pi (1Pi)
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits.memory: 1Pi
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT, value: 858993459MiB}
+
+  - it: should read a decimal limit in P (1P)
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits.memory: 1P
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT, value: 762939453MiB}
+
+  - it: should read a fraction without a leading digit (.5Gi)
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits.memory: .5Gi
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT, value: 409MiB}
+
+  - it: should read a signed number (+1Gi)
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits.memory: +1Gi
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT, value: 819MiB}
+
+  - it: should read a limit in plain bytes (1073741824)
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits.memory: 1073741824
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT, value: 819MiB}
+
+  - it: should set no GOMEMLIMIT when the share is under 1MiB
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits.memory: 1000m
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT}
+          any: true
+
   - it: should refuse a memory limit it cannot read
     template: templates/fusescope-collector/deployment.yaml
     set:
@@ -104,7 +177,31 @@ tests:
       fusescopeCollector.goMemLimitPercentage: 100
     asserts:
       - failedTemplate:
-          errorPattern: "fusescopeCollector.goMemLimitPercentage 100 must be between 0 and 95"
+          errorPattern: "fusescopeCollector.goMemLimitPercentage 100 must be a whole number between 0 and 95"
+
+  - it: should refuse a percentage that is text (nope)
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.goMemLimitPercentage: nope
+    asserts:
+      - failedTemplate:
+          errorPattern: "fusescopeCollector.goMemLimitPercentage nope must be a whole number between 0 and 95"
+
+  - it: should refuse a percentage that is a fraction (80.5)
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.goMemLimitPercentage: 80.5
+    asserts:
+      - failedTemplate:
+          errorPattern: "fusescopeCollector.goMemLimitPercentage 80.5 must be a whole number between 0 and 95"
+
+  - it: should refuse a percentage that is a negative number (-1)
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.goMemLimitPercentage: -1
+    asserts:
+      - failedTemplate:
+          errorPattern: "fusescopeCollector.goMemLimitPercentage -1 must be a whole number between 0 and 95"
 
   - it: should set the agent's GOMEMLIMIT to 80% of its default 512Mi limit
     template: templates/fusescope-agent/daemonset.yaml
@@ -136,6 +233,42 @@ tests:
       - matchRegex:
           path: data["config.yaml"]
           pattern: "queue_size: 67108864"
+
+  - it: should refuse an agents' queue size that is text (nope)
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.sendingQueue.sizeMiB: nope
+    asserts:
+      - failedTemplate:
+          errorPattern: "fusescopeAgent.sendingQueue.sizeMiB nope must be a whole number of MiB, 1 or more"
+
+  - it: should refuse an agents' queue size that is a negative number (-1)
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.sendingQueue.sizeMiB: -1
+    asserts:
+      - failedTemplate:
+          errorPattern: "fusescopeAgent.sendingQueue.sizeMiB -1 must be a whole number of MiB, 1 or more"
+
+  - it: should refuse an agents' queue size that is zero (0)
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.sendingQueue.sizeMiB: 0
+    asserts:
+      - failedTemplate:
+          errorPattern: "fusescopeAgent.sendingQueue.sizeMiB 0 must be a whole number of MiB, 1 or more"
+
+  - it: should refuse an agents' queue size that is a fraction (1.5)
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.sendingQueue.sizeMiB: 1.5
+    asserts:
+      - failedTemplate:
+          errorPattern: "fusescopeAgent.sendingQueue.sizeMiB 1.5 must be a whole number of MiB, 1 or more"
 
   # The gateway's agents' listener closes connections after an age, so agents reconnect and new
   # replicas take a share of them.
