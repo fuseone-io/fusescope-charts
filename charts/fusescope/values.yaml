@@ -1607,6 +1607,14 @@ fusescopeCollector:
         # fusescopeCollector.rum.rateLimit.client.burst -- Burst size of the per-client limit.
         # @section -- FuseScope Collector
         burst: 60
+    networkPolicy:
+      # fusescopeCollector.rum.networkPolicy.ingressFrom -- (list) NetworkPolicy peers admitted on
+      # the RUM port, such as the ingress controller's pods. Empty, the port accepts any source in
+      # the cluster. Set, the collector's NetworkPolicy admits only them on it, and is rendered even
+      # without the agents' listener. Policies add up: another one selecting the collector pods can
+      # still admit more.
+      # @section -- FuseScope Collector
+      ingressFrom: []
     # fusescopeCollector.rum.maxStaleness -- (string) Refuse RUM requests, and report not ready, once
     # the policy held was last received longer ago than this, e.g. `1h`. Empty, a policy held keeps
     # working through a FuseScope outage.
@@ -1619,6 +1627,11 @@ fusescopeCollector:
     # with `otlp.insecure` (collector ADR 0013).
     # @section -- FuseScope Collector
     enabled: false
+    # fusescopeCollector.agentListener.maxConnectionAge -- (string) Close each agent's connection
+    # after this age, with a 1-minute grace, so agents reconnect and new replicas take a share of
+    # them. Empty, connections last until the agent or the replica restarts.
+    # @section -- FuseScope Collector
+    maxConnectionAge: 30m
     # fusescopeCollector.agentListener.port -- Port of the agents' listener, on the pods and the
     # collector's Service. Not 4319, which RUM uses.
     # @section -- FuseScope Collector
@@ -1730,6 +1743,12 @@ fusescopeCollector:
   # @section -- FuseScope Collector
   storage:
     sizeLimit: 64Mi
+  # fusescopeCollector.goMemLimitPercentage -- `GOMEMLIMIT`, as a percentage of
+  # `resources.limits.memory`, so the Go runtime collects before the limit and `memory_limiter`
+  # refuses data in time instead of the pod being OOMKilled. 0, or no memory limit, sets none.
+  # A whole number from 0 to 95.
+  # @section -- FuseScope Collector
+  goMemLimitPercentage: 80
   # fusescopeCollector.resources -- Resources. `memory_limiter` refuses data above 80% of the
   # memory limit, so senders retry instead of the pod being OOM-killed; size the limit for the
   # batches in flight, about 10 s of ingest per replica, or scale out (`autoscaling`).
@@ -1955,6 +1974,18 @@ fusescopeAgent:
       memory: 128Mi
     limits:
       memory: 512Mi
+  # fusescopeAgent.goMemLimitPercentage -- `GOMEMLIMIT`, as a percentage of
+  # `resources.limits.memory`, so the Go runtime collects before the limit. 0, or no memory
+  # limit, sets none. A whole number from 0 to 95.
+  # @section -- FuseScope Agent
+  goMemLimitPercentage: 80
+  sendingQueue:
+    # fusescopeAgent.sendingQueue.sizeMiB -- (int) Size of the agents' queue to the gateway, in
+    # MiB of data rather than in requests: a whole number, 1 or more. Empty, a quarter of
+    # `resources.limits.memory`, or 64 without a limit.
+    # @default -- "a quarter of the memory limit"
+    # @section -- FuseScope Agent
+    sizeMiB:
   # fusescopeAgent.podSecurityContext -- Pod security context. Unset, `runAsUser`, `runAsGroup` and
   # `runAsNonRoot` are uid 0 with `podLogs` or `hostMetrics`, which nodes keep readable by root
   # only, and 65532, non-root, otherwise (collector-server ADR 0011). Set them where

@@ -69,6 +69,11 @@ tests:
                   grpc:
                     endpoint: 0.0.0.0:4322
                     max_recv_msg_size_mib: 16
+                    # Agents reconnect after this age, so new replicas take a share of them.
+                    keepalive:
+                      server_parameters:
+                        max_connection_age: 30m
+                        max_connection_age_grace: 1m
                     tls:
                       min_version: "1.3"
                       cert_file: /etc/fusescope-collector/agents-tls/tls.crt

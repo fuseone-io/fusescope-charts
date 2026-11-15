@@ -73,6 +73,12 @@ spec:
             - --config=fusescopeopamp:/etc/fusescope-collector/config/config.yaml
           securityContext:
             {{- toYaml $c.securityContext | nindent 12 }}
+          {{- with include "fusescope.goMemLimit" (dict "resources" $c.resources "pct" $c.goMemLimitPercentage "where" "fusescopeCollector") }}
+          env:
+            # The Go runtime collects before the container's limit (collector DESIGN.md §4).
+            - name: GOMEMLIMIT
+              value: {{ . }}
+          {{- end }}
           ports:
             {{- if $otlp }}
             - name: otlp

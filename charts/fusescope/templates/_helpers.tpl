@@ -1039,3 +1039,60 @@ tls:
 {{- end -}}
 {{- toJson $out -}}
 {{- end -}}
+
+{{/*
+A whole number from values, or a template failure naming the value: Helm reads YAML numbers as
+float64 and --set numbers as int64, and anything else (text, a fraction) must not pass silently.
+Args: dict "value", "min", "max" (or nil), "msg" (the failure, after the path and the value), "where".
+*/}}
+{{- define "fusescope.wholeNumber" -}}
+{{- $v := .value -}}
+{{- $ok := or (kindIs "int" $v) (kindIs "int64" $v) (and (kindIs "float64" $v) (eq (floor $v) $v)) -}}
+{{- if $ok -}}
+{{- $ok = and (ge (int64 $v) (int64 .min)) (or (kindIs "invalid" .max) (le (int64 $v) (int64 .max))) -}}
+{{- end -}}
+{{- if not $ok -}}
+{{- fail (printf "%s %v %s" .where $v .msg) -}}
+{{- end -}}
+{{- int64 $v -}}
+{{- end -}}
+
+{{/*
+A share of a container's memory limit, in whole MiB, or empty without a limit, with pct 0 or
+under 1MiB. The limit follows the Kubernetes quantity syntax: a signed number (digits, a fraction
+or both) with a binary suffix (Ki to Ei), a decimal one (n, u, m, k, M to E) or a decimal exponent.
+Args: dict "resources" (the container's resources), "pct", "where" (the values path), "pctWhere".
+*/}}
+{{- define "fusescope.memoryLimitShareMiB" -}}
+{{- $pct := include "fusescope.wholeNumber" (dict "value" .pct "min" 0 "max" 95 "where" .pctWhere "msg" "must be a whole number between 0 and 95") | int64 -}}
+{{- $lim := "" -}}
+{{- with .resources }}{{ with .limits }}{{ with .memory }}{{ $lim = toString . }}{{ end }}{{ end }}{{ end -}}
+{{- if and $lim (gt $pct 0) -}}
+{{- $number := "^[+-]?([0-9]+[.]?[0-9]*|[.][0-9]+)" -}}
+{{- if not (regexMatch (printf "%s(Ki|Mi|Gi|Ti|Pi|Ei|n|u|m|k|M|G|T|P|E|[eE][+-]?[0-9]+)?$" $number) $lim) -}}
+{{- fail (printf "%s.resources.limits.memory %s is not a memory quantity" .where $lim) -}}
+{{- end -}}
+{{- $num := regexFind $number $lim -}}
+{{- $unit := trimPrefix $num $lim -}}
+{{- $bytes := 0.0 -}}
+{{- if regexMatch "^[eE][+-]?[0-9]+$" $unit -}}
+{{- $bytes = float64 $lim -}}
+{{- else -}}
+{{- $mult := dict "" 1.0 "Ki" 1024.0 "Mi" 1048576.0 "Gi" 1073741824.0 "Ti" 1099511627776.0 "Pi" 1125899906842624.0 "Ei" 1152921504606846976.0 "n" 0.000000001 "u" 0.000001 "m" 0.001 "k" 1000.0 "M" 1000000.0 "G" 1000000000.0 "T" 1000000000000.0 "P" 1000000000000000.0 "E" 1000000000000000000.0 -}}
+{{- $bytes = mulf (float64 $num) (index $mult $unit) -}}
+{{- end -}}
+{{- $mib := int64 (floor (divf (mulf $bytes $pct) 104857600.0)) -}}
+{{- if gt $mib 0 }}{{ printf "%d" $mib }}{{ end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+GOMEMLIMIT for a container: goMemLimitPercentage of its memory limit, so the Go runtime collects
+before the limit and memory_limiter refuses data in time instead of the pod being OOMKilled.
+Args: dict "resources", "pct", "where".
+*/}}
+{{- define "fusescope.goMemLimit" -}}
+{{- with include "fusescope.memoryLimitShareMiB" (dict "resources" .resources "pct" .pct "where" .where "pctWhere" (printf "%s.goMemLimitPercentage" .where)) -}}
+{{- printf "%sMiB" . -}}
+{{- end -}}
+{{- end -}}

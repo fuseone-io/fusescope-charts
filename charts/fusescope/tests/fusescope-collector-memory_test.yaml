@@ -1,0 +1,383 @@
+suite: Go memory limits, the agents' queue, gateway connection age and the RUM port's peers
+
+templates:
+  - templates/fusescope-collector/deployment.yaml
+  - templates/fusescope-collector/configmap.yaml
+  - templates/fusescope-collector/networkpolicy.yaml
+  - templates/fusescope-agent/daemonset.yaml
+  - templates/fusescope-agent/configmap.yaml
+
+release:
+  name: fusescope
+  namespace: platform
+
+capabilities:
+  majorVersion: 1
+  minorVersion: 30
+  apiVersions:
+    - networking.k8s.io/v1
+    - cert-manager.io/v1
+
+values:
+  - ./values/fusescope-agent.yaml
+
+tests:
+  # GOMEMLIMIT: the Go runtime collects before the container's limit, so memory_limiter can refuse
+  # data in time instead of the pod being OOMKilled.
+
+  - it: should set the gateway's GOMEMLIMIT to 80% of its default 1Gi limit
+    template: templates/fusescope-collector/deployment.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: GOMEMLIMIT
+            value: 819MiB
+
+  - it: should follow the gateway's limit in binary and decimal units
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits.memory: 1536Mi
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT, value: 1228MiB}
+
+  - it: should follow a limit in Gi
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits.memory: 4Gi
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT, value: 3276MiB}
+
+  - it: should follow a decimal limit in G
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits.memory: 2G
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT, value: 1525MiB}
+
+  - it: should take its own percentage
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.goMemLimitPercentage: 90
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT, value: 921MiB}
+
+  - it: should set no GOMEMLIMIT with percentage 0
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.goMemLimitPercentage: 0
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT}
+          any: true
+
+  - it: should set no GOMEMLIMIT without a memory limit
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits: null
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT}
+          any: true
+
+  - it: should read a decimal exponent as text ("129e6")
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits.memory: "129e6"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT, value: 98MiB}
+
+  - it: should read a decimal exponent read by YAML as a number (129e6)
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits.memory: 129e6
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT, value: 98MiB}
+
+  - it: should read a limit in Pi (1Pi)
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits.memory: 1Pi
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT, value: 858993459MiB}
+
+  - it: should read a decimal limit in P (1P)
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits.memory: 1P
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT, value: 762939453MiB}
+
+  - it: should read a fraction without a leading digit (.5Gi)
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits.memory: .5Gi
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT, value: 409MiB}
+
+  - it: should read a signed number (+1Gi)
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits.memory: +1Gi
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT, value: 819MiB}
+
+  - it: should read a limit in plain bytes (1073741824)
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits.memory: 1073741824
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT, value: 819MiB}
+
+  - it: should read the decimal suffix E, not an exponent (1E)
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits.memory: "1E"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT, value: 762939453125MiB}
+
+  - it: should read the binary suffix Ei, not an exponent (1Ei)
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits.memory: "1Ei"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT, value: 879609302220MiB}
+
+  - it: should read an exponent with a sign (1e+9)
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits.memory: "1e+9"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT, value: 762MiB}
+
+  - it: should set no GOMEMLIMIT when the share is under 1MiB
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits.memory: 1000m
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT}
+          any: true
+
+  - it: should refuse a memory limit it cannot read
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits.memory: 1Zi
+    asserts:
+      - failedTemplate:
+          errorPattern: "fusescopeCollector.resources.limits.memory 1Zi is not a memory quantity"
+
+  - it: should refuse a percentage out of range
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.goMemLimitPercentage: 100
+    asserts:
+      - failedTemplate:
+          errorPattern: "fusescopeCollector.goMemLimitPercentage 100 must be a whole number between 0 and 95"
+
+  - it: should refuse a percentage that is text (nope)
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.goMemLimitPercentage: nope
+    asserts:
+      - failedTemplate:
+          errorPattern: "fusescopeCollector.goMemLimitPercentage nope must be a whole number between 0 and 95"
+
+  - it: should refuse a percentage that is a fraction (80.5)
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.goMemLimitPercentage: 80.5
+    asserts:
+      - failedTemplate:
+          errorPattern: "fusescopeCollector.goMemLimitPercentage 80.5 must be a whole number between 0 and 95"
+
+  - it: should refuse a percentage that is a negative number (-1)
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.goMemLimitPercentage: -1
+    asserts:
+      - failedTemplate:
+          errorPattern: "fusescopeCollector.goMemLimitPercentage -1 must be a whole number between 0 and 95"
+
+  - it: should set the agent's GOMEMLIMIT to 80% of its default 512Mi limit
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT, value: 409MiB}
+
+  # The agents' sending queue, bounded in bytes rather than in requests: many small requests no
+  # longer fill it while it holds little data.
+
+  - it: should bound the agents' queue in bytes, a quarter of their memory limit
+    template: templates/fusescope-agent/configmap.yaml
+    set:
+      fusescopeAgent.enabled: true
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'sending_queue:\n\s+sizer: bytes\n\s+queue_size: 134217728\n\s+batch:\n\s+flush_timeout: 200ms'
+
+  - it: should size the agents' queue from its own value
+    template: templates/fusescope-agent/configmap.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.sendingQueue.sizeMiB: 64
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: "queue_size: 67108864"
+
+  - it: should refuse an agents' queue size that is text (nope)
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.sendingQueue.sizeMiB: nope
+    asserts:
+      - failedTemplate:
+          errorPattern: "fusescopeAgent.sendingQueue.sizeMiB nope must be a whole number of MiB, 1 or more"
+
+  - it: should refuse an agents' queue size that is a negative number (-1)
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.sendingQueue.sizeMiB: -1
+    asserts:
+      - failedTemplate:
+          errorPattern: "fusescopeAgent.sendingQueue.sizeMiB -1 must be a whole number of MiB, 1 or more"
+
+  - it: should refuse an agents' queue size that is zero (0)
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.sendingQueue.sizeMiB: 0
+    asserts:
+      - failedTemplate:
+          errorPattern: "fusescopeAgent.sendingQueue.sizeMiB 0 must be a whole number of MiB, 1 or more"
+
+  - it: should refuse an agents' queue size that is a fraction (1.5)
+    template: templates/fusescope-agent/daemonset.yaml
+    set:
+      fusescopeAgent.enabled: true
+      fusescopeAgent.sendingQueue.sizeMiB: 1.5
+    asserts:
+      - failedTemplate:
+          errorPattern: "fusescopeAgent.sendingQueue.sizeMiB 1.5 must be a whole number of MiB, 1 or more"
+
+  # The gateway's agents' listener closes connections after an age, so agents reconnect and new
+  # replicas take a share of them.
+
+  - it: should age the agents' connections out after 30 minutes by default
+    template: templates/fusescope-collector/configmap.yaml
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          pattern: 'endpoint: 0\.0\.0\.0:4322\n\s+max_recv_msg_size_mib: 16\n\s+#[^\n]*\n\s+keepalive:\n\s+server_parameters:\n\s+max_connection_age: 30m\n\s+max_connection_age_grace: 1m'
+
+  - it: should take the connection age from values, and drop it when empty
+    template: templates/fusescope-collector/configmap.yaml
+    set:
+      fusescopeCollector.agentListener.maxConnectionAge: ""
+    asserts:
+      - notMatchRegex:
+          path: data["config.yaml"]
+          pattern: max_connection_age
+
+  # The RUM port's peers.
+
+  - it: should keep the RUM port open to any source without peers
+    template: templates/fusescope-collector/networkpolicy.yaml
+    values:
+      - ./values/fusescope-agent.yaml
+      - ./values/fusescope-collector.yaml
+    asserts:
+      - contains:
+          path: spec.ingress
+          content:
+            ports:
+              - {port: rum, protocol: TCP}
+              - {port: health, protocol: TCP}
+
+  - it: should admit only the listed peers on the RUM port
+    template: templates/fusescope-collector/networkpolicy.yaml
+    values:
+      - ./values/fusescope-agent.yaml
+      - ./values/fusescope-collector.yaml
+    set:
+      fusescopeCollector.rum.networkPolicy.ingressFrom:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: ingress-nginx}
+          podSelector:
+            matchLabels: {app.kubernetes.io/component: controller}
+    asserts:
+      - contains:
+          path: spec.ingress
+          content:
+            from:
+              - namespaceSelector:
+                  matchLabels: {kubernetes.io/metadata.name: ingress-nginx}
+                podSelector:
+                  matchLabels: {app.kubernetes.io/component: controller}
+            ports:
+              - {port: rum, protocol: TCP}
+      - contains:
+          path: spec.ingress
+          content:
+            ports:
+              - {port: health, protocol: TCP}
+
+  - it: should render the RUM peers' policy without the agents' listener
+    template: templates/fusescope-collector/networkpolicy.yaml
+    values:
+      - ./values/fusescope-collector.yaml
+    set:
+      fusescopeCollector.agentListener.enabled: false
+      fusescopeCollector.rum.networkPolicy.ingressFrom:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: ingress-nginx}
+    asserts:
+      - isKind:
+          of: NetworkPolicy
+      - equal:
+          path: spec.ingress
+          value:
+            - from:
+                - namespaceSelector:
+                    matchLabels: {kubernetes.io/metadata.name: ingress-nginx}
+              ports:
+                - {port: rum, protocol: TCP}
+            - ports:
+                - {port: health, protocol: TCP}

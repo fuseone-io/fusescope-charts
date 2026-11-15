@@ -105,6 +105,13 @@ data:
           grpc:
             endpoint: 0.0.0.0:{{ $c.agentListener.port }}
             max_recv_msg_size_mib: 16
+            {{- with $c.agentListener.maxConnectionAge }}
+            # Agents reconnect after this age, so new replicas take a share of them.
+            keepalive:
+              server_parameters:
+                max_connection_age: {{ . }}
+                max_connection_age_grace: 1m
+            {{- end }}
             tls:
               min_version: "1.3"
               cert_file: /etc/fusescope-collector/agents-tls/tls.crt

@@ -1,6 +1,13 @@
 {{- if .Values.fusescopeAgent.enabled }}
 {{- include "fusescopeAgent.validate" . -}}
 {{- $a := .Values.fusescopeAgent -}}
+{{- $queueMiB := "" -}}
+{{- if not (or (kindIs "invalid" $a.sendingQueue.sizeMiB) (eq (toString $a.sendingQueue.sizeMiB) "")) -}}
+{{- $queueMiB = include "fusescope.wholeNumber" (dict "value" $a.sendingQueue.sizeMiB "min" 1 "max" nil "where" "fusescopeAgent.sendingQueue.sizeMiB" "msg" "must be a whole number of MiB, 1 or more") -}}
+{{- end -}}
+{{- if not $queueMiB -}}
+{{- $queueMiB = default "64" (include "fusescope.memoryLimitShareMiB" (dict "resources" $a.resources "pct" 25 "where" "fusescopeAgent" "pctWhere" "fusescopeAgent")) -}}
+{{- end -}}
 {{- $metrics := list -}}
 {{- if $a.hostMetrics.enabled }}{{ $metrics = append $metrics "host_metrics" }}{{ end -}}
 {{- if $a.kubeletStats.enabled }}{{ $metrics = append $metrics "kubelet_stats" }}{{ end -}}
@@ -127,7 +134,11 @@ data:
           authenticator: bearertokenauth/gateway
         retry_on_failure:
           enabled: true
+        # Bounded in bytes, not requests: many small requests do not fill it while it holds
+        # little data, and it stays within the agent's memory.
         sending_queue:
+          sizer: bytes
+          queue_size: {{ mul (int64 $queueMiB) 1048576 }}
           batch:
             flush_timeout: 200ms
 
