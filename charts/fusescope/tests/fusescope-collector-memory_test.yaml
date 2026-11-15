@@ -153,6 +153,33 @@ tests:
           path: spec.template.spec.containers[0].env
           content: {name: GOMEMLIMIT, value: 819MiB}
 
+  - it: should read the decimal suffix E, not an exponent (1E)
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits.memory: "1E"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT, value: 762939453125MiB}
+
+  - it: should read the binary suffix Ei, not an exponent (1Ei)
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits.memory: "1Ei"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT, value: 879609302220MiB}
+
+  - it: should read an exponent with a sign (1e+9)
+    template: templates/fusescope-collector/deployment.yaml
+    set:
+      fusescopeCollector.resources.limits.memory: "1e+9"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: GOMEMLIMIT, value: 762MiB}
+
   - it: should set no GOMEMLIMIT when the share is under 1MiB
     template: templates/fusescope-collector/deployment.yaml
     set:

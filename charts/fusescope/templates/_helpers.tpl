@@ -1075,7 +1075,7 @@ Args: dict "resources" (the container's resources), "pct", "where" (the values p
 {{- $num := regexFind $number $lim -}}
 {{- $unit := trimPrefix $num $lim -}}
 {{- $bytes := 0.0 -}}
-{{- if regexMatch "^[eE]" $unit -}}
+{{- if regexMatch "^[eE][+-]?[0-9]+$" $unit -}}
 {{- $bytes = float64 $lim -}}
 {{- else -}}
 {{- $mult := dict "" 1.0 "Ki" 1024.0 "Mi" 1048576.0 "Gi" 1073741824.0 "Ti" 1099511627776.0 "Pi" 1125899906842624.0 "Ei" 1152921504606846976.0 "n" 0.000000001 "u" 0.000001 "m" 0.001 "k" 1000.0 "M" 1000000.0 "G" 1000000000.0 "T" 1000000000000.0 "P" 1000000000000000.0 "E" 1000000000000000000.0 -}}
