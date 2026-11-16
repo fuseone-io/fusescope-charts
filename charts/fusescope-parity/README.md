@@ -207,6 +207,10 @@ kubectl -n parity patch statefulset <release>-investigate --subresource=scale \
   --type=merge -p '{"spec":{"replicas":0}}'
 ```
 
+- **Upgrades:** `helm upgrade` applies the live replica count, read with
+  `lookup`, so it does not conflict with on-call's scale and does not stop an
+  investigation; a change to the pod template still restarts its pod.
+  `helm template` and `--dry-run` render zero.
 - **Prompts:** the investigation asks on the terminal for the operator's
   ID token, then for the key.
 - **Audit:** it reports its start and its close to the audit pipeline.
