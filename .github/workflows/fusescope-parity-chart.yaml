@@ -3,6 +3,8 @@ name: FuseScope parity chart
 # The parity chart is not in ct.yaml: an install needs Secrets, a tenants
 # file and a second namespace a kind cluster does not have. This checks what
 # it renders instead: RBAC, hardening, schedules, egress and refusals.
+# The scale job installs it in kind only to check the investigation's replicas
+# across upgrades.
 on:
   pull_request:
     branches:
@@ -10,6 +12,7 @@ on:
     paths:
       - charts/fusescope-parity/**
       - scripts/fusescope-parity-chart-check.sh
+      - scripts/fusescope-parity-scale-check.sh
       - .github/workflows/fusescope-parity-chart.yaml
   push:
     branches:
@@ -17,6 +20,7 @@ on:
     paths:
       - charts/fusescope-parity/**
       - scripts/fusescope-parity-chart-check.sh
+      - scripts/fusescope-parity-scale-check.sh
       - .github/workflows/fusescope-parity-chart.yaml
 
 permissions:
@@ -42,3 +46,19 @@ jobs:
           KUBECONFORM: v0.7.0
           KUBECONFORM_SHA256: c31518ddd122663b3f3aa874cfe8178cb0988de944f29c74a0b9260920d115d3
       - run: scripts/fusescope-parity-chart-check.sh
+
+  scale:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
+        with:
+          version: v4.3.0
+          checksum-policy: required
+      - uses: helm/kind-action@dda0770415bac9fc20092cacbc54aa298604d140 # v1.8.0
+        with:
+          version: v0.27.0
+          install_only: true
+      - run: scripts/fusescope-parity-scale-check.sh
