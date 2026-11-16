@@ -24,7 +24,10 @@ metadata:
     {{- include "fsp.labels" . | nindent 4 }}
     app.kubernetes.io/component: investigate
 spec:
-  replicas: 0
+  {{- /* An upgrade applies the live count: on-call owns it through the scale subresource, and
+  applying another value conflicts with that owner. helm template and --dry-run render zero. */}}
+  {{- $live := lookup "apps/v1" "StatefulSet" .Release.Namespace (printf "%s-investigate" (include "fsp.name" .)) }}
+  replicas: {{ if $live }}{{ $live.spec.replicas | default 0 | int }}{{ else }}0{{ end }}
   serviceName: {{ include "fsp.name" . }}-investigate
   selector:
     matchLabels:
