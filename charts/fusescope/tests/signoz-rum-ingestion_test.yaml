@@ -1,0 +1,77 @@
+suite: Independent RUM onboarding URL
+templates:
+  - templates/signoz/statefulset.yaml
+values:
+  - ./values/fusescope-collector.yaml
+tests:
+  - it: leaves an unset RUM URL unannounced even when OTLP is configured
+    set:
+      signoz.ingestionUrl: https://otlp.example.com
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_GLOBAL_RUM__INGESTION__URL
+          any: true
+  - it: uses the separate TLS RUM ingress
+    set:
+      fusescopeCollector.ingress.enabled: true
+      fusescopeCollector.ingress.hosts: [rum.example.com]
+      fusescopeCollector.ingress.tls:
+        - hosts: [rum.example.com]
+          secretName: rum-public
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_GLOBAL_RUM__INGESTION__URL
+            value: https://rum.example.com
+  - it: inherits the UI ingress host and TLS when RUM ingress shares them
+    set:
+      fusescopeCollector.ingress.enabled: true
+      signoz.ingress.enabled: true
+      signoz.ingress.hosts:
+        - host: observe.example.net
+          paths: [{path: /, pathType: Prefix, port: 8080}]
+      signoz.ingress.tls:
+        - hosts: [observe.example.net]
+          secretName: ui-tls
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_GLOBAL_RUM__INGESTION__URL
+            value: https://observe.example.net
+  - it: preserves HTTP for an ingress without public TLS
+    set:
+      fusescopeCollector.ingress.enabled: true
+      fusescopeCollector.ingress.hosts: [rum.internal]
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_GLOBAL_RUM__INGESTION__URL
+            value: http://rum.internal
+  - it: prefers the explicit RUM URL for an external proxy
+    set:
+      signoz.rumIngestionUrl: https://edge.example.org/observe
+      signoz.ingestionUrl: https://otlp.other.example.org
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_GLOBAL_RUM__INGESTION__URL
+            value: https://edge.example.org/observe
+  - it: recognizes a wildcard TLS certificate for the chosen RUM host
+    set:
+      fusescopeCollector.ingress.enabled: true
+      fusescopeCollector.ingress.hosts: [rum.example.org]
+      fusescopeCollector.ingress.tls:
+        - hosts: ['*.example.org']
+          secretName: wildcard-public
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SIGNOZ_GLOBAL_RUM__INGESTION__URL
+            value: https://rum.example.org
