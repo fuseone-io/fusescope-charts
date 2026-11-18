@@ -318,6 +318,7 @@ Create Env
 {{- $defaultEnv = merge $defaultEnv (include "signoz.ingestPolicyEnv" . | fromYaml) -}}
 {{- $defaultEnv = merge $defaultEnv (include "signoz.proxyEnv" . | fromYaml) -}}
 {{- with include "signoz.ingestionUrl" . }}{{ $_ := set $defaultEnv "signoz_global_ingestion__url" . }}{{ end -}}
+{{- with include "signoz.rumIngestionUrl" . }}{{ $_ := set $defaultEnv "signoz_global_rum__ingestion__url" . }}{{ end -}}
 {{- $defaultEnv = merge $defaultEnv (include "signoz.retentionEnv" . | fromYaml) -}}
 {{- $defaultEnv = merge $defaultEnv (include "signoz.integrationsEnv" . | fromYaml) -}}
 
@@ -376,6 +377,35 @@ on (fusescopeCollector.otlp.insecure, collector ADR 0013), else nothing.
 {{- .Values.signoz.ingestionUrl -}}
 {{- else if include "fusescopeCollector.compatService" . -}}
 {{- printf "http://%s.%s.svc:%v" (include "otelCollector.fullname" .) .Release.Namespace (index .Values.otelCollector.ports "otlp-http" "servicePort") -}}
+{{- end -}}
+{{- end -}}
+
+{{/* RUM has its own listener and ingress; never reuse the OTLP URL. */}}
+{{- define "signoz.rumIngestionUrl" -}}
+{{- if .Values.signoz.rumIngestionUrl -}}
+{{- .Values.signoz.rumIngestionUrl -}}
+{{- else if and (include "fusescopeCollector.rumEnabled" .) .Values.fusescopeCollector.ingress.enabled -}}
+{{- $ing := .Values.fusescopeCollector.ingress -}}
+{{- $hosts := $ing.hosts -}}
+{{- $tls := $ing.tls -}}
+{{- if and (not $hosts) .Values.signoz.ingress.enabled -}}
+{{- range .Values.signoz.ingress.hosts -}}
+{{- $hosts = append $hosts .host -}}
+{{- end -}}
+{{- if not $tls -}}{{- $tls = .Values.signoz.ingress.tls -}}{{- end -}}
+{{- end -}}
+{{- if $hosts -}}
+{{- $host := first $hosts -}}
+{{- if not (contains "*" $host) -}}
+{{- $scheme := "http" -}}
+{{- range $tls -}}
+{{- range .hosts -}}
+{{- if or (eq . $host) (and (hasPrefix "*." .) (eq (join "." (rest (splitList "." $host))) (trimPrefix "*." .))) -}}{{- $scheme = "https" -}}{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- printf "%s://%s" $scheme $host -}}
+{{- end -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 

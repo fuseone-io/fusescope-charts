@@ -997,6 +997,11 @@ signoz:
   # @default -- "With `fusescopeCollector.otlp.insecure`, http://RELEASE-fusescope-otel-collector.NAMESPACE.svc:4318; otherwise none"
   # @section -- SigNoz Networking
   ingestionUrl: ""
+  # signoz.rumIngestionUrl -- (string) Public RUM base URL shown in onboarding (`global.rum_ingestion_url`), independent of OTLP.
+  # Overrides derivation from the enabled FuseScope collector RUM ingress; empty with no ingress leaves the UI origin as an unverified guess.
+  # @section -- SigNoz Networking
+  rumIngestionUrl: ""
+
   # OpAMP listener with TLS 1.3 for ingress collectors (`rum.ingest_policy`), on which FuseScope
   # publishes the ingest policy (RUM applications and keys) and reads the ingest reports that feed
   # the RUM setup screen. Tokens are read only there, never on the plaintext OpAMP port. It is on
